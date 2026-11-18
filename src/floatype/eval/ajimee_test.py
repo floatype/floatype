@@ -33,6 +33,26 @@ class AjimeeTest(unittest.TestCase):
     self.assertTrue(row["nfkc"])
     self.assertTrue(row["has_context"])
 
+  def test_zenz_prompt_with_and_without_context(self):
+    # U+EE00 input, U+EE01 output, U+EE02 left context; spaces become U+3000.
+    self.assertEqual(
+        ajimee.zenz_prompt("キョウ", ""), chr(0xEE00) + "キョウ" + chr(0xEE01)
+    )
+    self.assertEqual(
+        ajimee.zenz_prompt("イシャ", "熱が ある"),
+        chr(0xEE02) + "熱が" + chr(0x3000) + "ある" + chr(0xEE00) + "イシャ" + chr(0xEE01),
+    )
+
+  def test_zenz_prompt_keeps_only_the_last_40_context_characters(self):
+    prompt = ajimee.zenz_prompt("ア", "x" * 30 + "y" * 40)
+    self.assertEqual(prompt, chr(0xEE02) + "y" * 40 + chr(0xEE00) + "ア" + chr(0xEE01))
+
+  def test_latency_summary(self):
+    summary = ajimee.latency_summary([float(i) for i in range(1, 101)])
+    self.assertEqual(summary["p50_ms"], 51.0)
+    self.assertEqual(summary["p99_ms"], 99.0)
+    self.assertEqual(summary["max_ms"], 100.0)
+
   def test_summarize_splits_by_context(self):
     rows = [
         {"has_context": True, "exact": True, "nfkc": True, "min_cer": 0.0},
