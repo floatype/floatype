@@ -23,6 +23,10 @@ namespace mozc::floatype {
 // rejects any text whose reading differs from the conversion's.
 std::optional<std::vector<int>> MapToCandidates(const Segments& segments,
                                                 absl::string_view text);
+// Like MapToCandidates, but the segments only have to start with `text`; the
+// rest keep Mozc's top candidates. Used to keep what a live conversion showed.
+std::optional<std::vector<int>> MapPrefixToCandidates(const Segments& segments,
+                                                      absl::string_view text);
 
 // The session calls Request() right after Mozc converts, Poll() whenever the
 // client calls back, and Cancel() on any user action.

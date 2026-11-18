@@ -2504,6 +2504,9 @@ std::string Session::ShownAfterLiveConversion() const {
 }
 
 bool Session::LiveConvert(commands::Command* command) {
+  // What the last live conversion showed stays; only zenz may change it.
+  const std::string kept =
+      ShownAfterLiveConversion().empty() ? "" : live_value_;
   if (context_->state() != ImeContext::COMPOSITION ||
       !context_->mutable_converter()->Convert(context_->composer(),
                                               context_->client_context())) {
@@ -2512,6 +2515,15 @@ bool Session::LiveConvert(commands::Command* command) {
   command->mutable_output()->set_consumed(true);
   SetSessionState(ImeContext::CONVERSION, context_.get());
   live_conversion_ = true;
+  if (const std::optional<std::vector<int>> indices =
+          floatype::MapPrefixToCandidates(context_->converter().GetSegments(),
+                                          kept);
+      !kept.empty() && indices.has_value()) {
+    context_->mutable_converter()->PromoteCandidates(
+        *indices, context_->GetConfig().zenz_suggestion_learning()
+                      ? converter::Attribute::NO_HISTORY_LEARNING
+                      : converter::Attribute::NO_LEARNING);
+  }
   OutputLiveConversion(command);
   // zenz_delay_millisec counts from the last key, like this conversion.
   const config::Config& config = context_->GetConfig();

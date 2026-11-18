@@ -290,7 +290,10 @@ TEST_F(FloatypeZenzTest, ZenzsCorrectionStaysWhileTypingOn) {
   floatype::EnableLiveConversion(true);
   const commands::Output live = CallBack(SendKeys({"k", "i", "k", "a", "i"}));
   ASSERT_EQ(Preedit(PollWhileAsked(CallBack(live))), "機械");
-  EXPECT_EQ(Preedit(SendKeys({"g", "a"})), "機械が");
+  const commands::Output typed = SendKeys({"g", "a"});
+  EXPECT_EQ(Preedit(typed), "機械が");
+  // The next live conversion keeps it rather than going back to Mozc's 機会.
+  EXPECT_EQ(Preedit(CallBack(typed)), "機械が");
 }
 
 TEST_F(FloatypeZenzTest, ALiveConversionNeedsTwoCharactersAndCanBeOff) {
