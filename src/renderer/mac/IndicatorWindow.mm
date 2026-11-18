@@ -65,10 +65,9 @@ IndicatorWindow::~IndicatorWindow() { [window_ close]; }
 
 void IndicatorWindow::Hide() { [window_ orderOut:nil]; }
 
-void IndicatorWindow::Update(const commands::RendererCommand &command) {
+void IndicatorWindow::Update(const commands::RendererCommand &command, double base_screen_height) {
   const commands::Output::Indicator &indicator = command.output().indicator();
-  if (!command.visible() || indicator.state() == commands::Output::Indicator::NONE ||
-      !command.has_preedit_rectangle()) {
+  if (!command.visible() || indicator.state() == commands::Output::Indicator::NONE) {
     Hide();
     return;
   }
@@ -83,20 +82,26 @@ void IndicatorWindow::Update(const commands::RendererCommand &command) {
   view_.fillColor = ColorFromRGB(floatype::IndicatorColor(indicator.state(), style),
                                  style.opacity_percent() / 100.0);
 
-  // The preedit rectangle holds Cocoa screen coordinates of the composition's
-  // line: its bottom is the baseline, its top is the bottom minus the height.
+  // The preedit rectangle counts y down from the top of the base screen, as
+  // CandidateController::AlignWindows reads it; Cocoa counts y up.
   const commands::RendererCommand::Rectangle &line = command.preedit_rectangle();
-  const NSPoint origin = NSMakePoint(line.left(), line.bottom());
+  const bool has_caret = command.has_preedit_rectangle() &&
+                         (line.left() != 0 || line.top() != 0 || line.bottom() != 0);
+  const NSPoint origin = NSMakePoint(line.left(), base_screen_height - line.bottom());
   NSScreen *screen = [NSScreen mainScreen];
   for (NSScreen *candidate in [NSScreen screens]) {
-    if (NSPointInRect(origin, candidate.frame)) {
+    if (has_caret && NSPointInRect(origin, candidate.frame)) {
       screen = candidate;
       break;
     }
   }
+  const NSRect visible = screen.visibleFrame;
   const floatype::IndicatorRect rect =
-      floatype::LayoutIndicator(style, view_.label.size.width, line.left(), line.bottom(),
-                                line.bottom() - line.top(), NSMaxY(screen.visibleFrame));
+      has_caret ? floatype::LayoutIndicator(style, view_.label.size.width, origin.x, origin.y,
+                                            line.bottom() - line.top(), NSMaxY(visible))
+                : floatype::LayoutIndicatorWithoutCaret(
+                      style, view_.label.size.width,
+                      {NSMinX(visible), NSMinY(visible), NSWidth(visible), NSHeight(visible)});
   view_.cornerRadius = style.shape() == Config::IndicatorStyle::ROUNDED_RECT
                            ? std::min<double>(style.corner_radius(), rect.height / 2)
                            : rect.height / 2;

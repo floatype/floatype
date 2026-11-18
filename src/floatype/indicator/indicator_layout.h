@@ -36,6 +36,12 @@ IndicatorRect LayoutIndicator(const config::Config::IndicatorStyle& style,
                               double line_bottom, double line_height,
                               double screen_top);
 
+// The frame used when the app does not tell where the composition is: at the
+// bottom center of the screen area `screen`.
+IndicatorRect LayoutIndicatorWithoutCaret(
+    const config::Config::IndicatorStyle& style, double label_width,
+    const IndicatorRect& screen);
+
 }  // namespace mozc::floatype
 
 #endif  // MOZC_FLOATYPE_INDICATOR_INDICATOR_LAYOUT_H_

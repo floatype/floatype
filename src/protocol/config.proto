@@ -393,6 +393,7 @@ message Config {
     enum Placement {
       ABOVE = 0;  // Above the start of the composition.
       BELOW = 1;  // Below it.
+      SIDE = 2;   // Left of it, on the same line.
     }
     optional Shape shape = 1 [default = PILL];
     optional Label label = 2 [default = FULL_LABEL];

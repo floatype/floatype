@@ -142,7 +142,7 @@ bool CandidateController::ExecCommand(const RendererCommand &command) {
     return false;
   }
   command_.CopyFrom(command);
-  indicator_window_->Update(command_);
+  indicator_window_->Update(command_, GetBaseScreenHeight());
 
   // floatype: the client also sends commands to show the indicator alone.
   if (!command_.visible() || command_.output().candidate_window().candidate_size() == 0) {
@@ -157,7 +157,8 @@ bool CandidateController::ExecCommand(const RendererCommand &command) {
   bool cascading_visible = false;
   if (command_.output().has_candidate_window() &&
       command_.output().candidate_window().has_sub_candidate_window()) {
-    cascading_window_->SetCandidateWindow(command_.output().candidate_window().sub_candidate_window());
+    cascading_window_->SetCandidateWindow(
+        command_.output().candidate_window().sub_candidate_window());
     cascading_visible = true;
   }
 
@@ -238,8 +239,8 @@ void CandidateController::AlignWindows() {
   // the top-left position of the window because we want to show the
   // window just below of the preedit.
   const TableLayout *candidate_layout = candidate_window_->GetTableLayout();
-  const mozc::Point candidate_zero_point(
-      candidate_layout->GetColumnRect(kColumnCandidate).Left(), 0);
+  const mozc::Point candidate_zero_point(candidate_layout->GetColumnRect(kColumnCandidate).Left(),
+                                         0);
 
   const mozc::Point target_point(preedit_rect.Left(), preedit_rect.Bottom());
   const mozc::Rect candidate_rect = WindowUtil::GetWindowRectForMainWindowFromTargetPointAndPreedit(
@@ -276,6 +277,6 @@ void CandidateController::AlignWindows() {
   cascading_window_->MoveWindow(OriginPointInCocoaCoord(cascading_rect));
 }
 
-}  // namespace mozc::renderer::mac
-}  // namespace mozc::renderer
+}  // namespace mac
+}  // namespace renderer
 }  // namespace mozc

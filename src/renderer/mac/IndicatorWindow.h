@@ -23,7 +23,9 @@ class IndicatorWindow {
 
   // Shows the indicator of the command's output next to its composition, or
   // hides it when there is none.
-  void Update(const commands::RendererCommand &command);
+  // `base_screen_height` is the height of the screen at the origin, which the
+  // preedit rectangle counts down from.
+  void Update(const commands::RendererCommand &command, double base_screen_height);
   void Hide();
 
  private:

@@ -41,9 +41,9 @@ uint32_t IndicatorColor(State state, const Style& style) {
   }
 }
 
-IndicatorRect LayoutIndicator(const Style& style, double label_width,
-                              double line_left, double line_bottom,
-                              double line_height, double screen_top) {
+namespace {
+
+IndicatorRect Size(const Style& style, double label_width) {
   constexpr double kLabelPadding = 8;  // On each side of the label.
   IndicatorRect rect;
   rect.height = style.height();
@@ -51,6 +51,30 @@ IndicatorRect LayoutIndicator(const Style& style, double label_width,
       style.shape() == Style::CIRCLE
           ? rect.height
           : std::max<double>(style.width(), label_width + 2 * kLabelPadding);
+  return rect;
+}
+
+}  // namespace
+
+IndicatorRect LayoutIndicatorWithoutCaret(const Style& style,
+                                          double label_width,
+                                          const IndicatorRect& screen) {
+  constexpr double kMargin = 48;  // Above the Dock's usual height.
+  IndicatorRect rect = Size(style, label_width);
+  rect.x = screen.x + (screen.width - rect.width) / 2;
+  rect.y = screen.y + kMargin;
+  return rect;
+}
+
+IndicatorRect LayoutIndicator(const Style& style, double label_width,
+                              double line_left, double line_bottom,
+                              double line_height, double screen_top) {
+  IndicatorRect rect = Size(style, label_width);
+  if (style.placement() == Style::SIDE) {
+    rect.x = line_left - style.gap() - rect.width + style.offset_x();
+    rect.y = line_bottom + (line_height - rect.height) / 2 + style.offset_y();
+    return rect;
+  }
   rect.x = line_left + style.offset_x();
   const double above = line_bottom + line_height + style.gap();
   const double below = line_bottom - style.gap() - rect.height;

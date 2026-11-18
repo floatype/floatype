@@ -52,5 +52,20 @@ TEST(IndicatorLayoutTest, GrowsToFitTheLabelAndCirclesAreRound) {
   EXPECT_EQ(LayoutIndicator(circle, 60, 0, 0, 20, 1000).width, 22);
 }
 
+TEST(IndicatorLayoutTest, SitsLeftOfTheLineOnTheSide) {
+  Style side;
+  side.set_placement(Style::SIDE);
+  const IndicatorRect rect = LayoutIndicator(side, 30, 100, 500, 20, 1000);
+  EXPECT_EQ(rect.x, 100 - 5 - 56);
+  EXPECT_EQ(rect.y, 500 + (20 - 22) / 2.0);
+}
+
+TEST(IndicatorLayoutTest, GoesToTheBottomCenterWithoutACaret) {
+  const IndicatorRect screen{0, 40, 1000, 800};
+  const IndicatorRect rect = LayoutIndicatorWithoutCaret(Style(), 30, screen);
+  EXPECT_EQ(rect.x, (1000 - 56) / 2.0);
+  EXPECT_EQ(rect.y, 40 + 48);
+}
+
 }  // namespace
 }  // namespace mozc::floatype
