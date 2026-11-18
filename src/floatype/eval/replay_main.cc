@@ -54,11 +54,14 @@ ABSL_FLAG(bool, zenz, true, "correct conversions with zenz");
 ABSL_FLAG(bool, live, false,
           "type each reading key by key with live conversion on, pausing "
           "after 、 and 。 and at the end, and commit it with Enter; prints "
-          "<committed>\t<reading committed>\t<polls>, or SKIP for a reading "
-          "with characters that have no key here");
+          "<committed>\t<reading committed>\t<polls>\t<changes>, or SKIP for "
+          "a reading with characters that have no key here. <changes> counts "
+          "how often the text on screen changed while the user paused");
 ABSL_FLAG(int, pause_every, 0,
           "live mode: also pause after every this many kana (0: only at 、, 。 "
           "and the end)");
+ABSL_FLAG(int, wait_for_zenz, 0,
+          "live mode: live_conversion_waits_for_zenz_millisec");
 ABSL_FLAG(bool, keep_shown, true,
           "live mode: keep what a live conversion showed while typing on");
 
@@ -147,6 +150,7 @@ class Replayer {
       return "SKIP";
     }
     int polls = 0;
+    int changes = 0;
     for (const auto& [key_code, pause] : *keys) {
       commands::Input input;
       input.set_type(commands::Input::SEND_KEY);
@@ -154,7 +158,7 @@ class Replayer {
       input.mutable_context()->set_preceding_text(left_context);
       commands::Output output = Eval(std::move(input));
       if (pause) {
-        polls += RunCallbacks(std::move(output));
+        polls += RunCallbacks(std::move(output), changes);
       }
     }
     commands::Input enter;
@@ -172,14 +176,16 @@ class Replayer {
     reset.mutable_command()->set_type(commands::SessionCommand::RESET_CONTEXT);
     Eval(std::move(reset));
     return committed.result().value() + '\t' + committed.result().key() + '\t' +
-           std::to_string(polls);
+           std::to_string(polls) + '\t' + std::to_string(changes);
   }
 
-  void SetKeepShown(bool keep) {
+  void SetLiveConfig(bool keep_shown, int wait_for_zenz) {
     commands::Input input;
     input.set_type(commands::Input::SET_CONFIG);
     *input.mutable_config() = config::ConfigHandler::DefaultConfig();
-    input.mutable_config()->set_live_conversion_keeps_shown_text(keep);
+    input.mutable_config()->set_live_conversion_keeps_shown_text(keep_shown);
+    input.mutable_config()->set_live_conversion_waits_for_zenz_millisec(
+        wait_for_zenz);
     Eval(std::move(input));
   }
 
@@ -232,8 +238,9 @@ class Replayer {
 
   // Calls back the way the client's timer does until the session stops
   // asking. Only polls wait: they wait for the scorer.
-  int RunCallbacks(commands::Output output) {
+  int RunCallbacks(commands::Output output, int& changes) {
     int polls = 0;
+    std::string shown = Preedit(output);
     while (output.has_callback()) {
       if (output.callback().session_command().type() ==
           commands::SessionCommand::POLL_ZENZ) {
@@ -245,6 +252,10 @@ class Replayer {
       input.set_type(commands::Input::SEND_COMMAND);
       *input.mutable_command() = output.callback().session_command();
       output = Eval(std::move(input));
+      if (std::string now = Preedit(output); now != shown) {
+        ++changes;
+        shown = std::move(now);
+      }
     }
     return polls;
   }
@@ -290,7 +301,8 @@ int main(int argc, char** argv) {
   mozc::floatype::EnableSessionFeatures(live);
   mozc::Replayer replayer(*std::move(engine));
   if (live) {
-    replayer.SetKeepShown(absl::GetFlag(FLAGS_keep_shown));
+    replayer.SetLiveConfig(absl::GetFlag(FLAGS_keep_shown),
+                           absl::GetFlag(FLAGS_wait_for_zenz));
   }
 
   // The first conversion starts the scorer and loads the model.

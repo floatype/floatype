@@ -257,6 +257,9 @@ def main() -> None:
       "--pause_every", type=int, default=0,
       help="live: also pause after every this many kana")
   parser.add_argument(
+      "--wait_for_zenz", type=int, default=0,
+      help="live: wait up to this many ms for zenz before showing a live conversion")
+  parser.add_argument(
       "--binary", type=Path, help="default: the engine's tool under bazel-bin or floatype/scorer/build"
   )
   parser.add_argument(
@@ -280,7 +283,8 @@ def main() -> None:
     done = subprocess.run(
         [str(binary), f"--data_file={args.data_file}", "--data_type=oss", "--live",
          f"--keep_shown={'false' if args.refresh_live else 'true'}",
-         f"--pause_every={args.pause_every}"],
+         f"--pause_every={args.pause_every}",
+         f"--wait_for_zenz={args.wait_for_zenz}"],
         input="".join(
             f"{line_field('' if args.no_context else item.get('context_text', ''))}\t"
             f"{line_field(katakana_to_hiragana(item['input']))}\n"
@@ -290,10 +294,15 @@ def main() -> None:
     if len(lines) != len(items):
       raise SystemExit(f"expected {len(items)} results, got {len(lines)}")
     top1 = ["" if line == "SKIP" else line.split("\t")[0] for line in lines]
-    extras = [{"skipped": line == "SKIP"} for line in lines]
+    extras = [
+        {"skipped": line == "SKIP",
+         "changes": 0 if line == "SKIP" else int(line.split("\t")[3])}
+        for line in lines
+    ]
     report.update(context=not args.no_context, keeps_shown_text=not args.refresh_live,
-                  pause_every=args.pause_every)
+                  pause_every=args.pause_every, wait_for_zenz=args.wait_for_zenz)
     report["skipped"] = sum(e["skipped"] for e in extras)
+    report["screen_changes"] = sum(e["changes"] for e in extras)
   elif args.engine == "replay":
     binary = args.binary or Path("bazel-bin/floatype/eval/replay_main")
     pairs = [
