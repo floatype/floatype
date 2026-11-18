@@ -2698,8 +2698,18 @@ void Session::RequestZenz(commands::Command* command) {
     return;
   }
   zenz_.set_timeout(absl::Milliseconds(config.zenz_timeout_millisec()));
-  if (!zenz_.Request(context_->converter().GetSegments(),
-                     context_->client_context().preceding_text())) {
+  const Segments& segments = context_->converter().GetSegments();
+  std::string left_context = context_->client_context().preceding_text();
+  // Where the app does not tell what precedes the caret, as in terminals, what
+  // was committed last stands in (spec section 4).
+  if (left_context.empty()) {
+    for (const Segment& segment : segments.history_segments()) {
+      if (segment.candidates_size() > 0) {
+        left_context += segment.candidate(0).value;
+      }
+    }
+  }
+  if (!zenz_.Request(segments, left_context)) {
     return;
   }
   SetCallback(

@@ -1,6 +1,8 @@
 // A stand-in for floatype_scorer in tests. It answers each request with its
 // reading as the conversion, or with the reading's answer in the optional
-// "<reading>\t<answer>" file given as the only argument. These readings act:
+// "<reading>\t<answer>" file given as the only argument. An entry for
+// "<left context>|<reading>" answers only after that context. These readings
+// act:
 //   CRASH  aborts without answering.
 //   スロウ  answers after 200ms.
 //   カップ  answers with the stop reason "cap".
@@ -45,7 +47,8 @@ int main(int argc, char** argv) {
     if (request->reading == "スロウ") {
       std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }
-    const auto it = answers.find(request->reading);
+    auto it = answers.find(request->left_context + "|" + request->reading);
+    if (it == answers.end()) it = answers.find(request->reading);
     const std::string answer = ::floatype::scorer::FormatResponse(
         {request->id, it == answers.end() ? request->reading : it->second,
          request->reading == "カップ" ? "cap" : "eog", 1});

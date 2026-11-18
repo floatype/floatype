@@ -492,6 +492,16 @@ TEST_F(FloatypeZenzTest, SuggestsForTheFirstLettersOfAComposition) {
   EXPECT_EQ(Suggestions(SendKeys({"k"})), std::vector<std::string>{"k"});
 }
 
+TEST_F(FloatypeZenzTest, WhatWasCommittedLastStandsInForTheContext) {
+  // The fake turns キカイ into 機械 only after 機会.
+  ASSERT_OK(
+      FileUtil::SetContents(answers_, "キカイ\t機会\n機会|キカイ\t機械\n"));
+  ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機会");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機会");
+  // The test client tells nothing about the text before the caret.
+  EXPECT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
+}
+
 TEST_F(FloatypeZenzTest, ZenzCanBeTurnedOff) {
   config::Config config = config::ConfigHandler::DefaultConfig();
   config.set_use_zenz(false);
