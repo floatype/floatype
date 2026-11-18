@@ -27,7 +27,8 @@ nix develop .. --command bash -c '
 '
 
 before="$(shasum "$plist" 2>/dev/null || true)"
-sudo installer -pkg bazel-bin/mac/Mozc.pkg -target /
+# The package always asks for a logout; whether one is needed is decided below.
+sudo installer -pkg bazel-bin/mac/Mozc.pkg -target / | grep -v "requires logging out" || true
 after="$(shasum "$plist" 2>/dev/null || true)"
 
 if [ -z "$before" ] || [ "${before%% *}" != "${after%% *}" ]; then
