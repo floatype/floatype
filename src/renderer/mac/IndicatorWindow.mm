@@ -98,12 +98,23 @@ void IndicatorWindow::Update(const commands::RendererCommand &command, double ba
     }
   }
   const NSRect visible = screen.visibleFrame;
-  const floatype::IndicatorRect rect =
-      has_caret ? floatype::LayoutIndicator(style, view_.label.size.width, origin.x, origin.y,
-                                            line.bottom() - line.top(), NSMaxY(visible))
-                : floatype::LayoutIndicatorWithoutCaret(
-                      style, view_.label.size.width,
-                      {NSMinX(visible), NSMinY(visible), NSWidth(visible), NSHeight(visible)});
+  // Mozc's own test for vertical writing (CandidateController::AlignWindows):
+  // a line wider than it is tall.
+  const double line_width = line.right() - line.left();
+  const double line_height = line.bottom() - line.top();
+  floatype::IndicatorRect rect;
+  if (!has_caret) {
+    rect = floatype::LayoutIndicatorWithoutCaret(
+        style, view_.label.size.width,
+        {NSMinX(visible), NSMinY(visible), NSWidth(visible), NSHeight(visible)});
+  } else if (line_height < line_width) {
+    rect = floatype::LayoutIndicatorVertical(style, view_.label.size.width, origin.x,
+                                             origin.x + line_width, origin.y + line_height,
+                                             NSMaxX(visible));
+  } else {
+    rect = floatype::LayoutIndicator(style, view_.label.size.width, origin.x, origin.y,
+                                     line_height, NSMaxY(visible));
+  }
   view_.cornerRadius = style.shape() == Config::IndicatorStyle::ROUNDED_RECT
                            ? std::min<double>(style.corner_radius(), rect.height / 2)
                            : rect.height / 2;

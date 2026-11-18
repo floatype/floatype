@@ -66,6 +66,19 @@ IndicatorRect LayoutIndicatorWithoutCaret(const Style& style,
   return rect;
 }
 
+IndicatorRect LayoutIndicatorVertical(const Style& style, double label_width,
+                                      double column_left, double column_right,
+                                      double column_top, double screen_right) {
+  IndicatorRect rect = Size(style, label_width);
+  const double right = column_right + style.gap();
+  rect.x = right + rect.width <= screen_right
+               ? right
+               : column_left - style.gap() - rect.width;
+  rect.x += style.offset_x();
+  rect.y = column_top - rect.height + style.offset_y();
+  return rect;
+}
+
 IndicatorRect LayoutIndicator(const Style& style, double label_width,
                               double line_left, double line_bottom,
                               double line_height, double screen_top) {

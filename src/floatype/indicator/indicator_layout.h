@@ -36,6 +36,15 @@ IndicatorRect LayoutIndicator(const config::Config::IndicatorStyle& style,
                               double line_bottom, double line_height,
                               double screen_top);
 
+// The frame for vertical writing, where the composition runs down a column
+// from `column_left` to `column_right` with its top at `column_top`: right of
+// the column at its top, or left of it when the right side leaves the screen
+// at `screen_right`. The placement setting is for horizontal writing.
+IndicatorRect LayoutIndicatorVertical(
+    const config::Config::IndicatorStyle& style, double label_width,
+    double column_left, double column_right, double column_top,
+    double screen_right);
+
 // The frame used when the app does not tell where the composition is: at the
 // bottom center of the screen area `screen`.
 IndicatorRect LayoutIndicatorWithoutCaret(

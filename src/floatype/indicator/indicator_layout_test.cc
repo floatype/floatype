@@ -60,6 +60,17 @@ TEST(IndicatorLayoutTest, SitsLeftOfTheLineOnTheSide) {
   EXPECT_EQ(rect.y, 500 + (20 - 22) / 2.0);
 }
 
+TEST(IndicatorLayoutTest, SitsRightOfAVerticalColumnAtItsTop) {
+  const Style style;  // 56x22, 5pt gap.
+  const IndicatorRect rect =
+      LayoutIndicatorVertical(style, 30, 400, 420, 700, 1000);
+  EXPECT_EQ(rect.x, 420 + 5);
+  EXPECT_EQ(rect.y, 700 - 22);
+  // Left of the column at the right edge of the screen.
+  EXPECT_EQ(LayoutIndicatorVertical(style, 30, 940, 960, 700, 1000).x,
+            940 - 5 - 56);
+}
+
 TEST(IndicatorLayoutTest, GoesToTheBottomCenterWithoutACaret) {
   const IndicatorRect screen{0, 40, 1000, 800};
   const IndicatorRect rect = LayoutIndicatorWithoutCaret(Style(), 30, screen);
