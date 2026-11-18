@@ -317,7 +317,6 @@ class Session {
   // Mixed English input: converts the composition to its letters when they
   // were an English word. Returns whether it did.
   bool MaybeConvertAsEnglish(commands::Command* command);
-  bool english_shown_ = false;
   // Shows the correction the user committed before for this conversion's
   // reading, if any. Returns whether it did.
   bool ApplyAcceptedCorrection();

@@ -26,7 +26,8 @@ class EnglishWords {
   std::vector<std::string> words_;  // Lower case, sorted.
 };
 
-// Whether the keys `raw` typed into the composition shown as `preedit` were an
+// Whether the keys `raw` typed into the composition queried as `preedit` (with
+// a trailing n already ん, so ten stays てん) were an
 // English word: the romaji left letters unconverted (まcぼおk for macbook,
 // unlike へっぉ for hello, which stays Japanese), and `raw`, at least three
 // letters, is in `words`.

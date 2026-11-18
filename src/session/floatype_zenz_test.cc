@@ -733,10 +733,33 @@ TEST_F(FloatypeZenzTest, MixedEnglishKeepsAnEnglishWordInLetters) {
   EXPECT_TRUE(converted.indicator().english());
   EXPECT_EQ(SendKeys({"Enter"}).result().value(), "keyboard");
 
+  // A Japanese word converted another way afterwards is not taken as English.
+  SendKeys({"k", "i", "k", "a", "i"});
+  EXPECT_FALSE(SendKeys({"F7"}).indicator().english());
+  SendKeys({"Escape"});
+  SendKeys({"Escape"});
+
   // Japanese stays Japanese.
   const commands::Output japanese = SendKeys({"k", "i", "k", "a", "i"});
   EXPECT_FALSE(japanese.indicator().english());
   EXPECT_EQ(Preedit(SendKeys({"Space"})), "機会");
+}
+
+TEST_F(FloatypeZenzTest, MixedEnglishLeavesATrailingNJapanese) {
+  floatype::EnableSessionFeatures(true);
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_mixed_english(true);
+  config.set_use_live_conversion(false);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+  for (const absl::string_view word : {"ten", "pan", "sen", "ken", "pen"}) {
+    SendKeys({word.substr(0, 1), word.substr(1, 1), word.substr(2, 1)});
+    EXPECT_NE(Preedit(SendKeys({"Space"})), word);
+    SendKeys({"Escape"});
+    SendKeys({"Escape"});
+  }
 }
 
 TEST_F(FloatypeZenzTest, ZenzCanBeTurnedOff) {

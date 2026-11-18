@@ -132,6 +132,33 @@ TEST(FloatypeLookTest, TheIndicatorShowsEachState) {
   window.Hide();
 }
 
+TEST(FloatypeLookTest, MixedEnglishAddsTheWordsLanguage) {
+  renderer::mac::IndicatorWindow window;
+  commands::RendererCommand command;
+  command.set_visible(true);
+  commands::RendererCommand::Rectangle *line = command.mutable_composition_rectangle();
+  line->set_left(200);
+  line->set_right(201);
+  line->set_top(300);
+  line->set_bottom(320);
+  commands::Output::Indicator *indicator = command.mutable_output()->mutable_indicator();
+  indicator->set_state(commands::Output::Indicator::READING);
+  window.Update(command, 1000);
+  const double plain = NSWidth(window.ViewForTesting().window.frame);
+  indicator->set_english(true);
+  window.Update(command, 1000);
+  EXPECT_GT(NSWidth(window.ViewForTesting().window.frame), plain);
+  Save(window.ViewForTesting(), "indicator-english");
+  // Color only stays without text.
+  indicator->mutable_style()->set_label(config::Config::IndicatorStyle::COLOR_ONLY);
+  window.Update(command, 1000);
+  const double color_only = NSWidth(window.ViewForTesting().window.frame);
+  indicator->clear_english();
+  window.Update(command, 1000);
+  EXPECT_EQ(NSWidth(window.ViewForTesting().window.frame), color_only);
+  window.Hide();
+}
+
 TEST(FloatypeLookTest, TheReadingSitsAboveTheIndicator) {
   renderer::mac::IndicatorWindow window;
   commands::RendererCommand command;

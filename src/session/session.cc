@@ -2604,7 +2604,6 @@ void Session::MaybeScheduleLiveConversion(commands::Command* command) {
 }
 
 bool Session::MaybeConvertAsEnglish(commands::Command* command) {
-  english_shown_ = false;
   if (!floatype::SessionFeaturesEnabled() ||
       !context_->GetConfig().mixed_english() ||
       context_->state() != ImeContext::COMPOSITION) {
@@ -2612,12 +2611,11 @@ bool Session::MaybeConvertAsEnglish(commands::Command* command) {
   }
   const composer::Composer& composer = context_->composer();
   if (!floatype::LooksEnglish(composer.GetRawString(),
-                              composer.GetStringForPreedit(),
+                              composer.GetQueryForConversion(),
                               floatype::EnglishWords::Default())) {
     return false;
   }
-  english_shown_ = ConvertToHalfASCII(command);
-  return english_shown_;
+  return ConvertToHalfASCII(command);
 }
 
 bool Session::MaybeCommitOnCharacter(commands::Command* command) {
@@ -2808,11 +2806,17 @@ void Session::SetIndicator(commands::Command* command) const {
   *output->mutable_indicator()->mutable_style() = config.indicator_style();
   if (config.mixed_english()) {
     const composer::Composer& composer = context_->composer();
+    // In a conversion, what is shown decides: the typed letters or not.
+    std::string shown;
+    for (const commands::Preedit::Segment& segment :
+         output->preedit().segment()) {
+      shown += segment.value();
+    }
     output->mutable_indicator()->set_english(
         context_->state() == ImeContext::CONVERSION
-            ? english_shown_
+            ? shown == composer.GetRawString()
             : floatype::LooksEnglish(composer.GetRawString(),
-                                     composer.GetStringForPreedit(),
+                                     composer.GetQueryForConversion(),
                                      floatype::EnglishWords::Default()));
   }
 }
