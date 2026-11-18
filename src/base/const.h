@@ -35,8 +35,8 @@ namespace mozc {
 inline constexpr char kProductNameInEnglish[] = "Google Japanese Input";
 #define kProductPrefix "GoogleJapaneseInput"
 #else  // GOOGLE_JAPANESE_INPUT_BUILD
-inline constexpr char kProductNameInEnglish[] = "Mozc";
-#define kProductPrefix "Mozc"
+inline constexpr char kProductNameInEnglish[] = "floatype";
+#define kProductPrefix "floatype"
 #endif  // GOOGLE_JAPANESE_INPUT_BUILD
 
 inline constexpr char kVersionRewriterVersionPrefix[] = kProductPrefix "-";
