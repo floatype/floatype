@@ -266,8 +266,9 @@ bool SessionHandler::ReloadAndWait(commands::Command* command) {
 bool SessionHandler::ClearUserHistory(commands::Command* command) {
   MOZC_VLOG(1) << "Clearing user history";
   engine_->ClearUserHistory();
-  // floatype: the corrections the user stopped go too.
-  floatype::ZenzMemory::Default().Clear();
+  // floatype: what zenz learned goes too.
+  floatype::ZenzMemory::Stopped().Clear();
+  floatype::ZenzMemory::Accepted().Clear();
   return true;
 }
 

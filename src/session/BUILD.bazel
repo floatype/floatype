@@ -52,6 +52,7 @@ mozc_cc_library(
         "//evaluation/candidates_diff_checker:__pkg__",
     ],
     deps = [
+        "//base/strings:japanese",
         "//floatype/zenz:zenz_memory",
         ":ime_context",
         ":key_event_transformer",

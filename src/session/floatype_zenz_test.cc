@@ -591,6 +591,43 @@ TEST_F(FloatypeZenzTest, CtrlDeleteStopsACorrectionForGood) {
   EXPECT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
 }
 
+TEST_F(FloatypeZenzTest, ACommittedCorrectionShowsAtOnceNextTime) {
+  ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機械");
+  // The control: Mozc alone, in a new session where the commit is no context
+  // to repeat it from, still converts to 機会.
+  StartSession(/*zenz=*/false);
+  ASSERT_EQ(Preedit(ConvertKikai()), "機会");
+  StartSession(/*zenz=*/true);
+
+  // Right at Space, before zenz answers; zenz still looks.
+  const commands::Output converted = ConvertKikai();
+  EXPECT_EQ(Preedit(converted), "機械");
+  EXPECT_TRUE(converted.has_callback());
+  EXPECT_EQ(Preedit(PollWhileAsked(converted)), "機械");
+  // Space still shows Mozc's result.
+  EXPECT_EQ(Preedit(SendKeys({"Space"})), "機会");
+}
+
+TEST_F(FloatypeZenzTest, StoppingACommittedCorrectionForgetsIt) {
+  ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機械");
+  StartSession(/*zenz=*/true);
+  ASSERT_EQ(Preedit(ConvertKikai()), "機械") << "shown from memory";
+  EXPECT_EQ(Preedit(SendKeys({"Ctrl Delete"})), "機会");
+  SendKeys({"Escape"});
+  SendKeys({"Escape"});
+  EXPECT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機会");
+}
+
+TEST_F(FloatypeZenzTest, ShowingMozcThenCommittingTeachesNothing) {
+  ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
+  ASSERT_EQ(Preedit(SendKeys({"Space"})), "機会");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機会");
+  StartSession(/*zenz=*/true);
+  EXPECT_EQ(Preedit(ConvertKikai()), "機会") << "not shown before zenz answers";
+}
+
 TEST_F(FloatypeZenzTest, CtrlDeleteForgetsNothingWithLearningOff) {
   config::Config config = config::ConfigHandler::DefaultConfig();
   config.set_zenz_learning(false);

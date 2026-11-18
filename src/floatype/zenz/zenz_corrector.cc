@@ -138,6 +138,10 @@ std::optional<std::vector<int>> Map(const Segments& segments,
 
 }  // namespace
 
+std::string ConversionReading(const Segments& segments) {
+  return Reading(segments);
+}
+
 std::optional<std::vector<int>> MapToCandidates(const Segments& segments,
                                                 absl::string_view text) {
   return Map(segments, text, /*prefix=*/false);

@@ -46,6 +46,7 @@
 #include "absl/time/time.h"
 #include "base/clock.h"
 #include "base/port.h"
+#include "base/strings/japanese.h"
 #include "base/strings/unicode.h"
 #include "base/util.h"
 #include "composer/composer.h"
@@ -616,7 +617,8 @@ bool Session::SendKey(commands::Command* command) {
                                                         &key_command) &&
       key_command == keymap::ConversionState::DELETE_SELECTED_CANDIDATE) {
     if (context_->GetConfig().zenz_learning()) {
-      floatype::ZenzMemory::Default().Stop(zenz_reading_, zenz_text_);
+      floatype::ZenzMemory::Stopped().Add(zenz_reading_, zenz_text_);
+      floatype::ZenzMemory::Accepted().Remove(zenz_reading_, zenz_text_);
     }
     return ShowMozcAgain(zenz_indices, live, command);
   }
@@ -678,6 +680,14 @@ bool Session::SendKey(commands::Command* command) {
     preedit->set_cursor(Util::CharsLen(shown));
   } else if (!live_conversion_) {
     live_reading_.clear();
+  }
+  // floatype: committing zenz's correction as it was shown teaches it.
+  if (!zenz_indices.empty() && command->output().has_result() &&
+      context_->GetConfig().zenz_learning() &&
+      japanese::FullWidthAsciiToHalfWidthAscii(
+          command->output().result().value()) ==
+          japanese::FullWidthAsciiToHalfWidthAscii(zenz_text_)) {
+    floatype::ZenzMemory::Accepted().Add(zenz_reading_, zenz_text_);
   }
   MaybeScheduleLiveConversion(command);
   SetIndicator(command);
@@ -2585,6 +2595,36 @@ commands::Preedit Session::ShownPreedit() const {
   return preedit;
 }
 
+bool Session::ApplyAcceptedCorrection() {
+  // What zenz taught comes with zenz: not where it is off or missing.
+  if (!context_->GetConfig().zenz_learning() || !zenz_.available()) {
+    return false;
+  }
+  const Segments& segments = context_->converter().GetSegments();
+  const std::string reading = floatype::ConversionReading(segments);
+  const std::string text = floatype::ZenzMemory::Accepted().Latest(reading);
+  if (text.empty() || floatype::ZenzMemory::Stopped().Contains(reading, text)) {
+    return false;
+  }
+  const std::optional<std::vector<int>> indices =
+      floatype::MapToCandidates(segments, text);
+  if (!indices.has_value() ||
+      std::all_of(indices->begin(), indices->end(),
+                  [](int index) { return index == 0; }) ||
+      !context_->mutable_converter()->PromoteCandidates(
+          *indices,
+          context_->GetConfig().zenz_suggestion_learning()
+              ? converter::Attribute::NO_HISTORY_LEARNING
+              : converter::Attribute::NO_LEARNING,
+          0)) {
+    return false;
+  }
+  zenz_indices_ = *indices;
+  zenz_reading_ = reading;
+  zenz_text_ = text;
+  return true;
+}
+
 void Session::StopWaitingForZenz() {
   if (!std::exchange(waiting_for_zenz_, false)) {
     return;
@@ -2769,6 +2809,21 @@ void Session::RequestZenz(commands::Command* command) {
     return;
   }
   zenz_.set_timeout(absl::Milliseconds(config.zenz_timeout_millisec()));
+  // A correction the user committed before shows at once; zenz still looks,
+  // as the context may call for another.
+  if (ApplyAcceptedCorrection()) {
+    waiting_for_zenz_ = false;
+    // Output() adds to what is there: the conversion is shown afresh.
+    commands::Output* output = command->mutable_output();
+    output->clear_preedit();
+    output->clear_candidate_window();
+    output->clear_all_candidate_words();
+    if (live_conversion_) {
+      OutputLiveConversion(command);
+    } else {
+      Output(command);
+    }
+  }
   const Segments& segments = context_->converter().GetSegments();
   std::string left_context = context_->client_context().preceding_text();
   // Where the app does not tell what precedes the caret, as in terminals, what
@@ -2799,7 +2854,7 @@ bool Session::PollZenz(commands::Command* command) {
   // floatype: a correction the user stopped before is not made again.
   if (result.kind == floatype::ZenzCorrector::PollResult::kApply &&
       context_->GetConfig().zenz_learning() &&
-      floatype::ZenzMemory::Default().Stopped(result.reading, result.text)) {
+      floatype::ZenzMemory::Stopped().Contains(result.reading, result.text)) {
     result.kind = floatype::ZenzCorrector::PollResult::kDone;
   }
   if (result.kind == floatype::ZenzCorrector::PollResult::kApply) {

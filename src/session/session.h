@@ -308,6 +308,9 @@ class Session {
   commands::Preedit ShownPreedit() const;
   // A key or command during the wait meets the composition the user sees.
   void StopWaitingForZenz();
+  // Shows the correction the user committed before for this conversion's
+  // reading, if any. Returns whether it did.
+  bool ApplyAcceptedCorrection();
   // The manual zenz key: converts if needed and asks zenz now.
   bool CorrectWithZenzNow(commands::Command* command);
   // Space while zenz's correction is shown: Mozc's result again.

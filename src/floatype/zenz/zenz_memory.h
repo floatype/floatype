@@ -1,5 +1,7 @@
-// floatype: the corrections the user stopped (Ctrl+Delete while one is shown),
-// so that zenz does not make them again (spec section 2, zenz learning).
+// floatype: what the user did with zenz's corrections (spec section 2, zenz
+// learning). Two memories: the corrections the user stopped (Ctrl+Delete
+// while one is shown), which zenz does not make again, and the ones the user
+// committed, which are shown at once the next time the reading comes.
 
 #ifndef MOZC_FLOATYPE_ZENZ_ZENZ_MEMORY_H_
 #define MOZC_FLOATYPE_ZENZ_ZENZ_MEMORY_H_
@@ -21,23 +23,27 @@ class ZenzMemory {
   // The memory kept in `path`, one "<reading>\t<text>" line each.
   explicit ZenzMemory(std::string path);
 
-  // Whether zenz's `text` for the hiragana `reading` was stopped.
-  bool Stopped(absl::string_view reading, absl::string_view text) const;
-  // Remembers it, on disk too.
-  void Stop(absl::string_view reading, absl::string_view text);
+  // Whether zenz's `text` for the hiragana `reading` is remembered.
+  bool Contains(absl::string_view reading, absl::string_view text) const;
+  // The text remembered last for `reading`; empty when there is none.
+  std::string Latest(absl::string_view reading) const;
+  // Remembers it, on disk too. Remembering it again makes it the newest.
+  void Add(absl::string_view reading, absl::string_view text);
+  void Remove(absl::string_view reading, absl::string_view text);
   // Forgets everything, as clearing the user history does.
   void Clear();
 
-  // The memory in the user profile directory. It follows the directory, so
-  // tests with a profile of their own get a memory of their own.
-  static ZenzMemory& Default();
+  // The memories in the user profile directory. They follow the directory, so
+  // tests with a profile of their own get memories of their own.
+  static ZenzMemory& Stopped();
+  static ZenzMemory& Accepted();
 
  private:
   void Save() const;
 
   std::string path_;
   std::deque<std::string> order_;  // "<reading>\t<text>", oldest first.
-  absl::flat_hash_set<std::string> stopped_;
+  absl::flat_hash_set<std::string> entries_;
 };
 
 }  // namespace mozc::floatype
