@@ -3292,6 +3292,23 @@ TEST_F(DisplayAmbiguousTest, BackspaceDeletesWhatIsShown) {
   EXPECT_EQ(composer_->GetStringForPreedit(), "というこ");
 }
 
+TEST_F(DisplayAmbiguousTest, ALongerResultGoesOnOrIsEdited) {
+  EXPECT_EQ(Typed("kkd"), "ということで");
+  // The cursor moved into a shown result settles it before typing there.
+  Typed("kk");
+  composer_->MoveCursorLeft();
+  composer_->InsertCharacter("a");
+  EXPECT_EQ(composer_->GetStringForPreedit(), "というこあと");
+}
+
+TEST_F(DisplayAmbiguousTest, PredictionFollowsWhatIsShown) {
+  Typed("man");
+  EXPECT_EQ(composer_->GetQueryForPrediction(), "まん");
+  table_->set_display_ambiguous(false);
+  Typed("man");
+  EXPECT_EQ(composer_->GetQueryForPrediction(), "ま");
+}
+
 TEST_F(DisplayAmbiguousTest, IsOffByDefault) {
   table_->set_display_ambiguous(false);
   EXPECT_EQ(Typed("ms"), "ｍｓ");

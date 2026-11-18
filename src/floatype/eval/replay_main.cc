@@ -64,6 +64,8 @@ ABSL_FLAG(int, pause_every, 0,
 ABSL_FLAG(int, wait_for_zenz, 0,
           "live mode: live_conversion_waits_for_zenz_millisec");
 ABSL_FLAG(bool, mixed_english, false, "live mode: turn mixed English input on");
+ABSL_FLAG(bool, display_ambiguous, false,
+          "live mode: show ambiguous romaji as kana");
 ABSL_FLAG(bool, keep_shown, true,
           "live mode: keep what a live conversion showed while typing on");
 
@@ -190,6 +192,8 @@ class Replayer {
         wait_for_zenz);
     input.mutable_config()->set_mixed_english(
         absl::GetFlag(FLAGS_mixed_english));
+    input.mutable_config()->set_display_ambiguous_romaji(
+        absl::GetFlag(FLAGS_display_ambiguous));
     Eval(std::move(input));
   }
 
