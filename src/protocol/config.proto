@@ -372,6 +372,10 @@ message Config {
   optional uint32 live_conversion_delay_millisec = 1003 [default = 228];
   optional uint32 live_conversion_min_chars = 1004 [default = 2];
   optional uint32 zenz_delay_millisec = 1005 [default = 500];
+  // floatype: when a live conversion runs again after the user typed on, what
+  // the last one showed stays and only zenz may change it. Off, Mozc converts
+  // the whole reading afresh, as Mozkey does.
+  optional bool live_conversion_keeps_shown_text = 1006 [default = true];
 
   //////////////////////////////////////////////////////////////
   //

@@ -296,6 +296,22 @@ TEST_F(FloatypeZenzTest, ZenzsCorrectionStaysWhileTypingOn) {
   EXPECT_EQ(Preedit(CallBack(typed)), "機械が");
 }
 
+TEST_F(FloatypeZenzTest, ALiveConversionCanConvertAfreshAsMozkeyDoes) {
+  floatype::EnableLiveConversion(true);
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_live_conversion_keeps_shown_text(false);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+
+  const commands::Output live = CallBack(SendKeys({"k", "i", "k", "a", "i"}));
+  ASSERT_EQ(Preedit(PollWhileAsked(CallBack(live))), "機械");
+  const commands::Output typed = SendKeys({"g", "a"});
+  EXPECT_EQ(Preedit(typed), "機械が");
+  EXPECT_EQ(Preedit(CallBack(typed)), "機会が");
+}
+
 TEST_F(FloatypeZenzTest, ALiveConversionNeedsTwoCharactersAndCanBeOff) {
   floatype::EnableLiveConversion(true);
   EXPECT_FALSE(SendKeys({"k", "i"}).has_callback());

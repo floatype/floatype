@@ -2506,7 +2506,10 @@ std::string Session::ShownAfterLiveConversion() const {
 bool Session::LiveConvert(commands::Command* command) {
   // What the last live conversion showed stays; only zenz may change it.
   const std::string kept =
-      ShownAfterLiveConversion().empty() ? "" : live_value_;
+      ShownAfterLiveConversion().empty() ||
+              !context_->GetConfig().live_conversion_keeps_shown_text()
+          ? ""
+          : live_value_;
   if (context_->state() != ImeContext::COMPOSITION ||
       !context_->mutable_converter()->Convert(context_->composer(),
                                               context_->client_context())) {
