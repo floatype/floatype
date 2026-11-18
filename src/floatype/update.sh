@@ -34,8 +34,15 @@ after="$(shasum "$plist" 2>/dev/null || true)"
 if [ -z "$before" ] || [ "${before%% *}" != "${after%% *}" ]; then
   echo "floatype: 入力メソッドの登録内容が変わったので、ログアウトしてログインし直してください。"
 else
-  # launchd restarts the converter and the renderer; macOS restarts the input
-  # method on the next key. The scorer exits with the converter.
-  killall floatype floatypeConverter floatypeRenderer 2>/dev/null || true
+  # launchd keeps the old binaries' code hashes for its agents and refuses to
+  # start the new ones (EX_CONFIG) until they are registered again. macOS
+  # restarts the input method on the next key; the scorer exits with the
+  # converter.
+  for agent in Converter Renderer; do
+    label="io.github.floatype.inputmethod.Japanese.$agent"
+    launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+    launchctl bootstrap "gui/$(id -u)" "/Library/LaunchAgents/$label.plist"
+  done
+  killall floatype 2>/dev/null || true
   echo "floatype: 更新しました。ログアウトは不要です（入力中の文字があれば確定してから使ってください）。"
 fi
