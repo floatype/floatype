@@ -69,6 +69,30 @@ namespace mozc {
 namespace session {
 namespace {
 
+// floatype: whether `key` extends an unfinished Roman sequence (ｋｙ in
+// きかいｋｙ) whose suggestions would come and go. The first two letters of a
+// composition still suggest, so that typing from nothing shows candidates.
+// Mozkey holds suggestions the same way.
+bool HoldsSuggestions(const commands::KeyEvent& key,
+                      const composer::Composer& composer) {
+  const transliteration::TransliterationType mode = composer.GetInputMode();
+  if (key.modifier_keys_size() != 0 || key.key_code() < 'a' ||
+      key.key_code() > 'z' ||
+      (mode != transliteration::HIRAGANA &&
+       mode != transliteration::FULL_KATAKANA &&
+       mode != transliteration::HALF_KATAKANA)) {
+    return false;
+  }
+  size_t length = 0;
+  size_t pending = 0;
+  for (const char32_t c : Utf8AsChars32(composer.GetStringForPreedit())) {
+    ++length;
+    const bool roman = (c >= 'a' && c <= 'z') || (c >= U'ａ' && c <= U'ｚ');
+    pending = roman ? pending + 1 : 0;
+  }
+  return pending > 0 && (pending < length || pending > 2);
+}
+
 using ::mozc::engine::ConversionPreferences;
 using ::mozc::engine::EngineConverterInterface;
 
@@ -1663,6 +1687,14 @@ bool Session::InsertCharacter(commands::Command* command) {
   SetSessionState(ImeContext::COMPOSITION, context_.get());
   if (CanStartAutoConversion(key)) {
     return Convert(command);
+  }
+
+  // floatype: keeps the suggestions on screen while a Roman sequence is
+  // unfinished.
+  if (floatype::SessionFeaturesEnabled() && context_->converter().IsActive() &&
+      HoldsSuggestions(key, context_->composer())) {
+    Output(command);
+    return true;
   }
 
   if (Suggest(command->input())) {

@@ -426,6 +426,35 @@ TEST_F(FloatypeZenzTest, TheZenzKeyKeepsALiveConversionLive) {
   EXPECT_EQ(Preedit(SendKeys({"g", "a"})), "機械が");
 }
 
+std::vector<std::string> Suggestions(const commands::Output& output) {
+  std::vector<std::string> values;
+  for (const commands::CandidateWindow::Candidate& candidate :
+       output.candidate_window().candidate()) {
+    values.push_back(candidate.value());
+  }
+  return values;
+}
+
+TEST_F(FloatypeZenzTest, KeepsSuggestionsWhileARomanSequenceIsUnfinished) {
+  floatype::EnableSessionFeatures(true);
+  const std::vector<std::string> shown =
+      Suggestions(SendKeys({"k", "i", "k", "a", "i"}));
+  ASSERT_GE(shown.size(), 2);
+  const commands::Output k = SendKeys({"k"});
+  EXPECT_EQ(Preedit(k), "きかいｋ");
+  EXPECT_EQ(Suggestions(k), shown);
+  const commands::Output ky = SendKeys({"y"});
+  EXPECT_EQ(Preedit(ky), "きかいｋｙ");
+  EXPECT_EQ(Suggestions(ky), shown) << "Mozc alone suggests one candidate";
+  // A finished sequence suggests afresh.
+  EXPECT_EQ(Preedit(SendKeys({"o"})), "きかいきょ");
+}
+
+TEST_F(FloatypeZenzTest, SuggestsForTheFirstLettersOfAComposition) {
+  floatype::EnableSessionFeatures(true);
+  EXPECT_EQ(Suggestions(SendKeys({"k"})), std::vector<std::string>{"k"});
+}
+
 TEST_F(FloatypeZenzTest, DropsTheAnswerAfterTheUserActs) {
   ASSERT_TRUE(ConvertKikai().has_callback());
   const commands::Output picked = SendKeys({"Space"});
