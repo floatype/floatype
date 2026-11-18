@@ -360,6 +360,12 @@ message Config {
   // Use mode indicator feature.
   optional bool use_mode_indicator = 120 [default = true];
 
+  // floatype: commits that zenz corrected teach the suggestion history, so the
+  // user's sentences still come back as suggestions. The conversion ranking
+  // never learns zenz's choices. A large number keeps clear of fields that
+  // upstream Mozc adds.
+  optional bool zenz_suggestion_learning = 1001 [default = true];
+
   //////////////////////////////////////////////////////////////
   //
   // Cloud (300-319)

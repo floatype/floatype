@@ -14,10 +14,12 @@
 #include "base/file_util.h"
 #include "base/system_util.h"
 #include "composer/key_parser.h"
+#include "config/config_handler.h"
 #include "engine/mock_data_engine_factory.h"
 #include "floatype/zenz/scorer_client.h"
 #include "floatype/zenz/zenz_corrector.h"
 #include "protocol/commands.pb.h"
+#include "protocol/config.pb.h"
 #include "session/session_handler.h"
 #include "session/session_handler_test_util.h"
 #include "testing/gmock.h"
@@ -26,6 +28,14 @@
 
 namespace mozc::session {
 namespace {
+
+bool Suggests(const commands::Output& output, absl::string_view value) {
+  for (const commands::CandidateWord& word :
+       output.all_candidate_words().candidates()) {
+    if (word.value() == value) return true;
+  }
+  return false;
+}
 
 std::string Preedit(const commands::Output& output) {
   std::string text;
@@ -110,6 +120,29 @@ class FloatypeZenzTest : public testing::SessionHandlerTestBase {
     return output;
   }
 
+  void SetZenzSuggestionLearning(bool on) {
+    config::Config config = config::ConfigHandler::DefaultConfig();
+    config.set_zenz_suggestion_learning(on);
+    commands::Input input;
+    input.set_type(commands::Input::SET_CONFIG);
+    *input.mutable_config() = config;
+    Eval(std::move(input));
+  }
+
+  // Converts きかいがきかい, which the fake scorer turns into 機械が機械, and
+  // commits zenz's correction.
+  void CommitCorrectedSentence() {
+    ASSERT_OK(FileUtil::SetContents(answers_, "キカイガキカイ\t機械が機械\n"));
+    const commands::Output corrected = PollWhileAsked(SendKeys(
+        {"k", "i", "k", "a", "i", "g", "a", "k", "i", "k", "a", "i", "Space"}));
+    ASSERT_EQ(Preedit(corrected), "機械が機械");
+    ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機械が機械");
+  }
+
+  commands::Output TypeKikaiga() {
+    return SendKeys({"k", "i", "k", "a", "i", "g", "a"});
+  }
+
   commands::Output ConvertKikai() {
     return SendKeys({"k", "i", "k", "a", "i", "Space"});
   }
@@ -168,6 +201,31 @@ TEST_F(FloatypeZenzTest, KeepsWhatTheUserTaughtMozc) {
   ASSERT_EQ(Preedit(converted), "機械");
   ASSERT_TRUE(converted.has_callback());
   EXPECT_EQ(Preedit(PollWhileAsked(converted)), "機械");
+}
+
+TEST_F(FloatypeZenzTest, SuggestsWhatTheUserCommittedAfterZenz) {
+  CommitCorrectedSentence();
+  EXPECT_TRUE(Suggests(TypeKikaiga(), "機械が機械"));
+}
+
+TEST_F(FloatypeZenzTest, KeepsZenzsCorrectionOutOfSuggestionsWhenAskedTo) {
+  SetZenzSuggestionLearning(false);
+  CommitCorrectedSentence();
+  EXPECT_FALSE(Suggests(TypeKikaiga(), "機械が機械"));
+}
+
+TEST_F(FloatypeZenzTest, CtrlBackspaceDeletesTheSelectedSuggestion) {
+  CommitCorrectedSentence();
+  ASSERT_TRUE(Suggests(TypeKikaiga(), "機械が機械"));
+  // Move through the predictions until the learned sentence is selected.
+  commands::Output output = SendKeys({"Down"});
+  for (int i = 0; i < 10 && Preedit(output) != "機械が機械"; ++i) {
+    output = SendKeys({"Down"});
+  }
+  ASSERT_EQ(Preedit(output), "機械が機械");
+  SendKeys({"Ctrl Backspace"});
+  SendKeys({"Escape", "Escape"});
+  EXPECT_FALSE(Suggests(TypeKikaiga(), "機械が機械"));
 }
 
 TEST_F(FloatypeZenzTest, DropsTheAnswerAfterTheUserActs) {

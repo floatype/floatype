@@ -50,6 +50,7 @@
 #include "composer/composer.h"
 #include "composer/key_event_util.h"
 #include "composer/table.h"
+#include "converter/attribute.h"
 #include "engine/engine_converter_interface.h"
 #include "engine/engine_interface.h"
 #include "protocol/commands.pb.h"
@@ -2414,8 +2415,13 @@ bool Session::PollZenz(commands::Command* command) {
   const floatype::ZenzCorrector::PollResult result =
       zenz_.Poll(context_->converter().GetSegments());
   if (result.kind == floatype::ZenzCorrector::PollResult::kApply) {
-    context_->mutable_converter()->PromoteCandidatesWithoutLearning(
-        result.candidate_indices);
+    // zenz's choices never teach the conversion ranking; the suggestion
+    // history may learn the committed sentence.
+    context_->mutable_converter()->PromoteCandidates(
+        result.candidate_indices,
+        context_->GetConfig().zenz_suggestion_learning()
+            ? converter::Attribute::NO_HISTORY_LEARNING
+            : converter::Attribute::NO_LEARNING);
   }
   Output(command);
   if (result.kind == floatype::ZenzCorrector::PollResult::kWait) {

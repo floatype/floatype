@@ -1175,8 +1175,8 @@ void EngineConverter::CandidateMoveToId(const int id,
   SegmentFocus();
 }
 
-bool EngineConverter::PromoteCandidatesWithoutLearning(
-    absl::Span<const int> candidate_indices) {
+bool EngineConverter::PromoteCandidates(absl::Span<const int> candidate_indices,
+                                        const uint32_t attributes) {
   const size_t size = segments_.conversion_segments_size();
   if (!CheckState(CONVERSION) || candidate_indices.size() != size ||
       selected_candidate_indices_.size() != size) {
@@ -1195,8 +1195,7 @@ bool EngineConverter::PromoteCandidatesWithoutLearning(
       continue;
     }
     Segment* segment = segments_.mutable_conversion_segment(i);
-    segment->mutable_candidate(candidate_indices[i])->attributes |=
-        converter::Attribute::NO_LEARNING;
+    segment->mutable_candidate(candidate_indices[i])->attributes |= attributes;
     segment->move_candidate(candidate_indices[i], 0);
   }
   ResetResult();

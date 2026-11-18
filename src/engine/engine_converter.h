@@ -229,8 +229,8 @@ class EngineConverter : public EngineConverterInterface {
   bool CandidateMoveToShortcut(char shortcut) override;
 
   const Segments& GetSegments() const override { return segments_; }
-  bool PromoteCandidatesWithoutLearning(
-      absl::Span<const int> candidate_indices) override;
+  bool PromoteCandidates(absl::Span<const int> candidate_indices,
+                         uint32_t attributes) override;
 
   // Operation for the candidate list.
   void SetCandidateListVisible(bool visible) override;

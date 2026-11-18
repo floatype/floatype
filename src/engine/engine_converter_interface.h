@@ -33,6 +33,7 @@
 #define MOZC_ENGINE_SESSION_CONVERTER_INTERFACE_H_
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -252,11 +253,11 @@ class EngineConverterInterface {
   // floatype: the segments of the current conversion.
   virtual const converter::Segments& GetSegments() const = 0;
   // floatype: shows candidate candidate_indices[i] first in conversion segment
-  // i, marked so that committing it teaches Mozc nothing. Works only on a
-  // conversion the user has not changed; otherwise returns false and changes
-  // nothing.
-  virtual bool PromoteCandidatesWithoutLearning(
-      absl::Span<const int> candidate_indices) = 0;
+  // i and adds `attributes` (such as NO_HISTORY_LEARNING) to each candidate it
+  // moves. Works only on a conversion the user has not changed; otherwise
+  // returns false and changes nothing.
+  virtual bool PromoteCandidates(absl::Span<const int> candidate_indices,
+                                 uint32_t attributes) = 0;
 
   // Operation for the candidate list.
   virtual void SetCandidateListVisible(bool visible) = 0;
