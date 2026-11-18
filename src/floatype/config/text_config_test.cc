@@ -1,5 +1,8 @@
 #include "floatype/config/text_config.h"
 
+#include <fcntl.h>
+#include <sys/stat.h>
+
 #include <string>
 #include <vector>
 
@@ -197,6 +200,26 @@ TEST_F(TextConfigFileTest, ReadsTheFileAndKeepsTheLastGoodOne) {
   ASSERT_OK(FileUtil::Unlink(path_));
   ReloadTextConfig();
   EXPECT_EQ(TextConfigOverlay().ByteSizeLong(), 0);
+}
+
+TEST_F(TextConfigFileTest, NoticesAFileSwappedInWithTheSameTimeAndSize) {
+  // As a dotfile manager does: another file, same length, same time.
+  const std::string other = path_ + ".new";
+  ASSERT_OK(FileUtil::SetContents(path_, "zenz_delay_millisec: 228\n"));
+  ASSERT_OK(FileUtil::SetContents(other, "zenz_delay_millisec: 300\n"));
+  struct stat original;
+  ASSERT_EQ(stat(path_.c_str(), &original), 0);
+  const struct timespec times[2] = {original.st_atimespec,
+                                    original.st_mtimespec};
+  ASSERT_EQ(utimensat(AT_FDCWD, other.c_str(), times, 0), 0);
+  SetTextConfigPath(path_, false);
+  ASSERT_EQ(TextConfigOverlay().zenz_delay_millisec(), 228);
+
+  ASSERT_OK(FileUtil::AtomicRename(other, path_));
+  clock_.Advance(absl::Seconds(1));
+  EXPECT_TRUE(TextConfigChanged());
+  ReloadTextConfig();
+  EXPECT_EQ(TextConfigOverlay().zenz_delay_millisec(), 300);
 }
 
 }  // namespace

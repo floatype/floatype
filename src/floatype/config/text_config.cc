@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -116,14 +117,24 @@ absl::Status CheckRanges(const Message& message,
   return absl::OkStatus();
 }
 
+// What tells a changed file apart. Nix and other dotfile managers swap in a
+// new file with the same modification time; its inode differs. All -1 when
+// the file is missing.
+struct Stamp {
+  int64_t mtime_ns = -1;
+  int64_t size = -1;
+  int64_t inode = -1;
+  int64_t device = -1;
+  bool operator==(const Stamp&) const = default;
+};
+
 struct State {
   absl::Mutex mutex;
   std::string path;
   bool report_errors = false;
   config::Config overlay;
-  // The file as last read: modification time and size; -1 when missing.
-  int64_t mtime_ns = -1;
-  int64_t size = -1;
+  // The file as last read.
+  Stamp stamp;
   absl::Time last_check = absl::InfinitePast();
   std::string last_error;
 };
@@ -133,19 +144,20 @@ State& GetState() {
   return *state;
 }
 
-void FileStamp(const std::string& path, int64_t& mtime_ns, int64_t& size) {
+Stamp FileStamp(const std::string& path) {
   struct stat info;
   if (stat(path.c_str(), &info) != 0) {
-    mtime_ns = size = -1;
-    return;
+    return Stamp();
   }
 #ifdef __APPLE__
-  mtime_ns =
+  const int64_t mtime_ns =
       info.st_mtimespec.tv_sec * 1'000'000'000LL + info.st_mtimespec.tv_nsec;
 #else   // __APPLE__
-  mtime_ns = info.st_mtim.tv_sec * 1'000'000'000LL + info.st_mtim.tv_nsec;
+  const int64_t mtime_ns =
+      info.st_mtim.tv_sec * 1'000'000'000LL + info.st_mtim.tv_nsec;
 #endif  // __APPLE__
-  size = info.st_size;
+  return {mtime_ns, static_cast<int64_t>(info.st_size),
+          static_cast<int64_t>(info.st_ino), static_cast<int64_t>(info.st_dev)};
 }
 
 void Notify(const std::string& message) {
@@ -160,8 +172,8 @@ void Notify(const std::string& message) {
   pid_t pid;
   if (posix_spawn(&pid, argv[0], nullptr, nullptr,
                   const_cast<char* const*>(argv), nullptr) == 0) {
-    // osascript returns at once after posting.
-    waitpid(pid, nullptr, 0);
+    // Reaped aside: this runs while the user types.
+    std::thread([pid] { waitpid(pid, nullptr, 0); }).detach();
   }
 #endif  // __APPLE__
 }
@@ -239,8 +251,8 @@ void ReloadTextConfig() {
       return;
     }
     state.last_check = Clock::GetAbslTime();
-    FileStamp(state.path, state.mtime_ns, state.size);
-    if (state.mtime_ns < 0) {
+    state.stamp = FileStamp(state.path);
+    if (state.stamp.size < 0) {
       state.overlay.Clear();  // No file: the settings screen decides.
       state.last_error.clear();
       return;
@@ -272,10 +284,7 @@ bool TextConfigChanged() {
     return false;
   }
   state.last_check = now;
-  int64_t mtime_ns;
-  int64_t size;
-  FileStamp(state.path, mtime_ns, size);
-  return mtime_ns != state.mtime_ns || size != state.size;
+  return !(FileStamp(state.path) == state.stamp);
 }
 
 config::Config TextConfigOverlay() {
