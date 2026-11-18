@@ -444,6 +444,9 @@ message Config {
   // left over and a word list, converts to its letters, and the indicator
   // shows あ or A for the word before the caret.
   optional bool mixed_english = 1017 [default = false];
+  // floatype: romaji still open to a longer rule shows what it gives now (ん
+  // for n, ます for ms with a custom ms rule) instead of the letters.
+  optional bool display_ambiguous_romaji = 1018 [default = false];
   // floatype: a correction stopped with Ctrl+Delete while it is shown is not
   // made again for the same reading. Clearing the user history forgets them.
   optional bool zenz_learning = 1013 [default = true];

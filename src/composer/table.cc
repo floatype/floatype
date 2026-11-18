@@ -145,6 +145,7 @@ constexpr absl::string_view kMiddleDot = "・";
 bool Table::InitializeWithRequestAndConfig(const commands::Request& request,
                                            const config::Config& config) {
   case_sensitive_ = false;
+  display_ambiguous_ = config.display_ambiguous_romaji();
   bool result = false;
   if (request.special_romanji_table() !=
       mozc::commands::Request::DEFAULT_TABLE) {
@@ -564,7 +565,8 @@ std::shared_ptr<const Table> TableManager::GetTable(
   // calculate the hash depending on the request and the config
   const size_t hash =
       absl::HashOf(request.special_romanji_table(), config.preedit_method(),
-                   config.punctuation_method(), config.symbol_method());
+                   config.punctuation_method(), config.symbol_method(),
+                   config.display_ambiguous_romaji());
 
   // When custom_roman_table is set, force to create new table.
   bool update_custom_roman_table = false;

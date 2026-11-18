@@ -798,6 +798,21 @@ TEST_F(FloatypeZenzTest, AKeyCanRunSeveralCommands) {
   EXPECT_TRUE(next.has_candidate_window());
 }
 
+TEST_F(FloatypeZenzTest, AmbiguousRomajiCanShowItsKana) {
+  EXPECT_EQ(Preedit(SendKeys({"k", "a", "n"})), "かｎ") << "off by default";
+  SendKeys({"Escape"});
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_display_ambiguous_romaji(true);
+  config.set_use_live_conversion(false);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+  EXPECT_EQ(Preedit(SendKeys({"k", "a", "n"})), "かん");
+  EXPECT_EQ(Preedit(SendKeys({"a"})), "かな");
+  EXPECT_EQ(Preedit(SendKeys({"n", "k", "a"})), "かなんか");
+}
+
 TEST_F(FloatypeZenzTest, ZenzCanBeTurnedOff) {
   config::Config config = config::ConfigHandler::DefaultConfig();
   config.set_use_zenz(false);

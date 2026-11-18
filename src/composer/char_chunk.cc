@@ -131,13 +131,25 @@ void CharChunk::Clear() {
   local_length_cache_ = std::string::npos;
 }
 
+bool CharChunk::ShowsAmbiguous() const {
+  return table_ != nullptr && table_->display_ambiguous() &&
+         !ambiguous_.empty();
+}
+
+std::string CharChunk::Shown() const {
+  return ShowsAmbiguous() ? absl::StrCat(conversion_, ambiguous_)
+                          : absl::StrCat(conversion_, pending_);
+}
+
 size_t CharChunk::GetLength(Transliterators::Transliterator t12r) const {
-  if (t12r == Transliterators::LOCAL &&
+  // floatype: what is shown can change with ambiguous_ alone, so no cache.
+  const bool cacheable = table_ == nullptr || !table_->display_ambiguous();
+  if (t12r == Transliterators::LOCAL && cacheable &&
       local_length_cache_ != std::string::npos) {
     return local_length_cache_;
   }
-  const std::string t13n = Transliterate(
-      t12r, DeleteSpecialKeys(raw_), DeleteSpecialKeys(conversion_ + pending_));
+  const std::string t13n =
+      Transliterate(t12r, DeleteSpecialKeys(raw_), DeleteSpecialKeys(Shown()));
   size_t length = Util::CharsLen(t13n);
   if (t12r == Transliterators::LOCAL) {
     local_length_cache_ = length;
@@ -148,8 +160,7 @@ size_t CharChunk::GetLength(Transliterators::Transliterator t12r) const {
 void CharChunk::AppendResult(Transliterators::Transliterator t12r,
                              std::string* result) const {
   const std::string t13n =
-      Transliterate(t12r, DeleteSpecialKeys(raw_),
-                    DeleteSpecialKeys(absl::StrCat(conversion_, pending_)));
+      Transliterate(t12r, DeleteSpecialKeys(raw_), DeleteSpecialKeys(Shown()));
   result->append(t13n);
 }
 
@@ -558,6 +569,13 @@ absl::StatusOr<CharChunk> CharChunk::SplitChunk(
   if (position <= 0 || position >= GetLength(t12r)) {
     return absl::InvalidArgumentError(
         absl::StrCat("Invalid position: ", position));
+  }
+  // floatype: the cursor inside a shown ambiguous result settles it, so the
+  // split works on what is on screen.
+  if (ShowsAmbiguous()) {
+    absl::StrAppend(&conversion_, ambiguous_);
+    pending_.clear();
+    ambiguous_.clear();
   }
 
   local_length_cache_ = std::string::npos;

@@ -199,6 +199,11 @@ class CharChunk final {
   std::pair<bool, absl::string_view> AddInputInternal(absl::string_view input);
 
  private:
+  // floatype: whether ambiguous_ is shown in place of pending_, and the
+  // string shown.
+  bool ShowsAmbiguous() const;
+  std::string Shown() const;
+
   void AddInputAndConvertedChar(CompositionInput* composition_input);
 
   std::shared_ptr<const Table> table_;

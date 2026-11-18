@@ -3233,3 +3233,72 @@ TEST_F(ComposerTest, CreateEmptyComposerData) {
 
 }  // namespace composer
 }  // namespace mozc
+
+namespace mozc {
+namespace composer {
+namespace {
+
+// floatype: romaji still open to a longer rule shows what it gives now.
+class DisplayAmbiguousTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    table_ = std::make_shared<Table>();
+    table_->AddRule("a", "あ", "");
+    table_->AddRule("u", "う", "");
+    table_->AddRule("ma", "ま", "");
+    table_->AddRule("su", "す", "");
+    table_->AddRule("n", "ん", "");
+    table_->AddRule("na", "な", "");
+    table_->AddRule("ru", "る", "");
+    table_->AddRule("ms", "ます", "");
+    table_->AddRule("mst", "ました", "");
+    table_->AddRule("kk", "ということ", "");
+    table_->AddRule("kkd", "ということで", "");
+    table_->set_display_ambiguous(true);
+    composer_ = std::make_unique<Composer>(
+        table_, std::make_shared<commands::Request>(),
+        std::make_shared<config::Config>());
+  }
+  std::string Typed(absl::string_view keys) {
+    composer_->Reset();
+    for (const char c : keys) composer_->InsertCharacter(std::string(1, c));
+    return composer_->GetStringForPreedit();
+  }
+
+  std::shared_ptr<Table> table_;
+  std::unique_ptr<Composer> composer_;
+};
+
+TEST_F(DisplayAmbiguousTest, ShowsWhatTheShorterRuleGives) {
+  EXPECT_EQ(Typed("ms"), "ます");
+  EXPECT_EQ(Typed("mst"), "ました");
+  EXPECT_EQ(Typed("n"), "ん");
+  EXPECT_EQ(Typed("na"), "な");
+  EXPECT_EQ(Typed("kk"), "ということ");
+  EXPECT_EQ(composer_->GetCursor(), 5) << "the caret after what is shown";
+}
+
+TEST_F(DisplayAmbiguousTest, FallsBackWhenTheLongerRuleFails) {
+  EXPECT_EQ(Typed("msu"), "ますう") << "as without the option";
+  EXPECT_EQ(Typed("nru"), "んる");
+}
+
+TEST_F(DisplayAmbiguousTest, BackspaceDeletesWhatIsShown) {
+  Typed("ms");
+  composer_->Backspace();
+  EXPECT_EQ(composer_->GetStringForPreedit(), "ま");
+  Typed("kk");
+  composer_->Backspace();
+  EXPECT_EQ(composer_->GetStringForPreedit(), "というこ");
+}
+
+TEST_F(DisplayAmbiguousTest, IsOffByDefault) {
+  table_->set_display_ambiguous(false);
+  EXPECT_EQ(Typed("ms"), "ｍｓ");
+  EXPECT_EQ(Typed("n"), "ｎ");
+  EXPECT_EQ(composer_->GetQueryForConversion(), "ん");
+}
+
+}  // namespace
+}  // namespace composer
+}  // namespace mozc

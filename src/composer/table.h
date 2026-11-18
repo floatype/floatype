@@ -123,6 +123,11 @@ class Table final {
   bool case_sensitive() const;
   void set_case_sensitive(bool case_sensitive);
 
+  // floatype: whether the composition shows what romaji still open to a
+  // longer rule would give now (ん for n, ます for ms) instead of the letters.
+  bool display_ambiguous() const { return display_ambiguous_; }
+  void set_display_ambiguous(bool display) { display_ambiguous_ = display; }
+
   // Parses special key strings escaped with the pair of "{" and "}"
   // and returns the parsed string.
   std::string ParseSpecialKey(const absl::string_view input) const {
@@ -152,6 +157,7 @@ class Table final {
   // If false, input alphabet characters are normalized to lower
   // characters.  The default value is false.
   bool case_sensitive_ = false;
+  bool display_ambiguous_ = false;
 };
 
 class TableManager {

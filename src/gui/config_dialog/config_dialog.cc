@@ -565,6 +565,10 @@ void ConfigDialog::SetUpFloatypeTab() {
                liveConversionWaitSpinBox_);
   form->addRow(text("打つと zenz を待って確定する文字"), directCommitLineEdit_);
 
+  heading("ローマ字");
+  displayAmbiguousCheckBox_ =
+      check("長い規則の途中のローマ字を、いまの かな で見せる（n を ん で）");
+
   heading("日英混在入力");
   mixedEnglishCheckBox_ = check(
       "かなの入力中に打った英単語を英字のままにし、インジケータに あ / A "
@@ -700,6 +704,7 @@ void ConfigDialog::ConvertFromProto(const config::Config& config) {
   directCommitLineEdit_->setText(
       QString::fromStdString(config.direct_commit_characters()));
   SET_CHECKBOX(mixedEnglishCheckBox_, mixed_english);
+  SET_CHECKBOX(displayAmbiguousCheckBox_, display_ambiguous_romaji);
   candidateFontScaleSpinBox_->setValue(config.candidate_font_scale_percent());
   SET_CHECKBOX(showIndicatorCheckBox_, show_indicator);
   indicatorPlacementComboBox_->setCurrentIndex(
@@ -818,6 +823,7 @@ void ConfigDialog::ConvertToProto(config::Config* config) const {
   config->set_direct_commit_characters(
       directCommitLineEdit_->text().trimmed().toStdString());
   GET_CHECKBOX(mixedEnglishCheckBox_, mixed_english);
+  GET_CHECKBOX(displayAmbiguousCheckBox_, display_ambiguous_romaji);
   config->set_candidate_font_scale_percent(candidateFontScaleSpinBox_->value());
   GET_CHECKBOX(showIndicatorCheckBox_, show_indicator);
   config::Config::IndicatorStyle* style = config->mutable_indicator_style();
