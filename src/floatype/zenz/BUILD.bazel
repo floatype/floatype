@@ -3,6 +3,7 @@ load(
     "mozc_cc_binary",
     "mozc_cc_library",
     "mozc_cc_test",
+    "mozc_select",
 )
 
 package(default_visibility = ["//visibility:private"])
@@ -47,6 +48,11 @@ mozc_cc_library(
     name = "zenz_corrector",
     srcs = ["zenz_corrector.cc"],
     hdrs = ["zenz_corrector.h"],
+    # IsSecureEventInputEnabled
+    linkopts = mozc_select(macos = [
+        "-framework",
+        "Carbon",
+    ]),
     visibility = [
         "//server:__pkg__",
         "//session:__pkg__",

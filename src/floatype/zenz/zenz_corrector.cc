@@ -1,5 +1,9 @@
 #include "floatype/zenz/zenz_corrector.h"
 
+#ifdef __APPLE__
+#include <Carbon/Carbon.h>  // IsSecureEventInputEnabled
+#endif                      // __APPLE__
+
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -97,6 +101,12 @@ bool ZenzCorrector::Request(const Segments& segments,
   if (client_ == nullptr || segments.conversion_segments_size() == 0) {
     return false;
   }
+#ifdef __APPLE__
+  // What is typed while secure input is on stays out of zenz (spec section 4).
+  if (IsSecureEventInputEnabled()) {
+    return false;
+  }
+#endif  // __APPLE__
   std::string reading;
   for (const Segment& segment : segments.conversion_segments()) {
     reading += segment.key();
