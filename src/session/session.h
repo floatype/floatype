@@ -426,6 +426,22 @@ class Session {
   bool SendKeyPrecompositionState(mozc::commands::Command* command);
   bool SendKeyCompositionState(mozc::commands::Command* command);
   bool SendKeyConversionState(mozc::commands::Command* command);
+  // floatype: run one command as if its key had been bound to it.
+  bool RunDirectInputCommand(keymap::DirectInputState::Commands key_command,
+                             mozc::commands::Command* command);
+  bool RunPrecompositionCommand(
+      keymap::PrecompositionState::Commands key_command,
+      mozc::commands::Command* command);
+  bool RunCompositionCommand(keymap::CompositionState::Commands key_command,
+                             mozc::commands::Command* command);
+  bool RunConversionCommand(keymap::ConversionState::Commands key_command,
+                            mozc::commands::Command* command);
+  // floatype: runs a command named as in the keymap table in the state the
+  // session is in now; false when that state has no such command.
+  bool RunNamedCommand(const std::string& name,
+                       mozc::commands::Command* command);
+  // The keymap table's name for the state keys are looked up in now.
+  absl::string_view KeymapStateName() const;
 
   bool MoveCursorToEndInternal(mozc::commands::Command* command,
                                bool clear_undo);

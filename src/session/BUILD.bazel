@@ -702,6 +702,8 @@ mozc_cc_test(
     srcs = ["floatype_zenz_test.cc"],
     data = ["//floatype/zenz:fake_scorer"],
     deps = [
+        "//base:config_file_stream",
+        ":keymap",
         ":session_handler",
         ":session_handler_test_util",
         "//base:file_util",

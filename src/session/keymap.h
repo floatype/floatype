@@ -38,6 +38,7 @@
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
+#include "absl/strings/string_view.h"
 #include "base/port.h"
 #include "base/protobuf/repeated_field.h"
 #include "composer/key_event_util.h"
@@ -281,6 +282,22 @@ class KeyMapManager {
   // Return the file name bound with the keymap enum.
   static const char* GetKeyMapFileName(config::Config::SessionKeymap keymap);
 
+  // floatype: a key bound to several commands ("Commit|IMEOff") runs them in
+  // order. These are the ones after the first, for `state_name` as the keymap
+  // table writes it; Suggestion, Prediction and ZeroQuerySuggestion fall back
+  // to their base state as single commands do. The session resolves each by
+  // name in the state the earlier ones leave.
+  std::vector<std::string> GetFollowingCommands(
+      absl::string_view state_name, const commands::KeyEvent& key_event) const;
+  bool ParseCommandDirect(const std::string& command_string,
+                          DirectInputState::Commands* command) const;
+  bool ParseCommandPrecomposition(const std::string& command_string,
+                                  PrecompositionState::Commands* command) const;
+  bool ParseCommandComposition(const std::string& command_string,
+                               CompositionState::Commands* command) const;
+  bool ParseCommandConversion(const std::string& command_string,
+                              ConversionState::Commands* command) const;
+
   // Returns true if both `new_config` and `old_config`
   // can use the same KeyMapManager.
   static bool IsSameKeyMapManagerApplicable(const config::Config& old_config,
@@ -310,14 +327,6 @@ class KeyMapManager {
                   const std::string& key_event_name,
                   const std::string& command_name);
 
-  bool ParseCommandDirect(const std::string& command_string,
-                          DirectInputState::Commands* command) const;
-  bool ParseCommandPrecomposition(const std::string& command_string,
-                                  PrecompositionState::Commands* command) const;
-  bool ParseCommandComposition(const std::string& command_string,
-                               CompositionState::Commands* command) const;
-  bool ParseCommandConversion(const std::string& command_string,
-                              ConversionState::Commands* command) const;
   void RegisterDirectCommand(const std::string& command_string,
                              DirectInputState::Commands command);
   void RegisterPrecompositionCommand(const std::string& command_string,
@@ -365,6 +374,12 @@ class KeyMapManager {
   // enabled only if prediction is shown. Otherwise, inherit from
   // keymap_conversion
   KeyMap<ConversionState> keymap_prediction_;
+
+  // floatype: the commands after the first, by state name.
+  struct FollowingCommands {
+    using Commands = std::vector<std::string>;
+  };
+  absl::flat_hash_map<std::string, KeyMap<FollowingCommands>> following_;
 };
 
 template <typename T>

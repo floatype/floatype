@@ -42,6 +42,7 @@
 #include "composer/key_parser.h"
 #include "protocol/commands.pb.h"
 #include "protocol/config.pb.h"
+#include "testing/gmock.h"
 #include "testing/gunit.h"
 #include "testing/mozctest.h"
 #include "testing/test_peer.h"
@@ -1133,6 +1134,34 @@ TEST_F(KeyMapTest, AddCommand) {
     EXPECT_FALSE(manager_peer.AddCommand("Composition", kKeyEvent, "Unknown"));
     EXPECT_FALSE(manager_peer.AddCommand("Composition", "INVALID", "Cancel"));
   }
+}
+
+TEST_F(KeyMapTest, AKeyCanRunSeveralCommands) {
+  using ::testing::ElementsAre;
+  using ::testing::IsEmpty;
+  KeyMapManager manager;
+  KeyMapManagerTestPeer manager_peer(manager);
+  commands::KeyEvent key_event;
+  KeyParser::ParseKey("Ctrl Enter", &key_event);
+  EXPECT_TRUE(
+      manager_peer.AddCommand("Composition", "Ctrl Enter", "Commit|IMEOff"));
+  CompositionState::Commands command;
+  EXPECT_TRUE(manager.GetCommandComposition(key_event, &command));
+  EXPECT_EQ(command, CompositionState::COMMIT);
+  EXPECT_THAT(manager.GetFollowingCommands("Composition", key_event),
+              ElementsAre("IMEOff"));
+  // Suggestion inherits it; a key without a sequence has none.
+  EXPECT_THAT(manager.GetFollowingCommands("Suggestion", key_event),
+              ElementsAre("IMEOff"));
+  commands::KeyEvent other;
+  KeyParser::ParseKey("Enter", &other);
+  EXPECT_THAT(manager.GetFollowingCommands("Composition", other), IsEmpty());
+  // An unknown later command rejects the line; a single command replaces it.
+  EXPECT_FALSE(
+      manager_peer.AddCommand("Composition", "Ctrl Enter", "Commit|NoSuch"));
+  EXPECT_TRUE(manager_peer.AddCommand("Composition", "Ctrl Enter", "Cancel"));
+  EXPECT_THAT(manager.GetFollowingCommands("Composition", key_event),
+              IsEmpty());
 }
 
 TEST_F(KeyMapTest, ZeroQuerySuggestion) {

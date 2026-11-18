@@ -5,12 +5,15 @@
 #include <chrono>
 #include <cstdint>
 #include <initializer_list>
+#include <istream>
+#include <iterator>
 #include <memory>
 #include <string>
 #include <thread>
 #include <vector>
 
 #include "absl/strings/string_view.h"
+#include "base/config_file_stream.h"
 #include "base/file_util.h"
 #include "base/system_util.h"
 #include "composer/key_parser.h"
@@ -20,6 +23,7 @@
 #include "floatype/zenz/zenz_corrector.h"
 #include "protocol/commands.pb.h"
 #include "protocol/config.pb.h"
+#include "session/keymap.h"
 #include "session/session_handler.h"
 #include "session/session_handler_test_util.h"
 #include "testing/gmock.h"
@@ -760,6 +764,38 @@ TEST_F(FloatypeZenzTest, MixedEnglishLeavesATrailingNJapanese) {
     SendKeys({"Escape"});
     SendKeys({"Escape"});
   }
+}
+
+TEST_F(FloatypeZenzTest, AKeyCanRunSeveralCommands) {
+  // MS-IME's table with two keys bound to sequences.
+  std::unique_ptr<std::istream> stream = ConfigFileStream::LegacyOpen(
+      keymap::KeyMapManager::GetKeyMapFileName(config::Config::MSIME));
+  ASSERT_NE(stream, nullptr);
+  std::string table((std::istreambuf_iterator<char>(*stream)),
+                    std::istreambuf_iterator<char>());
+  table +=
+      "Composition\tCtrl Enter\tCommit|IMEOff\n"
+      "Composition\tCtrl Space\tConvert|ConvertNext\n";
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_session_keymap(config::Config::CUSTOM);
+  config.set_custom_keymap_table(table);
+  config.set_use_live_conversion(false);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+
+  const commands::Output committed =
+      SendKeys({"k", "i", "k", "a", "i", "Ctrl Enter"});
+  EXPECT_EQ(committed.result().value(), "きかい");
+  EXPECT_EQ(committed.mode(), commands::DIRECT) << "and the IME is off";
+
+  SendKeys({"Hankaku/Zenkaku"});
+  const commands::Output first = SendKeys({"k", "i", "k", "a", "i", "Space"});
+  SendKeys({"Escape"});
+  const commands::Output next = SendKeys({"Ctrl Space"});
+  EXPECT_NE(Preedit(next), Preedit(first)) << "converted, then the next one";
+  EXPECT_TRUE(next.has_candidate_window());
 }
 
 TEST_F(FloatypeZenzTest, ZenzCanBeTurnedOff) {

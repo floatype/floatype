@@ -162,6 +162,7 @@ void KeyMapManager::Reset() {
   keymap_zero_query_suggestion_.Clear();
   keymap_suggestion_.Clear();
   keymap_prediction_.Clear();
+  following_.clear();
 }
 
 bool KeyMapManager::ApplyPrimarySessionKeymap(
@@ -317,6 +318,35 @@ bool KeyMapManager::AddCommand(const std::string& state_name,
   commands::KeyEvent key_event;
   if (!KeyParser::ParseKey(key_event_name, &key_event)) {
     return false;
+  }
+
+  // floatype: several commands. Each later one has to be a command of some
+  // state; which one runs depends on the state the earlier ones leave.
+  const std::string state = state_name == "Direct" ? "DirectInput" : state_name;
+  if (const size_t bar = command_name.find('|'); bar != std::string::npos) {
+    std::vector<std::string> rest =
+        absl::StrSplit(absl::string_view(command_name).substr(bar + 1), '|');
+    for (const std::string& name : rest) {
+      DirectInputState::Commands direct;
+      PrecompositionState::Commands precomposition;
+      CompositionState::Commands composition;
+      ConversionState::Commands conversion;
+      if (!ParseCommandDirect(name, &direct) &&
+          !ParseCommandPrecomposition(name, &precomposition) &&
+          !ParseCommandComposition(name, &composition) &&
+          !ParseCommandConversion(name, &conversion)) {
+        return false;
+      }
+    }
+    if (!AddCommand(state_name, key_event_name, command_name.substr(0, bar))) {
+      return false;
+    }
+    following_[state].AddRule(key_event, std::move(rest));
+    return true;
+  }
+  // A single command replaces a sequence bound before.
+  if (const auto it = following_.find(state); it != following_.end()) {
+    it->second.AddRule(key_event, {});
   }
 
   if (state_name == "DirectInput" || state_name == "Direct") {
@@ -798,6 +828,32 @@ bool KeyMapManager::GetCommandPrediction(
   }
   // use conversion rule
   return keymap_conversion_.GetCommand(key_event, command);
+}
+
+std::vector<std::string> KeyMapManager::GetFollowingCommands(
+    absl::string_view state_name, const commands::KeyEvent& key_event) const {
+  std::vector<std::string> rest;
+  if (const auto it = following_.find(state_name);
+      it != following_.end() && it->second.GetCommand(key_event, &rest)) {
+    return rest;
+  }
+  // The states that inherit their base state's rules where they have none.
+  PrecompositionState::Commands precomposition;
+  CompositionState::Commands composition;
+  ConversionState::Commands conversion;
+  if (state_name == "ZeroQuerySuggestion" &&
+      !keymap_zero_query_suggestion_.GetCommand(key_event, &precomposition)) {
+    return GetFollowingCommands("Precomposition", key_event);
+  }
+  if (state_name == "Suggestion" &&
+      !keymap_suggestion_.GetCommand(key_event, &composition)) {
+    return GetFollowingCommands("Composition", key_event);
+  }
+  if (state_name == "Prediction" &&
+      !keymap_prediction_.GetCommand(key_event, &conversion)) {
+    return GetFollowingCommands("Conversion", key_event);
+  }
+  return {};
 }
 
 bool KeyMapManager::ParseCommandDirect(

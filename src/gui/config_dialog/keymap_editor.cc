@@ -47,6 +47,7 @@
 #include "absl/log/check.h"
 #include "absl/log/log.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/match.h"
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
@@ -156,6 +157,11 @@ class KeyMapEditorDialog::KeyMapValidator {
   }
 
   bool IsVisibleCommand(const absl::string_view command) {
+    // floatype: a sequence ("Commit|IMEOff") has no row in the editor; it is
+    // kept as written, like the other entries the editor does not show.
+    if (absl::StrContains(command, '|')) {
+      return false;
+    }
     if (invisible_commands_.contains(command)) {
       MOZC_VLOG(3) << "invisible command: " << command;
       return false;

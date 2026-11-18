@@ -661,6 +661,10 @@ bool Session::SendKey(commands::Command* command) {
     }
   }
 
+  // floatype: the commands after the first of a key bound to several.
+  const std::vector<std::string> following =
+      context_->GetKeyMapManager().GetFollowingCommands(KeymapStateName(),
+                                                        command->input().key());
   bool result = false;
   switch (context_->state()) {
     case ImeContext::DIRECT:
@@ -682,6 +686,9 @@ bool Session::SendKey(commands::Command* command) {
     case ImeContext::NONE:
       result = false;
       break;
+  }
+  for (const std::string& name : following) {
+    result = RunNamedCommand(name, command);
   }
 
   if (const std::string shown = ShownAfterLiveConversion(); !shown.empty()) {
@@ -767,6 +774,12 @@ bool Session::SendKeyDirectInputState(commands::Command* command) {
     return EchoBackAndClearUndoContext(command);
   }
 
+  return RunDirectInputCommand(key_command, command);
+}
+
+bool Session::RunDirectInputCommand(
+    keymap::DirectInputState::Commands key_command,
+    commands::Command* command) {
   switch (key_command) {
     case keymap::DirectInputState::IME_ON:
       return IMEOn(command);
@@ -811,6 +824,12 @@ bool Session::SendKeyPrecompositionState(commands::Command* command) {
     context_->mutable_client_context()->Clear();
   }
 
+  return RunPrecompositionCommand(key_command, command);
+}
+
+bool Session::RunPrecompositionCommand(
+    keymap::PrecompositionState::Commands key_command,
+    commands::Command* command) {
   switch (key_command) {
     case keymap::PrecompositionState::INSERT_CHARACTER:
       return InsertCharacter(command);
@@ -892,6 +911,12 @@ bool Session::SendKeyCompositionState(commands::Command* command) {
     return DoNothing(command);
   }
 
+  return RunCompositionCommand(key_command, command);
+}
+
+bool Session::RunCompositionCommand(
+    keymap::CompositionState::Commands key_command,
+    commands::Command* command) {
   switch (key_command) {
     case keymap::CompositionState::INSERT_CHARACTER:
       return InsertCharacter(command);
@@ -1034,6 +1059,11 @@ bool Session::SendKeyConversionState(commands::Command* command) {
     return DoNothing(command);
   }
 
+  return RunConversionCommand(key_command, command);
+}
+
+bool Session::RunConversionCommand(
+    keymap::ConversionState::Commands key_command, commands::Command* command) {
   switch (key_command) {
     case keymap::ConversionState::INSERT_CHARACTER:
       return InsertCharacter(command);
@@ -2601,6 +2631,59 @@ void Session::MaybeScheduleLiveConversion(commands::Command* command) {
   }
   SetCallback(command, commands::SessionCommand::LIVE_CONVERT,
               config.live_conversion_delay_millisec());
+}
+
+absl::string_view Session::KeymapStateName() const {
+  const EngineConverterInterface& converter = context_->converter();
+  switch (context_->state()) {
+    case ImeContext::DIRECT:
+      return "DirectInput";
+    case ImeContext::PRECOMPOSITION:
+      return converter.CheckState(EngineConverterInterface::SUGGESTION)
+                 ? "ZeroQuerySuggestion"
+                 : "Precomposition";
+    case ImeContext::COMPOSITION:
+      return converter.CheckState(EngineConverterInterface::SUGGESTION)
+                 ? "Suggestion"
+                 : "Composition";
+    case ImeContext::CONVERSION:
+      return converter.CheckState(EngineConverterInterface::PREDICTION)
+                 ? "Prediction"
+                 : "Conversion";
+    case ImeContext::NONE:
+      break;
+  }
+  return "";
+}
+
+bool Session::RunNamedCommand(const std::string& name,
+                              commands::Command* command) {
+  const keymap::KeyMapManager& keymap = context_->GetKeyMapManager();
+  switch (context_->state()) {
+    case ImeContext::DIRECT: {
+      keymap::DirectInputState::Commands key_command;
+      return keymap.ParseCommandDirect(name, &key_command) &&
+             RunDirectInputCommand(key_command, command);
+    }
+    case ImeContext::PRECOMPOSITION: {
+      keymap::PrecompositionState::Commands key_command;
+      return keymap.ParseCommandPrecomposition(name, &key_command) &&
+             RunPrecompositionCommand(key_command, command);
+    }
+    case ImeContext::COMPOSITION: {
+      keymap::CompositionState::Commands key_command;
+      return keymap.ParseCommandComposition(name, &key_command) &&
+             RunCompositionCommand(key_command, command);
+    }
+    case ImeContext::CONVERSION: {
+      keymap::ConversionState::Commands key_command;
+      return keymap.ParseCommandConversion(name, &key_command) &&
+             RunConversionCommand(key_command, command);
+    }
+    case ImeContext::NONE:
+      break;
+  }
+  return false;
 }
 
 bool Session::MaybeConvertAsEnglish(commands::Command* command) {
