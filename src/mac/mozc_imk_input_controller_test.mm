@@ -816,5 +816,38 @@ TEST_F(MozcImkInputControllerTest, fillSurroundingContext) {
   EXPECT_EQ([mock_client_ getCounter:"markedRange"], 0);
 }
 
+// floatype: a callback with a delay, such as the poll for zenz's correction, is
+// sent after the delay unless a key comes first.
+TEST_F(MozcImkInputControllerTest, SendsADelayedCallbackAfterItsDelay) {
+  commands::Output output;
+  output.set_consumed(true);
+  output.mutable_callback()->mutable_session_command()->set_type(
+      commands::SessionCommand::POLL_ZENZ);
+  output.mutable_callback()->set_delay_millisec(20);
+  EXPECT_CALL(*mock_mozc_client_, SendCommandWithContext(_, _, _)).Times(0);
+  [controller_ processOutput:&output client:mock_client_];
+  Mock::VerifyAndClearExpectations(mock_mozc_client_);
+
+  EXPECT_CALL(*mock_mozc_client_,
+              SendCommandWithContext(Type(commands::SessionCommand::POLL_ZENZ), _, NotNull()))
+      .WillOnce(Return(true));
+  [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.2]];
+}
+
+TEST_F(MozcImkInputControllerTest, AKeyCancelsADelayedCallback) {
+  controller_.mode = commands::HIRAGANA;
+  commands::Output output;
+  output.set_consumed(true);
+  output.mutable_callback()->mutable_session_command()->set_type(
+      commands::SessionCommand::POLL_ZENZ);
+  output.mutable_callback()->set_delay_millisec(20);
+  [controller_ processOutput:&output client:mock_client_];
+
+  EXPECT_CALL(*mock_mozc_client_, SendKeyWithContext(_, _, NotNull())).WillOnce(Return(true));
+  EXPECT_CALL(*mock_mozc_client_, SendCommandWithContext(_, _, _)).Times(0);
+  SendKeyEvent(kVK_ANSI_A, controller_, mock_client_);
+  [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.2]];
+}
+
 }  // namespace
 }  // namespace mozc

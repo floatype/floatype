@@ -316,6 +316,7 @@ bool CanSurroundingText(absl::string_view bundle_id) {
   if (mozcRenderer_) {
     mozcRenderer_->ExecCommand(clearCommand);
   }
+  [self cancelCallback];
   DLOG(INFO) << kProductNameInEnglish << " client (" << self << "): deactivated";
   DLOG(INFO) << "sender bundleID: " << clientBundle_;
   [super deactivateServer:sender];
@@ -625,6 +626,10 @@ bool CanSurroundingText(absl::string_view bundle_id) {
       [self invokeReconvert:&callback_command client:sender];
     } else if (callback_command.type() == SessionCommand::UNDO) {
       [self invokeUndo:sender];
+    } else if (output->callback().delay_millisec() > 0) {
+      [self sendCallback:callback_command
+              afterDelay:output->callback().delay_millisec()
+                  client:sender];
     } else {
       Output output_for_callback;
       if (mozcClient_->SendCommand(callback_command, &output_for_callback)) {
@@ -936,6 +941,7 @@ bool CanSurroundingText(absl::string_view bundle_id) {
       CanSurroundingText(clientBundle_)) {
     [self fillSurroundingContext:&context client:sender];
   }
+  [self cancelCallback];
   if (!mozcClient_->SendKeyWithContext(keyEvent, context, &output)) {
     return NO;
   }
@@ -944,8 +950,38 @@ bool CanSurroundingText(absl::string_view bundle_id) {
   return output.consumed();
 }
 
+- (void)sendCallback:(const SessionCommand &)command
+          afterDelay:(uint32_t)delayMillisec
+              client:(id)sender {
+  [self cancelCallback];
+  const SessionCommand callbackCommand = command;
+  __weak MozcImkInputController *weakSelf = self;
+  callbackTimer_ = [NSTimer
+      timerWithTimeInterval:delayMillisec / 1000.0
+                    repeats:NO
+                      block:^(NSTimer *timer) {
+                        MozcImkInputController *strongSelf = weakSelf;
+                        if (strongSelf == nil) {
+                          return;
+                        }
+                        strongSelf->callbackTimer_ = nil;
+                        Output output;
+                        if (strongSelf->mozcClient_->SendCommand(callbackCommand, &output)) {
+                          [strongSelf processOutput:&output client:sender];
+                        }
+                      }];
+  // Common modes keep the timer running while a menu or a candidate window is tracking.
+  [[NSRunLoop currentRunLoop] addTimer:callbackTimer_ forMode:NSRunLoopCommonModes];
+}
+
+- (void)cancelCallback {
+  [callbackTimer_ invalidate];
+  callbackTimer_ = nil;
+}
+
 #pragma mark ControllerCallback
 - (void)sendCommand:(const SessionCommand &)command {
+  [self cancelCallback];
   Output output;
   if (!mozcClient_->SendCommand(command, &output)) {
     return;

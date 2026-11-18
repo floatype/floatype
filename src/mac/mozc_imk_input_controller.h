@@ -100,6 +100,10 @@
   /** |imkClientForTest_| holds the reference to the client object for unit test. */
   id imkClientForTest_;
 
+  /** floatype: |callbackTimer_| sends a server callback that asks for a delay, such as the poll
+   * for zenz's correction. The next user action cancels it. */
+  NSTimer *callbackTimer_;
+
   /** |menu_| is the NSMenu to be shown in the pulldown menu-list of the IME. */
   IBOutlet NSMenu *menu_;
 }
@@ -217,6 +221,19 @@
  * @param sender The sender of this request.
  */
 - (void)invokeUndo:(id)sender;
+
+/** floatype: sends a server callback after its delay, unless a user action cancels it first.
+ *
+ * @param command The session command to send back.
+ * @param delayMillisec The delay the server asked for.
+ * @param sender The client to show the output in.
+ */
+- (void)sendCallback:(const mozc::commands::SessionCommand &)command
+          afterDelay:(uint32_t)delayMillisec
+              client:(id)sender;
+
+/** floatype: cancels the pending server callback, if any. */
+- (void)cancelCallback;
 
 /** Processes output fields such as preedit, output text, candidates, and modes and calls methods
  * above.
