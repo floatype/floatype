@@ -11,6 +11,10 @@ mozc_cc_binary(
     deps = [
         "//base:init_mozc",
         "//base:system_util",
+        "//base:util",
+        "//base/strings:japanese",
+        "//base/strings:unicode",
+        "//config:config_handler",
         "//base/file:temp_dir",
         "//engine",
         "//engine:eval_engine_factory",

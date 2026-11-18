@@ -3,6 +3,7 @@
 // does, and reports what the user would see and when.
 //
 // Input (stdin): "<left context>\t<hiragana reading>" per line.
+// With --live, see the flag for the output.
 // Output (stdout), one line each:
 //   <mozc>\t<final>\t<space ms>\t<final ms>\t<polls>
 // <mozc> is shown right after Space and <final> once the session stops asking
@@ -15,18 +16,25 @@
 #include <cstdint>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <string>
 #include <thread>
 #include <utility>
+#include <vector>
 
 #include "absl/flags/flag.h"
 #include "absl/log/check.h"
+#include "absl/strings/ascii.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "base/file/temp_dir.h"
 #include "base/init_mozc.h"
+#include "base/strings/japanese.h"
+#include "base/strings/unicode.h"
 #include "base/system_util.h"
+#include "base/util.h"
+#include "config/config_handler.h"
 #include "engine/engine.h"
 #include "engine/eval_engine_factory.h"
 #include "floatype/zenz/scorer_client.h"
@@ -43,6 +51,16 @@ ABSL_FLAG(std::string, model,
           "floatype/scorer/build/zenz-v3.2-small-Q5_K_M.gguf",
           "the zenz model");
 ABSL_FLAG(bool, zenz, true, "correct conversions with zenz");
+ABSL_FLAG(bool, live, false,
+          "type each reading key by key with live conversion on, pausing "
+          "after 、 and 。 and at the end, and commit it with Enter; prints "
+          "<committed>\t<reading committed>\t<polls>, or SKIP for a reading "
+          "with characters that have no key here");
+ABSL_FLAG(int, pause_every, 0,
+          "live mode: also pause after every this many kana (0: only at 、, 。 "
+          "and the end)");
+ABSL_FLAG(bool, keep_shown, true,
+          "live mode: keep what a live conversion showed while typing on");
 
 namespace mozc {
 namespace {
@@ -119,7 +137,113 @@ class Replayer {
            std::to_string(final_ms) + '\t' + std::to_string(polls);
   }
 
+  // Types `reading` key by key as romaji after `left_context`, lets the timer
+  // callbacks run where the user pauses, and commits with Enter.
+  std::string ReplayLive(absl::string_view left_context,
+                         absl::string_view reading) {
+    const std::optional<std::vector<std::pair<char, bool>>> keys =
+        Keys(reading);
+    if (!keys.has_value()) {
+      return "SKIP";
+    }
+    int polls = 0;
+    for (const auto& [key_code, pause] : *keys) {
+      commands::Input input;
+      input.set_type(commands::Input::SEND_KEY);
+      input.mutable_key()->set_key_code(key_code);
+      input.mutable_context()->set_preceding_text(left_context);
+      commands::Output output = Eval(std::move(input));
+      if (pause) {
+        polls += RunCallbacks(std::move(output));
+      }
+    }
+    commands::Input enter;
+    enter.set_type(commands::Input::SEND_KEY);
+    enter.mutable_key()->set_special_key(commands::KeyEvent::ENTER);
+    const commands::Output committed = Eval(std::move(enter));
+    // Takes back what the commit taught, so items stay independent.
+    commands::Input undo;
+    undo.set_type(commands::Input::SEND_KEY);
+    undo.mutable_key()->set_special_key(commands::KeyEvent::BACKSPACE);
+    Eval(std::move(undo));
+    return committed.result().value() + '\t' + committed.result().key() + '\t' +
+           std::to_string(polls);
+  }
+
+  void SetKeepShown(bool keep) {
+    commands::Input input;
+    input.set_type(commands::Input::SET_CONFIG);
+    *input.mutable_config() = config::ConfigHandler::DefaultConfig();
+    input.mutable_config()->set_live_conversion_keeps_shown_text(keep);
+    Eval(std::move(input));
+  }
+
  private:
+  // The romaji keys for `reading`, each marked when the user pauses after it.
+  static std::optional<std::vector<std::pair<char, bool>>> Keys(
+      absl::string_view reading) {
+    std::vector<std::pair<char, bool>> keys;
+    std::string kana;
+    int typed = 0;
+    auto flush = [&]() -> bool {
+      // ん before a vowel or y needs nn; HiraganaToRomanji writes n.
+      const int pause_every = absl::GetFlag(FLAGS_pause_every);
+      for (const char32_t c : Utf8AsChars32(kana)) {
+        std::string romaji =
+            japanese::HiraganaToRomanji(Util::CodepointToUtf8(c));
+        if (c == U'ん') romaji = "nn";
+        for (const char key : romaji) {
+          if (!absl::ascii_islower(static_cast<unsigned char>(key))) {
+            return false;
+          }
+          keys.emplace_back(key, false);
+        }
+        // Small kana join the kana before them, so the count skips them.
+        if (pause_every > 0 && !romaji.starts_with('x') &&
+            ++typed % pause_every == 0) {
+          keys.back().second = true;
+        }
+      }
+      kana.clear();
+      return true;
+    };
+    for (const char32_t c : Utf8AsChars32(reading)) {
+      // 、 and 。 end a phrase, where the user pauses; ー is its own key.
+      const char key = c == U'、'   ? ','
+                       : c == U'。' ? '.'
+                       : c == U'ー' ? '-'
+                                    : 0;
+      if (key == 0) {
+        Util::CodepointToUtf8Append(c, &kana);
+        continue;
+      }
+      if (!flush()) return std::nullopt;
+      keys.emplace_back(key, key != '-');
+    }
+    if (!flush() || keys.empty()) return std::nullopt;
+    keys.back().second = true;
+    return keys;
+  }
+
+  // Calls back the way the client's timer does until the session stops
+  // asking. Only polls wait: they wait for the scorer.
+  int RunCallbacks(commands::Output output) {
+    int polls = 0;
+    while (output.has_callback()) {
+      if (output.callback().session_command().type() ==
+          commands::SessionCommand::POLL_ZENZ) {
+        std::this_thread::sleep_for(
+            std::chrono::milliseconds(output.callback().delay_millisec()));
+        ++polls;
+      }
+      commands::Input input;
+      input.set_type(commands::Input::SEND_COMMAND);
+      *input.mutable_command() = output.callback().session_command();
+      output = Eval(std::move(input));
+    }
+    return polls;
+  }
+
   commands::Output Eval(commands::Input input) {
     commands::Command command;
     *command.mutable_input() = std::move(input);
@@ -155,7 +279,14 @@ int main(int argc, char** argv) {
   absl::StatusOr<std::unique_ptr<mozc::Engine>> engine = mozc::CreateEvalEngine(
       absl::GetFlag(FLAGS_data_file), absl::GetFlag(FLAGS_data_type));
   CHECK_OK(engine);
+  // Live conversion and the indicator run only where turned on, as in the
+  // converter process.
+  const bool live = absl::GetFlag(FLAGS_live);
+  mozc::floatype::EnableSessionFeatures(live);
   mozc::Replayer replayer(*std::move(engine));
+  if (live) {
+    replayer.SetKeepShown(absl::GetFlag(FLAGS_keep_shown));
+  }
 
   // The first conversion starts the scorer and loads the model.
   replayer.Replay("", "きょうはいしゃにいく");
@@ -168,7 +299,9 @@ int main(int argc, char** argv) {
     const absl::string_view reading =
         tab == std::string::npos ? absl::string_view(line)
                                  : absl::string_view(line).substr(tab + 1);
-    std::cout << replayer.Replay(context, reading) << std::endl;
+    std::cout << (live ? replayer.ReplayLive(context, reading)
+                       : replayer.Replay(context, reading))
+              << std::endl;
   }
   mozc::floatype::ZenzCorrector::SetDefaultClientForTesting(nullptr);
   return 0;

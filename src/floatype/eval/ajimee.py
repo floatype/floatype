@@ -8,6 +8,10 @@ Engines:
         decoding), sending one request at a time.
         Build first: cmake -S floatype/scorer -B floatype/scorer/build \
             -DCMAKE_BUILD_TYPE=Release && cmake --build floatype/scorer/build
+  live  types each reading key by key with live conversion on, pausing after
+        、 and 。 and at the end, and commits with Enter (replay_main --live).
+        Readings with characters other than kana, 、, 。 and ー are skipped
+        and counted as misses; the report says how many.
   replay  converts with Space through Mozc's session handler with the real
         engine and scorer (//floatype/eval:replay_main), the way the macOS
         client does, and also scores what a user who commits a given time after
@@ -245,7 +249,13 @@ def convert_with_zenz(
 
 def main() -> None:
   parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-  parser.add_argument("--engine", choices=["mozc", "zenz", "replay"], default="mozc")
+  parser.add_argument("--engine", choices=["mozc", "zenz", "replay", "live"], default="mozc")
+  parser.add_argument(
+      "--refresh_live", action="store_true",
+      help="live: convert the whole reading afresh each time (live_conversion_keeps_shown_text off)")
+  parser.add_argument(
+      "--pause_every", type=int, default=0,
+      help="live: also pause after every this many kana")
   parser.add_argument(
       "--binary", type=Path, help="default: the engine's tool under bazel-bin or floatype/scorer/build"
   )
@@ -265,6 +275,25 @@ def main() -> None:
     top1 = convert_with_mozc(
         [katakana_to_hiragana(item["input"]) for item in items], binary, args.data_file
     )
+  elif args.engine == "live":
+    binary = args.binary or Path("bazel-bin/floatype/eval/replay_main")
+    done = subprocess.run(
+        [str(binary), f"--data_file={args.data_file}", "--data_type=oss", "--live",
+         f"--keep_shown={'false' if args.refresh_live else 'true'}",
+         f"--pause_every={args.pause_every}"],
+        input="".join(
+            f"{line_field('' if args.no_context else item.get('context_text', ''))}\t"
+            f"{line_field(katakana_to_hiragana(item['input']))}\n"
+            for item in items),
+        capture_output=True, encoding="utf-8", errors="replace", check=True)
+    lines = done.stdout.splitlines()
+    if len(lines) != len(items):
+      raise SystemExit(f"expected {len(items)} results, got {len(lines)}")
+    top1 = ["" if line == "SKIP" else line.split("\t")[0] for line in lines]
+    extras = [{"skipped": line == "SKIP"} for line in lines]
+    report.update(context=not args.no_context, keeps_shown_text=not args.refresh_live,
+                  pause_every=args.pause_every)
+    report["skipped"] = sum(e["skipped"] for e in extras)
   elif args.engine == "replay":
     binary = args.binary or Path("bazel-bin/floatype/eval/replay_main")
     pairs = [
