@@ -98,6 +98,8 @@ mozc_macos_application(
             "//gui/word_register_dialog:word_register_dialog_macos": "Resources",
             "//renderer:mozc_renderer_macos": "Resources",
             "//server:mozc_server_macos": "Resources",
+            # floatype: the scorer and the zenz model, next to the converter.
+            "//floatype/scorer:bundle_files": "Resources",
         },
     ),
     app_icons = ["//data/images/mac:product_icon.icns"],

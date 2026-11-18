@@ -10,3 +10,37 @@ mozc_cc_library(
     srcs = ["protocol.cc"],
     hdrs = ["protocol.h"],
 )
+
+# --define=floatype_zenz=bundle puts the scorer and the zenz model into the app
+# bundle. CMake builds and downloads both into build/ first (CMakeLists.txt).
+config_setting(
+    name = "bundle_zenz",
+    define_values = {"floatype_zenz": "bundle"},
+)
+
+# The bundle keeps paths relative to this package, so the files are copied out
+# of build/ to land right in Contents/Resources.
+genrule(
+    name = "bundle_copies",
+    srcs = [
+        "build/floatype_scorer",
+        "build/zenz-v3.2-small-Q5_K_M.gguf",
+    ],
+    outs = [
+        "floatype_scorer",
+        "zenz-v3.2-small-Q5_K_M.gguf",
+    ],
+    cmd = " && ".join([
+        "cp $(location build/floatype_scorer) $(location floatype_scorer)",
+        "cp $(location build/zenz-v3.2-small-Q5_K_M.gguf) $(location zenz-v3.2-small-Q5_K_M.gguf)",
+    ]),
+)
+
+filegroup(
+    name = "bundle_files",
+    srcs = select({
+        ":bundle_zenz": [":bundle_copies"],
+        "//conditions:default": [],
+    }),
+    visibility = ["//mac:__pkg__"],
+)
