@@ -54,6 +54,7 @@
 #include "converter/attribute.h"
 #include "engine/engine_converter_interface.h"
 #include "engine/engine_interface.h"
+#include "floatype/zenz/zenz_memory.h"
 #include "protocol/commands.pb.h"
 #include "protocol/config.pb.h"
 #include "session/ime_context.h"
@@ -605,6 +606,18 @@ bool Session::SendKey(commands::Command* command) {
       context_->GetKeyMapManager().GetCommandConversion(command->input().key(),
                                                         &key_command) &&
       key_command == keymap::ConversionState::CONVERT_NEXT) {
+    return ShowMozcAgain(zenz_indices, live, command);
+  }
+  // Ctrl+Delete (the key that deletes a suggestion) while zenz's correction is
+  // shown stops it, and zenz does not make it again for this reading.
+  if (keymap::ConversionState::Commands key_command;
+      !zenz_indices.empty() && context_->state() == ImeContext::CONVERSION &&
+      context_->GetKeyMapManager().GetCommandConversion(command->input().key(),
+                                                        &key_command) &&
+      key_command == keymap::ConversionState::DELETE_SELECTED_CANDIDATE) {
+    if (context_->GetConfig().zenz_learning()) {
+      floatype::ZenzMemory::Default().Stop(zenz_reading_, zenz_text_);
+    }
     return ShowMozcAgain(zenz_indices, live, command);
   }
   // The manual zenz key changes nothing on screen: a live conversion stays
@@ -2781,8 +2794,14 @@ bool Session::PollZenz(commands::Command* command) {
     return DoNothing(command);
   }
   command->mutable_output()->set_consumed(true);
-  const floatype::ZenzCorrector::PollResult result =
+  floatype::ZenzCorrector::PollResult result =
       zenz_.Poll(context_->converter().GetSegments());
+  // floatype: a correction the user stopped before is not made again.
+  if (result.kind == floatype::ZenzCorrector::PollResult::kApply &&
+      context_->GetConfig().zenz_learning() &&
+      floatype::ZenzMemory::Default().Stopped(result.reading, result.text)) {
+    result.kind = floatype::ZenzCorrector::PollResult::kDone;
+  }
   if (result.kind == floatype::ZenzCorrector::PollResult::kApply) {
     // zenz's choices never teach the conversion ranking; the suggestion
     // history may learn the committed sentence.
@@ -2796,6 +2815,8 @@ bool Session::PollZenz(commands::Command* command) {
                 : converter::Attribute::NO_LEARNING,
             0)) {
       zenz_indices_ = result.candidate_indices;
+      zenz_reading_ = result.reading;
+      zenz_text_ = result.text;
     }
   }
   if (waiting_for_zenz_) {

@@ -574,6 +574,37 @@ TEST_F(FloatypeZenzTest, TheCandidateWindowGetsItsFontScale) {
   EXPECT_EQ(suggested.candidate_font_scale_percent(), 150);
 }
 
+TEST_F(FloatypeZenzTest, CtrlDeleteStopsACorrectionForGood) {
+  ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
+  EXPECT_EQ(Preedit(SendKeys({"Ctrl Delete"})), "機会");
+  SendKeys({"Escape"});
+  SendKeys({"Escape"});
+  EXPECT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機会")
+      << "zenz's 機械 for きかい is not made again";
+  SendKeys({"Escape"});
+  SendKeys({"Escape"});
+
+  // Clearing the user history forgets it.
+  commands::Input clear;
+  clear.set_type(commands::Input::CLEAR_USER_HISTORY);
+  Eval(std::move(clear));
+  EXPECT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
+}
+
+TEST_F(FloatypeZenzTest, CtrlDeleteForgetsNothingWithLearningOff) {
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_zenz_learning(false);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+  ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
+  EXPECT_EQ(Preedit(SendKeys({"Ctrl Delete"})), "機会") << "still stops it";
+  SendKeys({"Escape"});
+  SendKeys({"Escape"});
+  EXPECT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
+}
+
 TEST_F(FloatypeZenzTest, ZenzCanBeTurnedOff) {
   config::Config config = config::ConfigHandler::DefaultConfig();
   config.set_use_zenz(false);

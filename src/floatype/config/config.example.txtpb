@@ -24,6 +24,10 @@
 ## 変換の順位は、オンでも zenz の選択を覚えません。
 # zenz_suggestion_learning: true
 
+## zenz の補正の表示中に Ctrl+Delete で止めた補正を覚え、同じ読みでは二度としない。
+## 設定画面の「ユーザー履歴を消去」で忘れます。
+# zenz_learning: true
+
 ## ライブ変換のオン・オフ。手が止まったら Space を押さなくても変換します。
 # use_live_conversion: true
 

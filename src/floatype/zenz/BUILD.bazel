@@ -96,3 +96,33 @@ mozc_cc_test(
         "@com_google_absl//absl/strings",
     ],
 )
+
+mozc_cc_library(
+    name = "zenz_memory",
+    srcs = ["zenz_memory.cc"],
+    hdrs = ["zenz_memory.h"],
+    visibility = ["//session:__pkg__"],
+    deps = [
+        "//base:file_util",
+        "//base:system_util",
+        "@com_google_absl//absl/base:no_destructor",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+mozc_cc_test(
+    name = "zenz_memory_test",
+    srcs = ["zenz_memory_test.cc"],
+    deps = [
+        ":zenz_memory",
+        "//base:file_util",
+        "//base:system_util",
+        "//testing:gunit_main",
+        "//testing:mozctest",
+        "@com_google_absl//absl/strings",
+    ],
+)

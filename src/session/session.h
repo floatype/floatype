@@ -295,6 +295,9 @@ class Session {
   // The candidates zenz moved to the top while its correction is on screen;
   // empty otherwise.
   std::vector<int> zenz_indices_;
+  // The reading and zenz's text of the correction on screen, for Ctrl+Delete.
+  std::string zenz_reading_;
+  std::string zenz_text_;
   // A live conversion waiting for zenz before it shows (the setting
   // live_conversion_waits_for_zenz_millisec): what stays on screen meanwhile
   // and until when.

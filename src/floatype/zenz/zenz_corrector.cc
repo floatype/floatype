@@ -232,7 +232,8 @@ ZenzCorrector::PollResult ZenzCorrector::Poll(const Segments& segments) {
                   [](int index) { return index == 0; })) {
     return {PollResult::kDone, {}};
   }
-  return {PollResult::kApply, *std::move(indices)};
+  return {PollResult::kApply, *std::move(indices), Reading(segments),
+          response->conversion};
 }
 
 ScorerClient* ZenzCorrector::DefaultClient() {

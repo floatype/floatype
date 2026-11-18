@@ -425,6 +425,9 @@ message Config {
   optional uint32 live_conversion_waits_for_zenz_millisec = 1011 [default = 0];
   // floatype: the candidate window's font sizes, in percent of Mozc's.
   optional uint32 candidate_font_scale_percent = 1012 [default = 100];
+  // floatype: a correction stopped with Ctrl+Delete while it is shown is not
+  // made again for the same reading. Clearing the user history forgets them.
+  optional bool zenz_learning = 1013 [default = true];
 
   //////////////////////////////////////////////////////////////
   //

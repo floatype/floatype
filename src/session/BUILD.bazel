@@ -52,6 +52,7 @@ mozc_cc_library(
         "//evaluation/candidates_diff_checker:__pkg__",
     ],
     deps = [
+        "//floatype/zenz:zenz_memory",
         ":ime_context",
         ":key_event_transformer",
         ":keymap",
@@ -164,6 +165,7 @@ mozc_cc_library(
     ],
     deps = [
         "//floatype/config:text_config",
+        "//floatype/zenz:zenz_memory",
         ":keymap",
         ":session",
         "//base:clock",

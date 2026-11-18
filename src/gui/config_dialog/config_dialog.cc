@@ -541,6 +541,9 @@ void ConfigDialog::SetUpFloatypeTab() {
   form->addRow(text("答えを待つ上限"), zenzTimeoutSpinBox_);
   zenzSuggestionLearningCheckBox_ =
       check("zenz が直した確定を予測候補に覚えさせる");
+  zenzLearningCheckBox_ = check(
+      "補正の表示中に Ctrl+Delete "
+      "で止めた補正を覚え、同じ読みでは繰り返さない");
 
   heading("ライブ変換");
   liveConversionCheckBox_ = check("手が止まったら Space を押さずに変換する");
@@ -580,7 +583,7 @@ void ConfigDialog::SetUpFloatypeTab() {
   // Settings that only matter while their switch is on follow it.
   for (QWidget* widget : std::initializer_list<QWidget*>{
            zenzTimeoutSpinBox_, zenzSuggestionLearningCheckBox_,
-           zenzDelaySpinBox_}) {
+           zenzLearningCheckBox_, zenzDelaySpinBox_}) {
     connect(useZenzCheckBox_, &QCheckBox::toggled, widget,
             &QWidget::setEnabled);
   }
@@ -672,6 +675,7 @@ void ConfigDialog::ConvertFromProto(const config::Config& config) {
   SET_CHECKBOX(useZenzCheckBox_, use_zenz);
   zenzTimeoutSpinBox_->setValue(config.zenz_timeout_millisec());
   SET_CHECKBOX(zenzSuggestionLearningCheckBox_, zenz_suggestion_learning);
+  SET_CHECKBOX(zenzLearningCheckBox_, zenz_learning);
   SET_CHECKBOX(liveConversionCheckBox_, use_live_conversion);
   liveConversionDelaySpinBox_->setValue(
       config.live_conversion_delay_millisec());
@@ -784,6 +788,7 @@ void ConfigDialog::ConvertToProto(config::Config* config) const {
   GET_CHECKBOX(useZenzCheckBox_, use_zenz);
   config->set_zenz_timeout_millisec(zenzTimeoutSpinBox_->value());
   GET_CHECKBOX(zenzSuggestionLearningCheckBox_, zenz_suggestion_learning);
+  GET_CHECKBOX(zenzLearningCheckBox_, zenz_learning);
   GET_CHECKBOX(liveConversionCheckBox_, use_live_conversion);
   config->set_live_conversion_delay_millisec(
       liveConversionDelaySpinBox_->value());

@@ -57,6 +57,9 @@ class ZenzCorrector {
     };
     Kind kind = kDone;
     std::vector<int> candidate_indices;
+    // With kApply: the conversion's reading in hiragana and zenz's text.
+    std::string reading;
+    std::string text;
   };
   PollResult Poll(const Segments& segments);
 
