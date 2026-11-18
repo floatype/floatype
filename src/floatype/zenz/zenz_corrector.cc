@@ -210,6 +210,9 @@ ZenzCorrector::PollResult ZenzCorrector::Poll(const Segments& segments) {
   // - digits or letters Mozc did not (百均/１００均): 1 harm fewer, but
   //   AJIMEE-Bench drops from 82.0% to 81.0% (３年９月１５日, ＭＩ６);
   // - symbols or emoji Mozc did not: no harm fewer, AJIMEE-Bench 81.5%.
+  // Nor does zenz's confidence (the lowest log probability among its tokens)
+  // tell wins from harms: at the best threshold, -0.7, 1 harm fewer and 9
+  // wins lost.
   std::optional<std::vector<int>> indices =
       MapToCandidates(segments, response->conversion);
   if (!indices.has_value() ||
