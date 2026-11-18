@@ -69,6 +69,9 @@ enum ColumnType {
 // It also returns the size which is necessary to draw all GUI elements.
 - (NSSize)updateLayout;
 
+// floatype: scales the fonts by `percent` (0 means 100).
+- (void)setFontScalePercent:(uint32_t)percent;
+
 // Returns the table layout of the current candidates.
 - (const mozc::renderer::TableLayout *)tableLayout;
 @end

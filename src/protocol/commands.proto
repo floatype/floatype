@@ -1465,6 +1465,9 @@ message Output {
     optional mozc.config.Config.IndicatorStyle style = 2;
   }
   optional Indicator indicator = 1001;
+  // floatype: the candidate window's font sizes, in percent of Mozc's; unset
+  // means 100.
+  optional uint32 candidate_font_scale_percent = 1002;
 
   reserved 19;  // Deprecated storage_entry
   reserved 20;  // Deprecated cloud_sync_status

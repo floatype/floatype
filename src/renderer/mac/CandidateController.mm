@@ -152,6 +152,8 @@ bool CandidateController::ExecCommand(const RendererCommand &command) {
     return true;
   }
 
+  candidate_window_->SetFontScale(command_.output().candidate_font_scale_percent());
+  cascading_window_->SetFontScale(command_.output().candidate_font_scale_percent());
   candidate_window_->SetCandidateWindow(command_.output().candidate_window());
 
   bool cascading_visible = false;

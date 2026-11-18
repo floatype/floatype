@@ -74,6 +74,7 @@ void CandidateWindow::SetCandidateWindow(const commands::CandidateWindow& candid
     InitWindow();
   }
   CandidateView* candidate_view = (CandidateView*)view_;
+  [candidate_view setFontScalePercent:font_scale_percent_];
   [candidate_view setCandidateWindow:&candidate_window];
   [candidate_view setNeedsDisplay:YES];
   NSSize size = [candidate_view updateLayout];

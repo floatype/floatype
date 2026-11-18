@@ -45,6 +45,9 @@
 ## false にすると、読み全体を毎回変換し直します（Mozkey と同じ動き）。
 # live_conversion_keeps_shown_text: true
 
+## 候補の窓の文字の大きさ（Mozc の大きさに対する %、50〜300）。
+# candidate_font_scale_percent: 100
+
 ## 未確定文字の近くに出す状態インジケータ（入力中 / Mozc / Zenz… / Zenz）。
 # show_indicator: true
 

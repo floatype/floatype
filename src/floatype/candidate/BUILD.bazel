@@ -1,0 +1,22 @@
+load("//:build_defs.bzl", "mozc_cc_library", "mozc_cc_test")
+
+package(default_visibility = ["//visibility:private"])
+
+mozc_cc_library(
+    name = "candidate_style",
+    srcs = ["candidate_style.cc"],
+    hdrs = ["candidate_style.h"],
+    visibility = ["//renderer:__pkg__"],
+    deps = ["//protocol:renderer_cc_proto"],
+)
+
+mozc_cc_test(
+    name = "candidate_style_test",
+    srcs = ["candidate_style_test.cc"],
+    deps = [
+        ":candidate_style",
+        "//protocol:renderer_cc_proto",
+        "//renderer:renderer_style_handler",
+        "//testing:gunit_main",
+    ],
+)

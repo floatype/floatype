@@ -37,6 +37,7 @@
 #include "absl/log/log.h"
 #include "absl/strings/str_format.h"
 #include "client/client_interface.h"
+#include "floatype/candidate/candidate_style.h"
 #include "protocol/commands.pb.h"
 #include "protocol/renderer_style.pb.h"
 #include "renderer/mac/mac_view_util.h"
@@ -91,6 +92,9 @@ using mozc::renderer::mac::MacViewUtil;
 
   // |command_sender_| holds a callback for mouse clicks.
   mozc::client::SendCommandInterface *command_sender_;
+
+  // floatype: the fonts' scale in percent.
+  uint32_t fontScalePercent_;
 }
 
 #pragma mark initialization
@@ -98,6 +102,7 @@ using mozc::renderer::mac::MacViewUtil;
 - (id)initWithFrame:(NSRect)frame {
   self = [super initWithFrame:frame];
   if (self) {
+    fontScalePercent_ = 100;
     [self initializeDefaultStyle];
     focusedRow_ = -1;
   }
@@ -106,6 +111,7 @@ using mozc::renderer::mac::MacViewUtil;
 
 - (void)initializeDefaultStyle {
   style_ = RendererStyleHandler::GetRendererStyle();
+  mozc::floatype::ScaleFonts(style_, fontScalePercent_);
 
   const std::string &logo_file_name = style_.logo_file_name();
   logoImage_ = [NSImage imageNamed:[NSString stringWithUTF8String:logo_file_name.c_str()]];
@@ -126,8 +132,9 @@ using mozc::renderer::mac::MacViewUtil;
     min_width_string.append("  ");
   }
   NSString *nsstr = [NSString stringWithUTF8String:min_width_string.c_str()];
-  NSDictionary *attr = [NSDictionary dictionaryWithObject:[NSFont messageFontOfSize:14]
-                                                   forKey:NSFontAttributeName];
+  NSDictionary *attr =
+      [NSDictionary dictionaryWithObject:[NSFont messageFontOfSize:14 * fontScalePercent_ / 100.0]
+                                  forKey:NSFontAttributeName];
   const NSAttributedString *defaultMessage = [[NSAttributedString alloc] initWithString:nsstr
                                                                              attributes:attr];
   columnMinimumWidth_ = [defaultMessage size].width;
@@ -136,6 +143,15 @@ using mozc::renderer::mac::MacViewUtil;
   // it as 1.0 px.
   [NSBezierPath setDefaultLineWidth:1.0];
   [NSBezierPath setDefaultLineJoinStyle:NSLineJoinStyleMiter];
+}
+
+- (void)setFontScalePercent:(uint32_t)percent {
+  const uint32_t scale = percent == 0 ? 100 : percent;
+  if (scale == fontScalePercent_) {
+    return;
+  }
+  fontScalePercent_ = scale;
+  [self initializeDefaultStyle];
 }
 
 - (void)setCandidateWindow:(const CandidateWindow *)candidate_window {

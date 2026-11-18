@@ -557,6 +557,23 @@ TEST_F(FloatypeZenzTest, AKeyWhileWaitingForZenzMeetsWhatIsShown) {
   EXPECT_EQ(Preedit(PollWhileAsked(converted)), "機械");
 }
 
+TEST_F(FloatypeZenzTest, TheCandidateWindowGetsItsFontScale) {
+  floatype::EnableSessionFeatures(true);
+  EXPECT_FALSE(
+      SendKeys({"k", "i", "k", "a", "i"}).has_candidate_font_scale_percent())
+      << "100% is Mozc's look, left unsaid";
+  SendKeys({"Escape"});
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_candidate_font_scale_percent(150);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+  const commands::Output suggested = SendKeys({"k", "i", "k", "a", "i"});
+  ASSERT_TRUE(suggested.has_candidate_window());
+  EXPECT_EQ(suggested.candidate_font_scale_percent(), 150);
+}
+
 TEST_F(FloatypeZenzTest, ZenzCanBeTurnedOff) {
   config::Config config = config::ConfigHandler::DefaultConfig();
   config.set_use_zenz(false);

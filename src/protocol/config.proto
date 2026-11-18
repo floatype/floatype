@@ -423,6 +423,8 @@ message Config {
   // floatype: a live conversion waits up to this long for zenz before showing
   // anything, so that the text changes once; 0 shows Mozc's result first.
   optional uint32 live_conversion_waits_for_zenz_millisec = 1011 [default = 0];
+  // floatype: the candidate window's font sizes, in percent of Mozc's.
+  optional uint32 candidate_font_scale_percent = 1012 [default = 100];
 
   //////////////////////////////////////////////////////////////
   //

@@ -457,6 +457,7 @@ bool Session::SendCommand(commands::Command* command) {
       break;
   }
   SetIndicator(command);
+  SetCandidateFontScale(command);
   MaybeSetUndoStatus(command);
   return result;
 }
@@ -667,6 +668,7 @@ bool Session::SendKey(commands::Command* command) {
   }
   MaybeScheduleLiveConversion(command);
   SetIndicator(command);
+  SetCandidateFontScale(command);
   MaybeSetUndoStatus(command);
   return result;
 }
@@ -2626,6 +2628,14 @@ bool Session::ShowMozcAgain(absl::Span<const int> zenz_indices, bool live,
   }
   SetIndicator(command);
   return true;
+}
+
+void Session::SetCandidateFontScale(commands::Command* command) const {
+  const uint32_t percent = context_->GetConfig().candidate_font_scale_percent();
+  if (floatype::SessionFeaturesEnabled() && percent != 100 &&
+      command->output().has_candidate_window()) {
+    command->mutable_output()->set_candidate_font_scale_percent(percent);
+  }
 }
 
 void Session::SetIndicator(commands::Command* command) const {

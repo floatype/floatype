@@ -556,6 +556,10 @@ void ConfigDialog::SetUpFloatypeTab() {
   form->addRow(text("zenz の答えを待ってから出す上限"),
                liveConversionWaitSpinBox_);
 
+  heading("候補の窓");
+  candidateFontScaleSpinBox_ = spin(50, 300, 10, " %");
+  form->addRow(text("文字の大きさ"), candidateFontScaleSpinBox_);
+
   heading("状態インジケータ");
   showIndicatorCheckBox_ = check("入力中の文字の近くに出す");
   indicatorPlacementComboBox_ =
@@ -676,6 +680,7 @@ void ConfigDialog::ConvertFromProto(const config::Config& config) {
   SET_CHECKBOX(keepShownTextCheckBox_, live_conversion_keeps_shown_text);
   liveConversionWaitSpinBox_->setValue(
       config.live_conversion_waits_for_zenz_millisec());
+  candidateFontScaleSpinBox_->setValue(config.candidate_font_scale_percent());
   SET_CHECKBOX(showIndicatorCheckBox_, show_indicator);
   indicatorPlacementComboBox_->setCurrentIndex(
       config.indicator_style().placement());
@@ -788,6 +793,7 @@ void ConfigDialog::ConvertToProto(config::Config* config) const {
   GET_CHECKBOX(keepShownTextCheckBox_, live_conversion_keeps_shown_text);
   config->set_live_conversion_waits_for_zenz_millisec(
       liveConversionWaitSpinBox_->value());
+  config->set_candidate_font_scale_percent(candidateFontScaleSpinBox_->value());
   GET_CHECKBOX(showIndicatorCheckBox_, show_indicator);
   config::Config::IndicatorStyle* style = config->mutable_indicator_style();
   style->set_placement(static_cast<config::Config::IndicatorStyle::Placement>(

@@ -56,12 +56,15 @@ class CandidateWindow : public RendererBaseWindow {
   void SetSendCommandInterface(
       client::SendCommandInterface *send_command_interface);
   void SetCandidateWindow(const commands::CandidateWindow &candidate_window);
+  // floatype: the fonts' scale in percent for the next candidates (0: 100).
+  void SetFontScale(uint32_t percent) { font_scale_percent_ = percent; }
   const renderer::TableLayout *GetTableLayout() const;
 
  private:
   void InitWindow();
   void ResetView();
   mozc::client::SendCommandInterface *command_sender_;
+  uint32_t font_scale_percent_ = 100;
 };
 
 }  // namespace mac

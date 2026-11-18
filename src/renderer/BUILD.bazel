@@ -253,7 +253,10 @@ mozc_cc_library(
         ":renderer_style_data",
     ],
     hdrs = ["renderer_style_handler.h"],
-    visibility = ["//renderer:__subpackages__"],
+    visibility = [
+        "//floatype/candidate:__pkg__",
+        "//renderer:__subpackages__",
+    ],
     deps = [
         "//base:protobuf_util",
         "//base:text_normalizer",
@@ -334,6 +337,7 @@ mozc_objc_library(
         "Foundation",
     ],
     deps = [
+        "//floatype/candidate:candidate_style",
         "//floatype/indicator:indicator_layout",
         ":renderer_interface",
         ":renderer_server",
