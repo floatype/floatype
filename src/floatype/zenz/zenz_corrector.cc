@@ -20,6 +20,7 @@
 #include "base/file_util.h"
 #include "base/strings/japanese.h"
 #include "base/system_util.h"
+#include "base/util.h"
 #include "converter/attribute.h"
 #include "converter/segments.h"
 #include "floatype/scorer/protocol.h"
@@ -66,6 +67,15 @@ bool Search(const std::vector<std::vector<std::string>>& values,
   }
   dead_ends.insert({segment, pos});
   return false;
+}
+
+// The conversion's reading: its segment keys in hiragana.
+std::string Reading(const Segments& segments) {
+  std::string reading;
+  for (const Segment& segment : segments.conversion_segments()) {
+    reading += segment.key();
+  }
+  return reading;
 }
 
 // Identifies the conversion an answer is for: its segment keys and the
@@ -124,9 +134,10 @@ bool ZenzCorrector::Request(const Segments& segments,
     return false;
   }
 #endif  // __APPLE__
-  std::string reading;
-  for (const Segment& segment : segments.conversion_segments()) {
-    reading += segment.key();
+  const std::string reading = Reading(segments);
+  // Longer readings are slow to convert and may not fit the scorer's context.
+  if (Util::CharsLen(reading) > kMaxReadingChars) {
+    return false;
   }
   static uint64_t last_id = 0;
   const uint64_t id = ++last_id;
@@ -155,6 +166,14 @@ ZenzCorrector::PollResult ZenzCorrector::Poll(const Segments& segments) {
   Cancel();
   // A length cap means zenz did not finish its answer.
   if (response->stop != "eog" && response->stop != "tag") {
+    return {PollResult::kDone, {}};
+  }
+  // zenz hands the reading back unconverted when it does not know the words,
+  // where Mozc's dictionary usually does. On Mozc's regression set this halves
+  // the conversions zenz makes worse (20 to 10), at the cost of 2 of 48 wins.
+  if (japanese::FullWidthAsciiToHalfWidthAscii(
+          japanese::KatakanaToHiragana(response->conversion)) ==
+      japanese::FullWidthAsciiToHalfWidthAscii(Reading(segments))) {
     return {PollResult::kDone, {}};
   }
   std::optional<std::vector<int>> indices =

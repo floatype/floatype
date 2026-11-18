@@ -32,6 +32,10 @@ class ZenzCorrector {
   static constexpr absl::Duration kTimeout = absl::Milliseconds(300);
   // How long the client waits before calling back.
   static constexpr absl::Duration kPollInterval = absl::Milliseconds(20);
+  // Longer readings are left to Mozc. The scorer's context (512 tokens) holds
+  // 40 characters of context, the reading and an answer as long as the
+  // reading for readings up to about 230 characters.
+  static constexpr size_t kMaxReadingChars = 200;
 
   // `client` may be null, which turns zenz off.
   explicit ZenzCorrector(ScorerClient* client) : client_(client) {}

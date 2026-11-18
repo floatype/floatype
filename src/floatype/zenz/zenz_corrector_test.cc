@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <initializer_list>
+#include <memory>
 #include <optional>
 #include <string>
 #include <thread>
@@ -10,6 +11,8 @@
 #include "absl/strings/string_view.h"
 #include "base/clock.h"
 #include "base/clock_mock.h"
+#include "base/file_util.h"
+#include "base/system_util.h"
 #include "converter/attribute.h"
 #include "converter/segments.h"
 #include "floatype/zenz/scorer_client.h"
@@ -102,18 +105,31 @@ TEST(MapToCandidatesTest, IgnoresCandidatesForAnotherPartOfTheReading) {
   EXPECT_EQ(MapToCandidates(segments, "今日医者に行く"), std::nullopt);
 }
 
-// The fake scorer answers with the reading itself, in katakana.
+// The fake scorer's answers file (see ZenzCorrectorTest) turns キョウハ into
+// 京歯, which these candidates can write.
 Segments KyouHa() {
   Segments segments;
-  AddSegment(segments, "きょう", {"今日", "キョウ"});
-  AddSegment(segments, "は", {"は", "ハ"});
+  AddSegment(segments, "きょう", {"今日", "京"});
+  AddSegment(segments, "は", {"は", "歯"});
   return segments;
 }
 
 class ZenzCorrectorTest : public testing::TestWithTempUserProfile {
  protected:
-  void SetUp() override { Clock::SetClockForUnitTest(&clock_); }
-  void TearDown() override { Clock::SetClockForUnitTest(nullptr); }
+  void SetUp() override {
+    Clock::SetClockForUnitTest(&clock_);
+    const std::string answers = FileUtil::JoinPath(
+        SystemUtil::GetUserProfileDirectory(), "answers.tsv");
+    ASSERT_OK(FileUtil::SetContents(
+        answers, "キョウハ\t京歯\nアメ\t雨\nカップ\t河童\n"));
+    client_ = std::make_unique<ScorerClient>(std::vector<std::string>{
+        testing::GetSourceFileOrDie({"floatype", "zenz", "fake_scorer"}),
+        answers});
+  }
+  void TearDown() override {
+    client_.reset();
+    Clock::SetClockForUnitTest(nullptr);
+  }
 
   // Polls until the result is no longer kWait, for up to two seconds.
   static ZenzCorrector::PollResult PollUntilDone(ZenzCorrector& corrector,
@@ -127,12 +143,11 @@ class ZenzCorrectorTest : public testing::TestWithTempUserProfile {
   }
 
   ClockMock clock_{absl::FromUnixSeconds(1000)};
-  ScorerClient client_{
-      {testing::GetSourceFileOrDie({"floatype", "zenz", "fake_scorer"})}};
+  std::unique_ptr<ScorerClient> client_;
 };
 
 TEST_F(ZenzCorrectorTest, AppliesAnAnswerThatDiffersFromMozc) {
-  ZenzCorrector corrector(&client_);
+  ZenzCorrector corrector(client_.get());
   const Segments segments = KyouHa();
   ASSERT_TRUE(corrector.Request(segments, "熱が"));
   const ZenzCorrector::PollResult result = PollUntilDone(corrector, segments);
@@ -143,25 +158,35 @@ TEST_F(ZenzCorrectorTest, AppliesAnAnswerThatDiffersFromMozc) {
 }
 
 TEST_F(ZenzCorrectorTest, KeepsMozcWhenZenzAgrees) {
-  ZenzCorrector corrector(&client_);
+  ZenzCorrector corrector(client_.get());
   Segments segments;
-  AddSegment(segments, "あめ", {"アメ", "雨"});
+  AddSegment(segments, "あめ", {"雨", "飴"});
   ASSERT_TRUE(corrector.Request(segments, ""));
   EXPECT_EQ(PollUntilDone(corrector, segments).kind,
             ZenzCorrector::PollResult::kDone);
 }
 
-TEST_F(ZenzCorrectorTest, DropsAnUnfinishedAnswer) {
-  ZenzCorrector corrector(&client_);
+TEST_F(ZenzCorrectorTest, IgnoresTheReadingHandedBackUnconverted) {
+  ZenzCorrector corrector(client_.get());
   Segments segments;
-  AddSegment(segments, "かっぷ", {"カップ"});
-  ASSERT_TRUE(corrector.Request(segments, ""));  // The fake answers "cap".
+  AddSegment(segments, "いぬ", {"犬", "イヌ", "いぬ"});
+  ASSERT_TRUE(corrector.Request(segments, ""));  // The fake answers イヌ.
+  EXPECT_EQ(PollUntilDone(corrector, segments).kind,
+            ZenzCorrector::PollResult::kDone);
+}
+
+TEST_F(ZenzCorrectorTest, DropsAnUnfinishedAnswer) {
+  ZenzCorrector corrector(client_.get());
+  Segments segments;
+  AddSegment(segments, "かっぷ", {"カップ", "河童"});
+  // The fake answers 河童, stopped by the length cap.
+  ASSERT_TRUE(corrector.Request(segments, ""));
   EXPECT_EQ(PollUntilDone(corrector, segments).kind,
             ZenzCorrector::PollResult::kDone);
 }
 
 TEST_F(ZenzCorrectorTest, GivesUpAfterTheTimeout) {
-  ZenzCorrector corrector(&client_);
+  ZenzCorrector corrector(client_.get());
   Segments segments;
   AddSegment(segments, "すろう", {"スロウ"});  // The fake waits 200ms.
   ASSERT_TRUE(corrector.Request(segments, ""));
@@ -171,7 +196,7 @@ TEST_F(ZenzCorrectorTest, GivesUpAfterTheTimeout) {
 }
 
 TEST_F(ZenzCorrectorTest, DropsTheAnswerAfterCancelOrAChangedConversion) {
-  ZenzCorrector corrector(&client_);
+  ZenzCorrector corrector(client_.get());
   const Segments segments = KyouHa();
   ASSERT_TRUE(corrector.Request(segments, ""));
   corrector.Cancel();
@@ -183,6 +208,15 @@ TEST_F(ZenzCorrectorTest, DropsTheAnswerAfterCancelOrAChangedConversion) {
   changed.mutable_conversion_segment(1)->move_candidate(1, 0);
   EXPECT_EQ(PollUntilDone(corrector, changed).kind,
             ZenzCorrector::PollResult::kDone);
+}
+
+TEST_F(ZenzCorrectorTest, LeavesLongReadingsToMozc) {
+  ZenzCorrector corrector(client_.get());
+  std::string reading;
+  for (size_t i = 0; i <= ZenzCorrector::kMaxReadingChars; ++i) reading += "あ";
+  Segments segments;
+  AddSegment(segments, reading, {"亜"});
+  EXPECT_FALSE(corrector.Request(segments, ""));
 }
 
 TEST_F(ZenzCorrectorTest, DoesNothingWithoutAScorer) {
