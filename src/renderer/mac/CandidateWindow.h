@@ -33,6 +33,7 @@
 #import <Carbon/Carbon.h>
 
 #include "renderer/mac/RendererBaseWindow.h"
+#include "protocol/config.pb.h"
 
 namespace mozc {
 namespace client {
@@ -56,8 +57,12 @@ class CandidateWindow : public RendererBaseWindow {
   void SetSendCommandInterface(
       client::SendCommandInterface *send_command_interface);
   void SetCandidateWindow(const commands::CandidateWindow &candidate_window);
-  // floatype: the fonts' scale in percent for the next candidates (0: 100).
-  void SetFontScale(uint32_t percent) { font_scale_percent_ = percent; }
+  // floatype: the fonts' scale in percent (0: 100) and the colors for the
+  // next candidates.
+  void SetLook(uint32_t percent, const config::Config::CandidateStyle &colors) {
+    font_scale_percent_ = percent;
+    colors_ = colors;
+  }
   const renderer::TableLayout *GetTableLayout() const;
 
  private:
@@ -65,6 +70,7 @@ class CandidateWindow : public RendererBaseWindow {
   void ResetView();
   mozc::client::SendCommandInterface *command_sender_;
   uint32_t font_scale_percent_ = 100;
+  config::Config::CandidateStyle colors_;
 };
 
 }  // namespace mac

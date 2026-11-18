@@ -1468,6 +1468,8 @@ message Output {
   // floatype: the candidate window's font sizes, in percent of Mozc's; unset
   // means 100.
   optional uint32 candidate_font_scale_percent = 1002;
+  // floatype: the candidate window's colors; unset means Mozc's.
+  optional mozc.config.Config.CandidateStyle candidate_style = 1003;
 
   reserved 19;  // Deprecated storage_entry
   reserved 20;  // Deprecated cloud_sync_status

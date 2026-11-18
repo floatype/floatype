@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "protocol/config.pb.h"
 #include "protocol/renderer_style.pb.h"
 
 namespace mozc::floatype {
@@ -40,7 +41,32 @@ void ScaleIn(Message& message, double factor) {
   }
 }
 
+void SetColor(renderer::RendererStyle::RGBAColor* color, uint32_t rgb) {
+  color->set_r((rgb >> 16) & 0xff);
+  color->set_g((rgb >> 8) & 0xff);
+  color->set_b(rgb & 0xff);
+}
+
 }  // namespace
+
+void ApplyColors(renderer::RendererStyle& style,
+                 const config::Config::CandidateStyle& colors) {
+  if (colors.has_text_color()) {
+    SetColor(style.mutable_candidate_style()->mutable_foreground_color(),
+             colors.text_color());
+  }
+  if (colors.has_focused_background_color()) {
+    SetColor(style.mutable_focused_background_color(),
+             colors.focused_background_color());
+  }
+  if (colors.has_focused_border_color()) {
+    SetColor(style.mutable_focused_border_color(),
+             colors.focused_border_color());
+  }
+  if (colors.has_border_color()) {
+    SetColor(style.mutable_border_color(), colors.border_color());
+  }
+}
 
 void ScaleFonts(renderer::RendererStyle& style, uint32_t percent) {
   if (percent != 100) {

@@ -7,7 +7,10 @@ mozc_cc_library(
     srcs = ["candidate_style.cc"],
     hdrs = ["candidate_style.h"],
     visibility = ["//renderer:__pkg__"],
-    deps = ["//protocol:renderer_cc_proto"],
+    deps = [
+        "//protocol:config_cc_proto",
+        "//protocol:renderer_cc_proto",
+    ],
 )
 
 mozc_cc_test(
@@ -15,6 +18,7 @@ mozc_cc_test(
     srcs = ["candidate_style_test.cc"],
     deps = [
         ":candidate_style",
+        "//protocol:config_cc_proto",
         "//protocol:renderer_cc_proto",
         "//renderer:renderer_style_handler",
         "//testing:gunit_main",

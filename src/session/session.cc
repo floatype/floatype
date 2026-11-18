@@ -459,7 +459,7 @@ bool Session::SendCommand(commands::Command* command) {
       break;
   }
   SetIndicator(command);
-  SetCandidateFontScale(command);
+  SetCandidateLook(command);
   MaybeSetUndoStatus(command);
   return result;
 }
@@ -691,7 +691,7 @@ bool Session::SendKey(commands::Command* command) {
   }
   MaybeScheduleLiveConversion(command);
   SetIndicator(command);
-  SetCandidateFontScale(command);
+  SetCandidateLook(command);
   MaybeSetUndoStatus(command);
   return result;
 }
@@ -2683,11 +2683,18 @@ bool Session::ShowMozcAgain(absl::Span<const int> zenz_indices, bool live,
   return true;
 }
 
-void Session::SetCandidateFontScale(commands::Command* command) const {
-  const uint32_t percent = context_->GetConfig().candidate_font_scale_percent();
-  if (floatype::SessionFeaturesEnabled() && percent != 100 &&
-      command->output().has_candidate_window()) {
-    command->mutable_output()->set_candidate_font_scale_percent(percent);
+void Session::SetCandidateLook(commands::Command* command) const {
+  const config::Config& config = context_->GetConfig();
+  commands::Output* output = command->mutable_output();
+  if (!floatype::SessionFeaturesEnabled() || !output->has_candidate_window()) {
+    return;
+  }
+  if (config.candidate_font_scale_percent() != 100) {
+    output->set_candidate_font_scale_percent(
+        config.candidate_font_scale_percent());
+  }
+  if (config.has_candidate_style()) {
+    *output->mutable_candidate_style() = config.candidate_style();
   }
 }
 

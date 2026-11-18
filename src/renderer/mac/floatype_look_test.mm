@@ -62,7 +62,7 @@ TEST(FloatypeLookTest, TheCandidateWindowGrowsWithItsFonts) {
   [view setCandidateWindow:&candidates];
   const NSSize normal = Draw(view, "candidates_100");
 
-  [view setFontScalePercent:150];
+  [view setFontScalePercent:150 colors:config::Config::CandidateStyle()];
   [view setCandidateWindow:&candidates];
   const NSSize large = Draw(view, "candidates_150");
   EXPECT_GT(large.width / normal.width, 1.3);
@@ -71,11 +71,33 @@ TEST(FloatypeLookTest, TheCandidateWindowGrowsWithItsFonts) {
   EXPECT_LT(large.height / normal.height, 1.6);
 
   // Back to 100% is Mozc's look again.
-  [view setFontScalePercent:0];
+  [view setFontScalePercent:0 colors:config::Config::CandidateStyle()];
   [view setCandidateWindow:&candidates];
   const NSSize again = Draw(view, "candidates_again");
   EXPECT_EQ(again.width, normal.width);
   EXPECT_EQ(again.height, normal.height);
+}
+
+TEST(FloatypeLookTest, TheCandidateWindowTakesItsColors) {
+  const commands::CandidateWindow candidates = Candidates();
+  CandidateView *view = [[CandidateView alloc] initWithFrame:NSMakeRect(0, 0, 1, 1)];
+  config::Config::CandidateStyle colors;
+  colors.set_text_color(0x1a3d6b);
+  colors.set_focused_background_color(0xffe4b0);
+  colors.set_focused_border_color(0xd08a00);
+  [view setFontScalePercent:100 colors:colors];
+  [view setCandidateWindow:&candidates];
+  Draw(view, "candidates_colors");
+  // A spot in the focused (first) row's background, left of its text.
+  NSBitmapImageRep *image = [view bitmapImageRepForCachingDisplayInRect:view.bounds];
+  [view cacheDisplayInRect:view.bounds toBitmapImageRep:image];
+  NSColor *focused = [[image colorAtX:4 y:6] colorUsingColorSpace:NSColorSpace.sRGBColorSpace];
+  // Color spaces shift the values a little; Mozc's own focused background,
+  // 0xd1eaff, is far off in red and blue.
+  EXPECT_NEAR(focused.redComponent * 255, 0xff, 20);
+  EXPECT_NEAR(focused.greenComponent * 255, 0xe4, 20);
+  EXPECT_NEAR(focused.blueComponent * 255, 0xb0, 20);
+  EXPECT_LT(focused.blueComponent * 255, 0xea) << "not Mozc's blue";
 }
 
 TEST(FloatypeLookTest, TheIndicatorShowsEachState) {

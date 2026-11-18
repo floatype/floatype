@@ -68,6 +68,12 @@ constexpr Range kConfigRanges[] = {
     {"live_conversion_waits_for_zenz_millisec", 0, 1000},
     {"candidate_font_scale_percent", 50, 300},
 };
+constexpr Range kCandidateRanges[] = {
+    {"text_color", 0, 0xffffff},
+    {"focused_background_color", 0, 0xffffff},
+    {"focused_border_color", 0, 0xffffff},
+    {"border_color", 0, 0xffffff},
+};
 constexpr Range kIndicatorRanges[] = {
     {"reading_color", 0, 0xffffff},
     {"mozc_color", 0, 0xffffff},
@@ -199,6 +205,14 @@ absl::StatusOr<config::Config> ParseTextConfig(absl::string_view text) {
     return absl::InvalidArgumentError(errors.first());
   }
   if (absl::Status status = CheckRanges(config, &tree, kConfigRanges);
+      !status.ok()) {
+    return status;
+  }
+  const FieldDescriptor* candidate =
+      config::Config::descriptor()->FindFieldByName("candidate_style");
+  if (absl::Status status =
+          CheckRanges(config.candidate_style(),
+                      tree.GetTreeForNested(candidate, -1), kCandidateRanges);
       !status.ok()) {
     return status;
   }

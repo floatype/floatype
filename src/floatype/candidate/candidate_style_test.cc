@@ -23,6 +23,24 @@ TEST(CandidateStyleTest, ScalesEveryFontSize) {
       renderer::RendererStyleHandler::GetRendererStyle().row_rect_padding());
 }
 
+TEST(CandidateStyleTest, PutsTheSetColorsInAndLeavesTheRest) {
+  renderer::RendererStyle style =
+      renderer::RendererStyleHandler::GetRendererStyle();
+  const renderer::RendererStyle mozc = style;
+  config::Config::CandidateStyle colors;
+  colors.set_text_color(0x112233);
+  colors.set_focused_background_color(0x445566);
+  ApplyColors(style, colors);
+  EXPECT_EQ(style.candidate_style().foreground_color().r(), 0x11);
+  EXPECT_EQ(style.candidate_style().foreground_color().g(), 0x22);
+  EXPECT_EQ(style.candidate_style().foreground_color().b(), 0x33);
+  EXPECT_EQ(style.focused_background_color().b(), 0x66);
+  EXPECT_EQ(style.border_color().SerializeAsString(),
+            mozc.border_color().SerializeAsString());
+  EXPECT_EQ(style.focused_border_color().SerializeAsString(),
+            mozc.focused_border_color().SerializeAsString());
+}
+
 TEST(CandidateStyleTest, ScalesNothingAtAHundredPercent) {
   renderer::RendererStyle style =
       renderer::RendererStyleHandler::GetRendererStyle();

@@ -93,8 +93,9 @@ using mozc::renderer::mac::MacViewUtil;
   // |command_sender_| holds a callback for mouse clicks.
   mozc::client::SendCommandInterface *command_sender_;
 
-  // floatype: the fonts' scale in percent.
+  // floatype: the fonts' scale in percent and the colors set.
   uint32_t fontScalePercent_;
+  mozc::config::Config::CandidateStyle colors_;
 }
 
 #pragma mark initialization
@@ -112,6 +113,7 @@ using mozc::renderer::mac::MacViewUtil;
 - (void)initializeDefaultStyle {
   style_ = RendererStyleHandler::GetRendererStyle();
   mozc::floatype::ScaleFonts(style_, fontScalePercent_);
+  mozc::floatype::ApplyColors(style_, colors_);
 
   const std::string &logo_file_name = style_.logo_file_name();
   logoImage_ = [NSImage imageNamed:[NSString stringWithUTF8String:logo_file_name.c_str()]];
@@ -145,12 +147,15 @@ using mozc::renderer::mac::MacViewUtil;
   [NSBezierPath setDefaultLineJoinStyle:NSLineJoinStyleMiter];
 }
 
-- (void)setFontScalePercent:(uint32_t)percent {
+- (void)setFontScalePercent:(uint32_t)percent
+                     colors:(const mozc::config::Config::CandidateStyle &)colors {
   const uint32_t scale = percent == 0 ? 100 : percent;
-  if (scale == fontScalePercent_) {
+  if (scale == fontScalePercent_ &&
+      colors.SerializeAsString() == colors_.SerializeAsString()) {
     return;
   }
   fontScalePercent_ = scale;
+  colors_ = colors;
   [self initializeDefaultStyle];
 }
 

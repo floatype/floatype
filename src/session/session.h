@@ -318,8 +318,9 @@ class Session {
                      commands::Command* command);
   // Tells the client what the indicator next to the composition shows.
   void SetIndicator(commands::Command* command) const;
-  // Tells the renderer the candidate window's font scale, when not 100%.
-  void SetCandidateFontScale(commands::Command* command) const;
+  // Tells the renderer the candidate window's font scale and colors, when
+  // they are not Mozc's.
+  void SetCandidateLook(commands::Command* command) const;
   // Output() with every segment underlined, as a live conversion looks.
   void OutputLiveConversion(commands::Command* command);
   // The reading and the text of the last live conversion. Typing on keeps that
