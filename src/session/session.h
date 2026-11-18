@@ -292,6 +292,12 @@ class Session {
   bool RequestZenzAfterLiveConversion(commands::Command* command);
   // Output() with every segment underlined, as a live conversion looks.
   void OutputLiveConversion(commands::Command* command);
+  // The reading and the text of the last live conversion. Typing on keeps that
+  // text on screen and shows only what was typed after it as the reading.
+  std::string live_reading_;
+  std::string live_value_;
+  // The text on screen while composing after a live conversion, or "".
+  std::string ShownAfterLiveConversion() const;
 
   // Undo stack. *begin is the oldest, and *back is the newest.
   std::deque<std::unique_ptr<ImeContext>> undo_contexts_;

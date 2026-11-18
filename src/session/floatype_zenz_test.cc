@@ -273,13 +273,24 @@ TEST_F(FloatypeZenzTest, LiveConvertsWhenTheUserPausesAndZenzFollows) {
 TEST_F(FloatypeZenzTest, TypingAfterALiveConversionEditsTheReading) {
   floatype::EnableLiveConversion(true);
   CallBack(SendKeys({"k", "i", "k", "a", "i"}));
+  // The converted part stays; only what was typed after it is the reading.
   const commands::Output typed = SendKeys({"g", "a"});
-  EXPECT_EQ(Preedit(typed), "きかいが");
+  EXPECT_EQ(Preedit(typed), "機会が");
+  EXPECT_TRUE(AllUnderlined(typed));
   EXPECT_EQ(typed.callback().session_command().type(),
             commands::SessionCommand::LIVE_CONVERT);
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(), "機会が")
+      << "Enter commits what is on screen";
 
-  CallBack(typed);
-  EXPECT_EQ(Preedit(SendKeys({"Backspace"})), "きかい");
+  CallBack(SendKeys({"k", "i", "k", "a", "i"}));
+  EXPECT_EQ(Preedit(SendKeys({"Backspace"})), "きか");
+}
+
+TEST_F(FloatypeZenzTest, ZenzsCorrectionStaysWhileTypingOn) {
+  floatype::EnableLiveConversion(true);
+  const commands::Output live = CallBack(SendKeys({"k", "i", "k", "a", "i"}));
+  ASSERT_EQ(Preedit(PollWhileAsked(CallBack(live))), "機械");
+  EXPECT_EQ(Preedit(SendKeys({"g", "a"})), "機械が");
 }
 
 TEST_F(FloatypeZenzTest, ALiveConversionNeedsTwoCharactersAndCanBeOff) {

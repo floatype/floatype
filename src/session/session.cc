@@ -41,6 +41,7 @@
 
 #include "absl/log/check.h"
 #include "absl/log/log.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "base/clock.h"
@@ -299,6 +300,7 @@ bool Session::SendCommand(commands::Command* command) {
     default:
       zenz_.Cancel();
       live_conversion_ = false;
+      live_reading_.clear();
   }
   bool result = false;
   if (session_command.type() ==
@@ -554,6 +556,19 @@ bool Session::SendKey(commands::Command* command) {
     }
   }
 
+  // floatype: Enter commits what is on screen, kept live conversion included.
+  if (const std::string shown = ShownAfterLiveConversion(); !shown.empty()) {
+    keymap::CompositionState::Commands key_command;
+    if (context_->GetKeyMapManager().GetCommandComposition(
+            command->input().key(), &key_command) &&
+        key_command == keymap::CompositionState::COMMIT) {
+      const std::string reading = context_->composer().GetQueryForConversion();
+      live_reading_.clear();
+      CommitStringDirectly(reading, shown, command);
+      return true;
+    }
+  }
+
   bool result = false;
   switch (context_->state()) {
     case ImeContext::DIRECT:
@@ -577,6 +592,18 @@ bool Session::SendKey(commands::Command* command) {
       break;
   }
 
+  if (const std::string shown = ShownAfterLiveConversion(); !shown.empty()) {
+    commands::Preedit* preedit = command->mutable_output()->mutable_preedit();
+    preedit->Clear();
+    commands::Preedit::Segment* segment = preedit->add_segment();
+    segment->set_annotation(commands::Preedit::Segment::UNDERLINE);
+    segment->set_value(shown);
+    segment->set_value_length(Util::CharsLen(shown));
+    segment->set_key(context_->composer().GetStringForPreedit());
+    preedit->set_cursor(Util::CharsLen(shown));
+  } else if (!live_conversion_) {
+    live_reading_.clear();
+  }
   MaybeScheduleLiveConversion(command);
   MaybeSetUndoStatus(command);
   return result;
@@ -2455,9 +2482,25 @@ void Session::OutputLiveConversion(commands::Command* command) {
   Output(command);
   commands::Preedit* preedit = command->mutable_output()->mutable_preedit();
   preedit->clear_highlighted_position();
+  live_reading_ = context_->composer().GetStringForPreedit();
+  live_value_.clear();
   for (commands::Preedit::Segment& segment : *preedit->mutable_segment()) {
     segment.set_annotation(commands::Preedit::Segment::UNDERLINE);
+    live_value_ += segment.value();
   }
+}
+
+std::string Session::ShownAfterLiveConversion() const {
+  const composer::Composer& composer = context_->composer();
+  if (live_reading_.empty() || context_->state() != ImeContext::COMPOSITION ||
+      composer.GetCursor() != composer.GetLength()) {
+    return "";
+  }
+  const std::string reading = composer.GetStringForPreedit();
+  if (!reading.starts_with(live_reading_)) {
+    return "";
+  }
+  return absl::StrCat(live_value_, reading.substr(live_reading_.size()));
 }
 
 bool Session::LiveConvert(commands::Command* command) {
