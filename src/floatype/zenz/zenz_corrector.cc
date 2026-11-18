@@ -202,6 +202,14 @@ ZenzCorrector::PollResult ZenzCorrector::Poll(const Segments& segments) {
       japanese::FullWidthAsciiToHalfWidthAscii(Reading(segments))) {
     return {PollResult::kDone, {}};
   }
+  // Rules measured and left out (floatype/eval/regression.py on Mozc's
+  // regression set, ajimee.py --engine replay on AJIMEE-Bench), each keeping
+  // Mozc's candidate in a segment where zenz would write:
+  // - the same word in kana instead of kanji or back (ほう/方): 3 harms
+  //   fewer, 5 wins lost;
+  // - digits or letters Mozc did not (百均/１００均): 1 harm fewer, but
+  //   AJIMEE-Bench drops from 82.0% to 81.0% (３年９月１５日, ＭＩ６);
+  // - symbols or emoji Mozc did not: no harm fewer, AJIMEE-Bench 81.5%.
   std::optional<std::vector<int>> indices =
       MapToCandidates(segments, response->conversion);
   if (!indices.has_value() ||
