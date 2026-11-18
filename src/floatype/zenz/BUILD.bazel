@@ -12,7 +12,10 @@ mozc_cc_library(
     name = "scorer_client",
     srcs = ["scorer_client.cc"],
     hdrs = ["scorer_client.h"],
-    visibility = ["//session:__pkg__"],
+    visibility = [
+        "//floatype/eval:__pkg__",
+        "//session:__pkg__",
+    ],
     deps = [
         "//base:clock",
         "//floatype/scorer:protocol",
@@ -54,6 +57,7 @@ mozc_cc_library(
         "Carbon",
     ]),
     visibility = [
+        "//floatype/eval:__pkg__",
         "//server:__pkg__",
         "//session:__pkg__",
     ],

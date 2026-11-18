@@ -158,6 +158,7 @@ mozc_cc_library(
     hdrs = ["session_handler.h"],
     visibility = [
         "//android/jni:__pkg__",
+        "//floatype/eval:__pkg__",
         "//ios:__pkg__",
     ],
     deps = [

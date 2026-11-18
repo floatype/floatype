@@ -40,6 +40,12 @@ class AjimeeTest(unittest.TestCase):
     )
     self.assertEqual(ajimee.zenz_request_line(0, "", "キョウ"), "0\t\tキョウ\n")
 
+  def test_committed_after_takes_zenz_only_when_it_came_in_time(self):
+    row = {"mozc": "機会", "final": "機械", "final_ms": 25.0}
+    self.assertEqual(ajimee.committed_after(row, 20), "機会")
+    self.assertEqual(ajimee.committed_after(row, 25), "機械")
+    self.assertEqual(ajimee.committed_after(row, 100), "機械")
+
   def test_latency_summary(self):
     summary = ajimee.latency_summary([float(i) for i in range(1, 101)])
     self.assertEqual(summary["p50_ms"], 51.0)

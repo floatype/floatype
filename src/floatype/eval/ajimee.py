@@ -8,6 +8,11 @@ Engines:
         decoding), sending one request at a time.
         Build first: cmake -S floatype/scorer -B floatype/scorer/build \
             -DCMAKE_BUILD_TYPE=Release && cmake --build floatype/scorer/build
+  replay  converts with Space through Mozc's session handler with the real
+        engine and scorer (//floatype/eval:replay_main), the way the macOS
+        client does, and also scores what a user who commits a given time after
+        Space gets. Build the scorer as for zenz, and bazelisk build
+        --config release_build //floatype/eval:replay_main.
 
 Run from src/, for example:
 
@@ -53,11 +58,15 @@ def katakana_to_hiragana(text: str) -> str:
   )
 
 
+def line_field(text: str) -> str:
+  """Keeps a field on one line: tabs become spaces and line breaks go, as
+  floatype/scorer/protocol.cc does."""
+  return text.replace("\t", " ").replace("\r", "").replace("\n", "")
+
+
 def zenz_request_line(request_id: int, left_context: str, reading_katakana: str) -> str:
   """Formats a scorer request as floatype/scorer/protocol.h's FormatRequest does."""
-  def field(text: str) -> str:
-    return text.replace("\t", " ").replace("\r", "").replace("\n", "")
-  return f"{request_id}\t{field(left_context)}\t{field(reading_katakana)}\n"
+  return f"{request_id}\t{line_field(left_context)}\t{line_field(reading_katakana)}\n"
 
 
 def levenshtein(a: str, b: str) -> int:
@@ -169,6 +178,42 @@ def convert_with_mozc(readings: list[str], binary: Path, data_file: Path) -> lis
   return results
 
 
+# How long after Space the user commits, for the replay engine.
+COMMIT_DELAYS_MS = (50, 100, 150, 200, 300, 500)
+
+
+def replay_with_session(
+    pairs: list[tuple[str, str]], binary: Path, data_file: Path
+) -> list[dict]:
+  """Replays (left context, hiragana reading) pairs; see replay_main.cc for the fields."""
+  done = subprocess.run(
+      [str(binary), f"--data_file={data_file}", "--data_type=oss"],
+      input="".join(f"{line_field(c)}\t{line_field(r)}\n" for c, r in pairs),
+      capture_output=True,
+      encoding="utf-8",
+      errors="replace",
+      check=True,
+  )
+  rows = []
+  for line in done.stdout.splitlines():
+    mozc, final, space_ms, final_ms, polls = line.split("\t")
+    rows.append({
+        "mozc": mozc,
+        "final": final,
+        "space_ms": float(space_ms),
+        "final_ms": float(final_ms),
+        "polls": int(polls),
+    })
+  if len(rows) != len(pairs):
+    raise SystemExit(f"expected {len(pairs)} results, got {len(rows)}")
+  return rows
+
+
+def committed_after(row: dict, delay_ms: float) -> str:
+  """What a user who commits `delay_ms` after Space gets."""
+  return row["final"] if row["final_ms"] <= delay_ms else row["mozc"]
+
+
 def convert_with_zenz(
     pairs: list[tuple[str, str]], binary: Path, model: Path, threads: int
 ) -> tuple[list[tuple[str, float, str]], dict]:
@@ -200,7 +245,7 @@ def convert_with_zenz(
 
 def main() -> None:
   parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-  parser.add_argument("--engine", choices=["mozc", "zenz"], default="mozc")
+  parser.add_argument("--engine", choices=["mozc", "zenz", "replay"], default="mozc")
   parser.add_argument(
       "--binary", type=Path, help="default: the engine's tool under bazel-bin or floatype/scorer/build"
   )
@@ -220,6 +265,27 @@ def main() -> None:
     top1 = convert_with_mozc(
         [katakana_to_hiragana(item["input"]) for item in items], binary, args.data_file
     )
+  elif args.engine == "replay":
+    binary = args.binary or Path("bazel-bin/floatype/eval/replay_main")
+    pairs = [
+        ("" if args.no_context else item.get("context_text", ""), katakana_to_hiragana(item["input"]))
+        for item in items
+    ]
+    replayed = replay_with_session(pairs, binary, args.data_file)
+    top1 = [r["final"] for r in replayed]
+    extras = [
+        {k: r[k] for k in ("mozc", "space_ms", "final_ms", "polls")} for r in replayed
+    ]
+    changed = [r for r in replayed if r["final"] != r["mozc"]]
+    report.update(context=not args.no_context)
+    report["space_latency"] = latency_summary([r["space_ms"] for r in replayed])
+    report["replacement_latency"] = latency_summary([r["final_ms"] for r in changed]) if changed else None
+    report["replaced"] = len(changed)
+    report["commit_after_ms"] = {
+        str(delay): summarize([score(item, committed_after(r, delay)) for item, r in zip(items, replayed)])["all"]["acc1"]
+        for delay in COMMIT_DELAYS_MS
+    }
+    report["mozc_after_space"] = summarize([score(item, r["mozc"]) for item, r in zip(items, replayed)])
   else:
     binary = args.binary or Path("floatype/scorer/build/floatype_scorer")
     model = fetch(ZENZ_URL, f"zenz-v3.2-small-{ZENZ_REVISION[:12]}-Q5_K_M.gguf", ZENZ_SHA256)
