@@ -416,6 +416,11 @@ message Config {
   optional bool show_indicator = 1007 [default = true];
   optional IndicatorStyle indicator_style = 1008;
 
+  // floatype: off, conversions stay Mozc's and zenz is never asked.
+  optional bool use_zenz = 1009 [default = true];
+  // floatype: zenz's answers that come later than this are dropped.
+  optional uint32 zenz_timeout_millisec = 1010 [default = 300];
+
   //////////////////////////////////////////////////////////////
   //
   // Cloud (300-319)

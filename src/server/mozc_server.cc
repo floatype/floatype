@@ -43,6 +43,8 @@
 #include "base/run_level.h"
 #include "base/system_util.h"
 #include "base/vlog.h"
+#include "config/config_handler.h"
+#include "floatype/config/text_config.h"
 #include "floatype/zenz/zenz_corrector.h"
 #include "session/session_server.h"
 
@@ -104,6 +106,9 @@ int MozcServer::Run() {
   // floatype: correct conversions with zenz through the bundled scorer.
   mozc::floatype::ZenzCorrector::EnableDefaultClient();
   mozc::floatype::EnableSessionFeatures(true);
+  mozc::floatype::SetTextConfigPath(mozc::floatype::DefaultTextConfigPath(),
+                                    /*report_errors=*/true);
+  mozc::config::ConfigHandler::Reload();
 
   {
     std::unique_ptr<mozc::SessionServer> session_server =

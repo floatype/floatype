@@ -1,0 +1,128 @@
+## floatype の設定ファイルの例
+##
+## 置き場所: ~/.config/floatype/config.txtpb
+## 書式: protobuf のテキスト形式（定義は src/protocol/config.proto の Config）
+##
+## - 書いた項目だけが効きます。書かない項目は設定画面の値のままです。
+## - 書いた項目は設定画面より優先されます。設定画面で変えても、このファイルの値に戻ります。
+## - floatype はこのファイルを書き換えません。dotfiles としてコード管理できます。
+## - 保存すると 1 秒ほどで反映されます。
+## - 誤りがあると通知で行番号を知らせ、直前の正しい設定のまま動きます。
+##
+## 使うときは、行頭の「# 」を消してください。値は既定値です。
+
+
+## ── floatype の項目 ──────────────────────────────
+
+## zenz の補正のオン・オフ。オフにすると Mozc の変換だけになります。
+# use_zenz: true
+
+## zenz の答えを待つ上限（ミリ秒、50〜5000）。これより遅い答えは捨てます。
+# zenz_timeout_millisec: 300
+
+## zenz が直した確定を、予測候補（サジェスト）の履歴に覚えさせるか。
+## 変換の順位は、オンでも zenz の選択を覚えません。
+# zenz_suggestion_learning: true
+
+## ライブ変換のオン・オフ。手が止まったら Space を押さなくても変換します。
+# use_live_conversion: true
+
+## ライブ変換を始めるまでの待ち時間（ミリ秒、0〜2000）。最後のキーから数えます。
+# live_conversion_delay_millisec: 228
+
+## ライブ変換を始める最小の文字数（1〜10）。
+# live_conversion_min_chars: 2
+
+## ライブ変換の後に zenz を始めるまでの待ち時間（ミリ秒、0〜5000）。最後のキーから数えます。
+# zenz_delay_millisec: 500
+
+## ライブ変換の後に打ち続けたとき、前に出た変換を残すか。
+## false にすると、読み全体を毎回変換し直します（Mozkey と同じ動き）。
+# live_conversion_keeps_shown_text: true
+
+## 未確定文字の近くに出す状態インジケータ（入力中 / Mozc / Zenz… / Zenz）。
+# show_indicator: true
+
+## インジケータの見た目。色は 0xRRGGBB です。
+# indicator_style {
+##   形: PILL（角丸の帯）、ROUNDED_RECT（角丸の四角）、CIRCLE（丸）
+#   shape: PILL
+##   文字: FULL_LABEL（入力中 など）、SYMBOL（あ / M / … / Z）、COLOR_ONLY（色だけ）
+#   label: FULL_LABEL
+##   位置: ABOVE（未確定文字の上）、BELOW（下）、SIDE（左横）
+#   placement: ABOVE
+#   reading_color: 0x747d8c
+#   mozc_color: 0x586b85
+#   zenz_pending_color: 0x847438
+#   zenz_color: 0x338d85
+#   text_color: 0xffffff
+##   幅（8〜400）と高さ（8〜200）。幅は文字に合わせて広がります。
+#   width: 56
+#   height: 22
+##   文字の大きさ（6〜72）、角の丸み（0〜100）、不透明度（0〜100）
+#   font_size: 11
+#   corner_radius: 7
+#   opacity_percent: 93
+##   未確定文字との間隔（0〜200）と、位置のずらし（-1000〜1000）
+#   gap: 5
+#   offset_x: 0
+#   offset_y: 0
+# }
+
+
+## ── Mozc の主な項目 ──────────────────────────────
+## ほかの項目は src/protocol/config.proto を見てください。
+
+## キー設定: KOTOERI（macOS の既定）、MSIME、ATOK、CUSTOM（custom_keymap_table を使う）
+# session_keymap: KOTOERI
+
+## ローマ字入力（ROMAN）か かな入力（KANA）か
+# preedit_method: ROMAN
+
+## 句読点: TOUTEN_KUTEN（、。）、COMMA_PERIOD（，．）、TOUTEN_PERIOD（、．）、COMMA_KUTEN（，。）
+# punctuation_method: TOUTEN_KUTEN
+
+## 記号: CORNER_BRACKET_MIDDLE_DOT（「」・）、SQUARE_BRACKET_SLASH（［］／）など
+# symbol_method: CORNER_BRACKET_MIDDLE_DOT
+
+## スペースの幅: FUNDAMENTAL_INPUT_MODE（入力モードに従う）、FUNDAMENTAL_FULL_WIDTH、FUNDAMENTAL_HALF_WIDTH
+# space_character_form: FUNDAMENTAL_INPUT_MODE
+
+## 候補の選択キー: SHORTCUT_123456789、SHORTCUT_ASDFGHJKL、NO_SHORTCUT
+# selection_shortcut: SHORTCUT_123456789
+
+## 学習: DEFAULT_HISTORY（する）、READ_ONLY（使うが覚えない）、NO_HISTORY（しない）
+# history_learning_level: DEFAULT_HISTORY
+
+## シークレットモード（学習しない）
+# incognito_mode: false
+
+## 予測候補: 入力履歴から、辞書から、変換結果から。表示する数（1〜9）
+# use_history_suggest: true
+# use_dictionary_suggest: true
+# use_realtime_conversion: true
+# suggestions_size: 3
+
+## 変換の種類ごとのオン・オフ
+# use_date_conversion: true
+# use_single_kanji_conversion: true
+# use_symbol_conversion: true
+# use_number_conversion: true
+# use_emoticon_conversion: true
+# use_emoji_conversion: false
+# use_calculator: true
+# use_t13n_conversion: true
+# use_zip_code_conversion: true
+# use_spelling_correction: true
+
+## Shift で英字を打ったとき: ASCII_INPUT_MODE（英数入力に切り替え）、KATAKANA_INPUT_MODE、OFF
+# shift_key_mode_switch: ASCII_INPUT_MODE
+
+## 句読点を打ったら自動で変換する
+# use_auto_conversion: false
+
+## テンキーの文字: NUMPAD_HALF_WIDTH、NUMPAD_FULL_WIDTH、NUMPAD_INPUT_MODE、NUMPAD_DIRECT_INPUT
+# numpad_character_form: NUMPAD_HALF_WIDTH
+
+## ¥ キーの文字: YEN_SIGN（¥）、BACKSLASH（\）
+# yen_sign_character: YEN_SIGN

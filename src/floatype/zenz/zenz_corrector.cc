@@ -183,7 +183,7 @@ ZenzCorrector::PollResult ZenzCorrector::Poll(const Segments& segments) {
   }
   const std::optional<Response> response = client_->Poll();
   if (!response.has_value() || response->id != pending_->id) {
-    if (Clock::GetAbslTime() - pending_->sent >= kTimeout) {
+    if (Clock::GetAbslTime() - pending_->sent >= timeout_) {
       Cancel();
       return {PollResult::kDone, {}};
     }

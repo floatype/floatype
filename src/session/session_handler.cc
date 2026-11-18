@@ -56,6 +56,7 @@
 #include "config/character_form_manager.h"
 #include "config/config_handler.h"
 #include "engine/engine_interface.h"
+#include "floatype/config/text_config.h"
 #include "protocol/commands.pb.h"
 #include "protocol/config.pb.h"
 #include "protocol/engine_builder.pb.h"
@@ -322,6 +323,11 @@ bool SessionHandler::SetRequest(commands::Command* command) {
 bool SessionHandler::EvalCommand(commands::Command* command) {
   if (engine_) {
     engine_->ClearOldSupplementalModels();
+  }
+  // floatype: the settings file was edited.
+  if (floatype::TextConfigChanged()) {
+    config::ConfigHandler::Reload();
+    UpdateSessions();
   }
   if (!is_available_) {
     LOG(ERROR) << "SessionHandler is not available.";

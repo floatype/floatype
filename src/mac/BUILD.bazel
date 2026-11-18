@@ -100,6 +100,8 @@ mozc_macos_application(
             "//server:mozc_server_macos": "Resources",
             # floatype: the scorer and the zenz model, next to the converter.
             "//floatype/scorer:bundle_files": "Resources",
+            # floatype: copy to ~/.config/floatype/config.txtpb to change settings.
+            "//floatype/config:config.example.txtpb": "Resources",
         },
     ),
     app_icons = ["//data/images/mac:product_icon.icns"],
@@ -148,6 +150,8 @@ mozc_objc_library(
         "//base:const",
         "//base:init_mozc",
         "//base:run_level",
+        "//config:config_handler",
+        "//floatype/config:text_config",
         "//client",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/log",

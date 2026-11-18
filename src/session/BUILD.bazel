@@ -163,6 +163,7 @@ mozc_cc_library(
         "//ios:__pkg__",
     ],
     deps = [
+        "//floatype/config:text_config",
         ":keymap",
         ":session",
         "//base:clock",

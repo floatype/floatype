@@ -481,6 +481,18 @@ TEST_F(FloatypeZenzTest, SuggestsForTheFirstLettersOfAComposition) {
   EXPECT_EQ(Suggestions(SendKeys({"k"})), std::vector<std::string>{"k"});
 }
 
+TEST_F(FloatypeZenzTest, ZenzCanBeTurnedOff) {
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_use_zenz(false);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+  const commands::Output converted = ConvertKikai();
+  EXPECT_EQ(Preedit(converted), "機会");
+  EXPECT_FALSE(converted.has_callback());
+}
+
 TEST_F(FloatypeZenzTest, DropsTheAnswerAfterTheUserActs) {
   ASSERT_TRUE(ConvertKikai().has_callback());
   const commands::Output picked = SendKeys({"Space"});

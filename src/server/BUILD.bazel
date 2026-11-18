@@ -103,6 +103,8 @@ mozc_cc_library(
         "//base:run_level",
         "//base:system_util",
         "//base:vlog",
+        "//config:config_handler",
+        "//floatype/config:text_config",
         "//floatype/zenz:zenz_corrector",
         "//session:session_server",
         "@com_google_absl//absl/base:config",

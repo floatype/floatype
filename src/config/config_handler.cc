@@ -52,6 +52,7 @@
 #include "base/thread.h"
 #include "base/version.h"
 #include "base/vlog.h"
+#include "floatype/config/text_config.h"
 #include "protocol/config.pb.h"
 
 namespace mozc {
@@ -177,6 +178,8 @@ class ConfigHandlerImpl final {
   void SetConfigInternal(std::shared_ptr<Config> config);
 
   std::string filename_ ABSL_GUARDED_BY(mutex_);
+  // floatype: config1.db as stored, without the settings file's values.
+  Config stored_ ABSL_GUARDED_BY(mutex_);
   std::atomic<uint64_t> config_hash_ = 0;   // hash of final config.
   std::atomic<uint64_t> content_hash_ = 0;  // hash w/o metadata.
   AtomicSharedPtr<Config> config_;
@@ -205,6 +208,14 @@ void ConfigHandlerImpl::SetConfigInternal(std::shared_ptr<Config> config) {
 }
 
 void ConfigHandlerImpl::SetConfig(Config config) {
+  // floatype: the settings screen sends back what it was shown, the file's
+  // values included; those stay out of config1.db, so removing a line from the
+  // file gives the field back to the settings screen.
+  const Config overlay = floatype::TextConfigOverlay();
+  {
+    absl::ReaderMutexLock lock(mutex_);
+    floatype::RestoreOverlaidFields(overlay, stored_, config);
+  }
   const uint64_t config_hash = CityFingerprint(config.SerializeAsString());
 
   // If the wire format of config is identical to the one of the previously
@@ -249,7 +260,13 @@ void ConfigHandlerImpl::SetConfig(Config config) {
   ConfigFileStream::AtomicUpdate(absl::StrCat(filename, ".txt"), debug_content);
 #endif  // DEBUG
 
-  SetConfigInternal(output_config);
+  {
+    absl::WriterMutexLock lock(mutex_);
+    stored_ = *output_config;
+  }
+  auto effective = std::make_shared<Config>(*output_config);
+  floatype::ApplyOverlay(overlay, *effective);
+  SetConfigInternal(effective);
 }
 
 // Reload from file
@@ -268,6 +285,15 @@ void ConfigHandlerImpl::Reload() {
   }
 
   // we set default config when file is broken
+  NormalizeConfig(input_config.get());
+
+  // floatype: the settings file overrides the fields it sets.
+  {
+    absl::WriterMutexLock lock(mutex_);
+    stored_ = *input_config;
+  }
+  floatype::ReloadTextConfig();
+  floatype::ApplyOverlay(floatype::TextConfigOverlay(), *input_config);
   NormalizeConfig(input_config.get());
 
   SetConfigInternal(input_config);

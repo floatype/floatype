@@ -2693,6 +2693,11 @@ bool Session::RequestZenzAfterLiveConversion(commands::Command* command) {
 }
 
 void Session::RequestZenz(commands::Command* command) {
+  const config::Config& config = context_->GetConfig();
+  if (!config.use_zenz()) {
+    return;
+  }
+  zenz_.set_timeout(absl::Milliseconds(config.zenz_timeout_millisec()));
   if (!zenz_.Request(context_->converter().GetSegments(),
                      context_->client_context().preceding_text())) {
     return;

@@ -205,6 +205,18 @@ TEST_F(ZenzCorrectorTest, GivesUpAfterTheTimeout) {
   EXPECT_EQ(corrector.Poll(segments).kind, ZenzCorrector::PollResult::kDone);
 }
 
+TEST_F(ZenzCorrectorTest, TheTimeoutCanBeSet) {
+  ZenzCorrector corrector(client_.get());
+  corrector.set_timeout(absl::Milliseconds(1000));
+  Segments segments;
+  AddSegment(segments, "すろう", {"スロウ"});
+  ASSERT_TRUE(corrector.Request(segments, ""));
+  clock_.Advance(ZenzCorrector::kTimeout);
+  EXPECT_EQ(corrector.Poll(segments).kind, ZenzCorrector::PollResult::kWait);
+  clock_.Advance(absl::Milliseconds(700));
+  EXPECT_EQ(corrector.Poll(segments).kind, ZenzCorrector::PollResult::kDone);
+}
+
 TEST_F(ZenzCorrectorTest, DropsTheAnswerAfterCancelOrAChangedConversion) {
   ZenzCorrector corrector(client_.get());
   const Segments segments = KyouHa();

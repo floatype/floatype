@@ -42,6 +42,8 @@
 #include "base/const.h"
 #include "base/init_mozc.h"
 #include "base/run_level.h"
+#include "config/config_handler.h"
+#include "floatype/config/text_config.h"
 #include "client/client.h"
 
 ABSL_FLAG(bool, register_input_source, false,
@@ -103,6 +105,12 @@ int main(int argc, char *argv[]) {
   if (!mozc::RunLevel::IsValidClientRunLevel()) {
     return -1;
   }
+
+  // floatype: keys that the settings file sets for direct input apply here
+  // too; the converter reports the file's errors.
+  mozc::floatype::SetTextConfigPath(mozc::floatype::DefaultTextConfigPath(),
+                                    /*report_errors=*/false);
+  mozc::config::ConfigHandler::Reload();
 
   // Initialize imkServer
   NSBundle *bundle = [NSBundle mainBundle];

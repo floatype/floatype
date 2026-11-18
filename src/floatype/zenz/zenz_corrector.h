@@ -32,7 +32,8 @@ std::optional<std::vector<int>> MapPrefixToCandidates(const Segments& segments,
 // client calls back, and Cancel() on any user action.
 class ZenzCorrector {
  public:
-  // Answers that come later are dropped (spec section 5: 300ms, provisional).
+  // Answers that come later are dropped, unless set_timeout() says otherwise
+  // (the zenz_timeout_millisec setting).
   static constexpr absl::Duration kTimeout = absl::Milliseconds(300);
   // How long the client waits before calling back.
   static constexpr absl::Duration kPollInterval = absl::Milliseconds(20);
@@ -60,6 +61,7 @@ class ZenzCorrector {
   PollResult Poll(const Segments& segments);
 
   void Cancel() { pending_.reset(); }
+  void set_timeout(absl::Duration timeout) { timeout_ = timeout; }
   // True while an answer is awaited.
   bool pending() const { return pending_.has_value(); }
 
@@ -79,6 +81,7 @@ class ZenzCorrector {
   };
 
   ScorerClient* const client_;
+  absl::Duration timeout_ = kTimeout;
   std::optional<Pending> pending_;
 };
 
