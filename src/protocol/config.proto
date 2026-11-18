@@ -434,6 +434,10 @@ message Config {
     optional uint32 border_color = 4;
   }
   optional CandidateStyle candidate_style = 1014;
+  // floatype: typing one of these characters (for example "、。？！") at the end
+  // of the composition converts it, waits for zenz, and commits it. Empty
+  // turns it off.
+  optional string direct_commit_characters = 1015 [default = ""];
   // floatype: a correction stopped with Ctrl+Delete while it is shown is not
   // made again for the same reading. Clearing the user history forgets them.
   optional bool zenz_learning = 1013 [default = true];

@@ -35,6 +35,7 @@
 #include <QFont>
 #include <QFormLayout>
 #include <QLabel>
+#include <QLineEdit>
 #include <QMessageBox>
 #include <QSpinBox>
 #include <QWidget>
@@ -554,10 +555,14 @@ void ConfigDialog::SetUpFloatypeTab() {
   zenzDelaySpinBox_ = spin(0, 5000, 10, " ms");
   form->addRow(text("zenz に頼むまでの待ち時間"), zenzDelaySpinBox_);
   keepShownTextCheckBox_ = check("打ち続けても、前に出た変換を残す");
+  directCommitLineEdit_ = new QLineEdit(tab);
+  directCommitLineEdit_->setPlaceholderText(
+      text("例: 、。？！（空なら使わない）"));
   liveConversionWaitSpinBox_ = spin(0, 1000, 10, " ms");
   liveConversionWaitSpinBox_->setSpecialValueText(text("待たない"));
   form->addRow(text("zenz の答えを待ってから出す上限"),
                liveConversionWaitSpinBox_);
+  form->addRow(text("打つと zenz を待って確定する文字"), directCommitLineEdit_);
 
   heading("候補の窓");
   candidateFontScaleSpinBox_ = spin(50, 300, 10, " %");
@@ -684,6 +689,8 @@ void ConfigDialog::ConvertFromProto(const config::Config& config) {
   SET_CHECKBOX(keepShownTextCheckBox_, live_conversion_keeps_shown_text);
   liveConversionWaitSpinBox_->setValue(
       config.live_conversion_waits_for_zenz_millisec());
+  directCommitLineEdit_->setText(
+      QString::fromStdString(config.direct_commit_characters()));
   candidateFontScaleSpinBox_->setValue(config.candidate_font_scale_percent());
   SET_CHECKBOX(showIndicatorCheckBox_, show_indicator);
   indicatorPlacementComboBox_->setCurrentIndex(
@@ -798,6 +805,8 @@ void ConfigDialog::ConvertToProto(config::Config* config) const {
   GET_CHECKBOX(keepShownTextCheckBox_, live_conversion_keeps_shown_text);
   config->set_live_conversion_waits_for_zenz_millisec(
       liveConversionWaitSpinBox_->value());
+  config->set_direct_commit_characters(
+      directCommitLineEdit_->text().trimmed().toStdString());
   config->set_candidate_font_scale_percent(candidateFontScaleSpinBox_->value());
   GET_CHECKBOX(showIndicatorCheckBox_, show_indicator);
   config::Config::IndicatorStyle* style = config->mutable_indicator_style();

@@ -326,6 +326,7 @@ bool Session::SendCommand(commands::Command* command) {
     default:
       zenz_.Cancel();
       StopWaitingForZenz();
+      commit_after_zenz_ = false;
       zenz_indices_.clear();
       live_conversion_ = false;
       live_reading_.clear();
@@ -563,6 +564,19 @@ bool Session::TestSendKey(commands::Command* command) {
 bool Session::SendKey(commands::Command* command) {
   zenz_.Cancel();
   StopWaitingForZenz();
+  // floatype: a key before zenz answered a direct commit commits what is on
+  // screen; Enter does only that, other keys go on as typed after it.
+  if (std::exchange(commit_after_zenz_, false) &&
+      context_->state() == ImeContext::CONVERSION) {
+    keymap::ConversionState::Commands key_command;
+    if (context_->GetKeyMapManager().GetCommandConversion(
+            command->input().key(), &key_command) &&
+        key_command == keymap::ConversionState::COMMIT) {
+      return Commit(command);
+    }
+    CommitNotTriggeringZeroQuerySuggest(command);
+    live_conversion_ = false;
+  }
   const std::vector<int> zenz_indices = std::exchange(zenz_indices_, {});
   const bool live = live_conversion_;
   live_conversion_ = false;
@@ -688,6 +702,12 @@ bool Session::SendKey(commands::Command* command) {
           command->output().result().value()) ==
           japanese::FullWidthAsciiToHalfWidthAscii(zenz_text_)) {
     floatype::ZenzMemory::Accepted().Add(zenz_reading_, zenz_text_);
+  }
+  if (MaybeCommitOnCharacter(command)) {
+    SetIndicator(command);
+    SetCandidateLook(command);
+    MaybeSetUndoStatus(command);
+    return true;
   }
   MaybeScheduleLiveConversion(command);
   SetIndicator(command);
@@ -2579,6 +2599,52 @@ void Session::MaybeScheduleLiveConversion(commands::Command* command) {
               config.live_conversion_delay_millisec());
 }
 
+bool Session::MaybeCommitOnCharacter(commands::Command* command) {
+  const std::string& characters =
+      context_->GetConfig().direct_commit_characters();
+  if (!floatype::SessionFeaturesEnabled() || characters.empty() ||
+      context_->state() != ImeContext::COMPOSITION) {
+    return false;
+  }
+  const transliteration::TransliterationType mode =
+      context_->composer().GetInputMode();
+  if (mode == transliteration::HALF_ASCII ||
+      mode == transliteration::FULL_ASCII) {
+    return false;
+  }
+  const std::string preedit = context_->composer().GetStringForPreedit();
+  bool ends = false;
+  for (const char32_t c : Utf8AsChars32(characters)) {
+    std::string utf8;
+    Util::CodepointToUtf8Append(c, &utf8);
+    ends = ends || (preedit.size() > utf8.size() && preedit.ends_with(utf8));
+  }
+  if (!ends) {
+    return false;
+  }
+  // What InsertCharacter showed goes; the conversion is shown afresh.
+  commands::Output* output = command->mutable_output();
+  output->clear_preedit();
+  output->clear_candidate_window();
+  output->clear_all_candidate_words();
+  output->clear_callback();
+  CorrectWithZenzNow(command);
+  if (context_->state() != ImeContext::CONVERSION) {
+    return true;
+  }
+  if (zenz_.pending()) {
+    commit_after_zenz_ = true;
+    return true;
+  }
+  // No zenz to wait for.
+  output->clear_preedit();
+  output->clear_candidate_window();
+  output->clear_callback();
+  live_conversion_ = false;
+  CommitNotTriggeringZeroQuerySuggest(command);
+  return true;
+}
+
 commands::Preedit Session::ShownPreedit() const {
   commands::Command probe;
   OutputComposition(&probe);
@@ -2880,6 +2946,13 @@ bool Session::PollZenz(commands::Command* command) {
       zenz_reading_ = result.reading;
       zenz_text_ = result.text;
     }
+  }
+  // A direct commit commits once zenz has answered or given up.
+  if (commit_after_zenz_ &&
+      result.kind != floatype::ZenzCorrector::PollResult::kWait) {
+    commit_after_zenz_ = false;
+    live_conversion_ = false;
+    return CommitNotTriggeringZeroQuerySuggest(command);
   }
   if (waiting_for_zenz_) {
     if (result.kind == floatype::ZenzCorrector::PollResult::kWait &&

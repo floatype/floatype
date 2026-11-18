@@ -114,6 +114,7 @@ class ConfigDialog : public QDialog, private Ui::ConfigDialog {
   QSpinBox* zenzDelaySpinBox_;
   QCheckBox* keepShownTextCheckBox_;
   QSpinBox* liveConversionWaitSpinBox_;
+  QLineEdit* directCommitLineEdit_;
   QSpinBox* candidateFontScaleSpinBox_;
   QCheckBox* showIndicatorCheckBox_;
   QComboBox* indicatorPlacementComboBox_;

@@ -642,6 +642,61 @@ TEST_F(FloatypeZenzTest, CtrlDeleteForgetsNothingWithLearningOff) {
   EXPECT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
 }
 
+class DirectCommitTest : public FloatypeZenzTest {
+ protected:
+  void SetUp() override {
+    FloatypeZenzTest::SetUp();
+    floatype::EnableSessionFeatures(true);
+    ASSERT_OK(FileUtil::SetContents(answers_, "キカイ。\t機会。\n"));
+    config::Config config = config::ConfigHandler::DefaultConfig();
+    config.set_direct_commit_characters("、。");
+    config.set_use_live_conversion(false);
+    commands::Input input;
+    input.set_type(commands::Input::SET_CONFIG);
+    *input.mutable_config() = config;
+    Eval(std::move(input));
+  }
+};
+
+TEST_F(DirectCommitTest, APeriodConvertsWaitsForZenzAndCommits) {
+  const commands::Output converted = SendKeys({"k", "i", "k", "a", "i", "."});
+  EXPECT_EQ(Preedit(converted), "機械。") << "Mozc's, while zenz works";
+  EXPECT_FALSE(converted.has_result());
+  const commands::Output done = PollWhileAsked(converted);
+  EXPECT_EQ(done.result().value(), "機会。") << "zenz's";
+  EXPECT_EQ(Preedit(done), "");
+}
+
+TEST_F(DirectCommitTest, AKeyBeforeZenzAnswersCommitsWhatIsShown) {
+  const commands::Output typed = SendKeys({"k", "i", "k", "a", "i", ".", "a"});
+  EXPECT_EQ(typed.result().value(), "機械。");
+  EXPECT_EQ(Preedit(typed), "あ");
+}
+
+TEST_F(DirectCommitTest, EnterBeforeZenzAnswersOnlyCommits) {
+  SendKeys({"k", "i", "k", "a", "i", "."});
+  const commands::Output entered = SendKeys({"Enter"});
+  EXPECT_EQ(entered.result().value(), "機械。");
+  EXPECT_TRUE(entered.consumed()) << "no new line in the app";
+}
+
+TEST_F(DirectCommitTest, APeriodAfterALiveConversionCommitsToo) {
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_direct_commit_characters("、。");
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+  CallBack(SendKeys({"k", "i", "k", "a", "i"}));  // A live conversion.
+  const commands::Output done = PollWhileAsked(SendKeys({"."}));
+  EXPECT_EQ(done.result().value(), "機会。");
+  EXPECT_EQ(Preedit(done), "");
+}
+
+TEST_F(DirectCommitTest, OtherCharactersCompose) {
+  EXPECT_EQ(Preedit(SendKeys({"k", "i", "k", "a", "i"})), "きかい");
+}
+
 TEST_F(FloatypeZenzTest, ZenzCanBeTurnedOff) {
   config::Config config = config::ConfigHandler::DefaultConfig();
   config.set_use_zenz(false);

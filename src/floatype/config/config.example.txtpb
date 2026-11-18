@@ -49,6 +49,11 @@
 ## false にすると、読み全体を毎回変換し直します（Mozkey と同じ動き）。
 # live_conversion_keeps_shown_text: true
 
+## 句読点の単打確定: ここに書いた文字（例 "、。？！"）を打つと、入力中の文を変換して
+## zenz の答えを待ち（zenz_timeout_millisec まで）、そのまま確定する。待っている間に
+## Enter を押すとその場で確定、ほかのキーは見えているものを確定してから効く。空で切る。
+# direct_commit_characters: ""
+
 ## 候補の窓の文字の大きさ（Mozc の大きさに対する %、50〜300）。
 # candidate_font_scale_percent: 100
 
