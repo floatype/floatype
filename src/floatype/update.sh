@@ -15,15 +15,15 @@ nix develop .. --command bash -c '
   set -euo pipefail
   cmake -S floatype/scorer -B floatype/scorer/build -DCMAKE_BUILD_TYPE=Release >/dev/null
   cmake --build floatype/scorer/build -j --target floatype_scorer >/dev/null
-  # Bazel does not rebuild the embedded keymaps when data/keymap changes, so the
-  # object is always rebuilt.
-  find bazel-out/ -path "*_objs/config_file_stream/config_file_stream.o" 2>/dev/null |
-    while read -r o; do
-      d=$(dirname "$(dirname "$(dirname "$o")")")
-      chmod u+w "$(dirname "$o")" "$d"
-      rm -f "$o" "$d/libconfig_file_stream.a"
-    done
+  # Bazel keeps stale objects after generated sources (protocol buffers,
+  # embedded keymaps) change, so a change to their inputs means a clean build.
+  stamp=floatype/scorer/build/update-stamp
+  inputs=$(git ls-files -s -- "*.proto" data/keymap data/preedit | shasum; git diff -- "*.proto" data/keymap data/preedit | shasum)
+  if [ "$(cat "$stamp" 2>/dev/null)" != "$inputs" ]; then
+    bazelisk clean
+  fi
   bazelisk build --config release_build --define=floatype_zenz=bundle package
+  echo "$inputs" > "$stamp"
 '
 
 before="$(shasum "$plist" 2>/dev/null || true)"
