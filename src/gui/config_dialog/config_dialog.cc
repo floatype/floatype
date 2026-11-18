@@ -30,9 +30,17 @@
 // Qt component of configure dialog for Mozc
 #include "gui/config_dialog/config_dialog.h"
 
+#include <QCheckBox>
+#include <QComboBox>
+#include <QFont>
+#include <QFormLayout>
+#include <QLabel>
 #include <QMessageBox>
+#include <QSpinBox>
+#include <QWidget>
 #include <algorithm>
 #include <cstdint>
+#include <initializer_list>
 #include <istream>
 #include <map>
 #include <memory>
@@ -136,6 +144,7 @@ ConfigDialog::ConfigDialog()
 #endif  // NDEBUG
 
   suggestionsSizeSpinBox->setRange(1, 9);
+  SetUpFloatypeTab();
 
   punctuationsSettingComboBox->addItem(QString::fromUtf8("、。"));
   punctuationsSettingComboBox->addItem(QString::fromUtf8("，．"));
@@ -495,6 +504,93 @@ void GetComboboxForPreeditMethod(const QComboBox* combobox,
 }
 }  // namespace
 
+void ConfigDialog::SetUpFloatypeTab() {
+  QWidget* tab = new QWidget();
+  QFormLayout* form = new QFormLayout(tab);
+  const auto text = [](const char* utf8) { return QString::fromUtf8(utf8); };
+  const auto heading = [&](const char* utf8) {
+    QLabel* label = new QLabel(text(utf8), tab);
+    QFont font = label->font();
+    font.setBold(true);
+    label->setFont(font);
+    form->addRow(label);
+  };
+  const auto spin = [&](int min, int max, int step, const char* suffix) {
+    QSpinBox* box = new QSpinBox(tab);
+    box->setRange(min, max);
+    box->setSingleStep(step);
+    box->setSuffix(text(suffix));
+    return box;
+  };
+  const auto check = [&](const char* utf8) {
+    QCheckBox* box = new QCheckBox(text(utf8), tab);
+    form->addRow(box);
+    return box;
+  };
+  const auto combo = [&](const char* utf8,
+                         std::initializer_list<const char*> items) {
+    QComboBox* box = new QComboBox(tab);
+    for (const char* item : items) box->addItem(text(item));
+    form->addRow(text(utf8), box);
+    return box;
+  };
+
+  heading("zenz（AI による補正）");
+  useZenzCheckBox_ = check("zenz で変換を補正する");
+  zenzTimeoutSpinBox_ = spin(50, 5000, 50, " ms");
+  form->addRow(text("答えを待つ上限"), zenzTimeoutSpinBox_);
+  zenzSuggestionLearningCheckBox_ =
+      check("zenz が直した確定を予測候補に覚えさせる");
+
+  heading("ライブ変換");
+  liveConversionCheckBox_ = check("手が止まったら Space を押さずに変換する");
+  liveConversionDelaySpinBox_ = spin(0, 2000, 10, " ms");
+  form->addRow(text("変換するまでの待ち時間"), liveConversionDelaySpinBox_);
+  liveConversionMinCharsSpinBox_ = spin(1, 10, 1, " 文字");
+  form->addRow(text("変換を始める文字数"), liveConversionMinCharsSpinBox_);
+  zenzDelaySpinBox_ = spin(0, 5000, 10, " ms");
+  form->addRow(text("zenz に頼むまでの待ち時間"), zenzDelaySpinBox_);
+  keepShownTextCheckBox_ = check("打ち続けても、前に出た変換を残す");
+
+  heading("状態インジケータ");
+  showIndicatorCheckBox_ = check("入力中の文字の近くに出す");
+  indicatorPlacementComboBox_ =
+      combo("位置", {"入力中の文字の上", "下", "左横"});
+  indicatorLabelComboBox_ =
+      combo("文字", {"入力中 / Mozc / Zenz", "あ / M / Z", "色だけ"});
+  indicatorShapeComboBox_ = combo("形", {"角丸の帯", "角丸の四角", "丸"});
+
+  QLabel* note = new QLabel(
+      text("~/.config/floatype/config.txtpb "
+           "に書いた項目は、ここより優先されます。"
+           "色や大きさはそのファイルで変えられます（例は floatype.app の "
+           "Resources/config.example.txtpb）。"),
+      tab);
+  note->setWordWrap(true);
+  form->addRow(note);
+
+  // Settings that only matter while their switch is on follow it.
+  for (QWidget* widget : std::initializer_list<QWidget*>{
+           zenzTimeoutSpinBox_, zenzSuggestionLearningCheckBox_,
+           zenzDelaySpinBox_}) {
+    connect(useZenzCheckBox_, &QCheckBox::toggled, widget,
+            &QWidget::setEnabled);
+  }
+  for (QWidget* widget : std::initializer_list<QWidget*>{
+           liveConversionDelaySpinBox_, liveConversionMinCharsSpinBox_,
+           keepShownTextCheckBox_}) {
+    connect(liveConversionCheckBox_, &QCheckBox::toggled, widget,
+            &QWidget::setEnabled);
+  }
+  for (QWidget* widget : std::initializer_list<QWidget*>{
+           indicatorPlacementComboBox_, indicatorLabelComboBox_,
+           indicatorShapeComboBox_}) {
+    connect(showIndicatorCheckBox_, &QCheckBox::toggled, widget,
+            &QWidget::setEnabled);
+  }
+  configDialogTabWidget->insertTab(1, tab, text("floatype"));
+}
+
 // TODO(taku)
 // Actually ConvertFromProto and ConvertToProto are almost the same.
 // The difference only SET_ and GET_. We would like to unify the twos.
@@ -563,6 +659,22 @@ void ConfigDialog::ConvertFromProto(const config::Config& config) {
 
   suggestionsSizeSpinBox->setValue(
       std::clamp<int>(config.suggestions_size(), 1, 9));
+
+  // floatype
+  SET_CHECKBOX(useZenzCheckBox_, use_zenz);
+  zenzTimeoutSpinBox_->setValue(config.zenz_timeout_millisec());
+  SET_CHECKBOX(zenzSuggestionLearningCheckBox_, zenz_suggestion_learning);
+  SET_CHECKBOX(liveConversionCheckBox_, use_live_conversion);
+  liveConversionDelaySpinBox_->setValue(
+      config.live_conversion_delay_millisec());
+  liveConversionMinCharsSpinBox_->setValue(config.live_conversion_min_chars());
+  zenzDelaySpinBox_->setValue(config.zenz_delay_millisec());
+  SET_CHECKBOX(keepShownTextCheckBox_, live_conversion_keeps_shown_text);
+  SET_CHECKBOX(showIndicatorCheckBox_, show_indicator);
+  indicatorPlacementComboBox_->setCurrentIndex(
+      config.indicator_style().placement());
+  indicatorLabelComboBox_->setCurrentIndex(config.indicator_style().label());
+  indicatorShapeComboBox_->setCurrentIndex(config.indicator_style().shape());
 
   // tab5
   SetSendStatsCheckBox();
@@ -656,6 +768,26 @@ void ConfigDialog::ConvertToProto(config::Config* config) const {
 
   config->set_suggestions_size(
       static_cast<uint32_t>(suggestionsSizeSpinBox->value()));
+
+  // floatype
+  GET_CHECKBOX(useZenzCheckBox_, use_zenz);
+  config->set_zenz_timeout_millisec(zenzTimeoutSpinBox_->value());
+  GET_CHECKBOX(zenzSuggestionLearningCheckBox_, zenz_suggestion_learning);
+  GET_CHECKBOX(liveConversionCheckBox_, use_live_conversion);
+  config->set_live_conversion_delay_millisec(
+      liveConversionDelaySpinBox_->value());
+  config->set_live_conversion_min_chars(
+      liveConversionMinCharsSpinBox_->value());
+  config->set_zenz_delay_millisec(zenzDelaySpinBox_->value());
+  GET_CHECKBOX(keepShownTextCheckBox_, live_conversion_keeps_shown_text);
+  GET_CHECKBOX(showIndicatorCheckBox_, show_indicator);
+  config::Config::IndicatorStyle* style = config->mutable_indicator_style();
+  style->set_placement(static_cast<config::Config::IndicatorStyle::Placement>(
+      indicatorPlacementComboBox_->currentIndex()));
+  style->set_label(static_cast<config::Config::IndicatorStyle::Label>(
+      indicatorLabelComboBox_->currentIndex()));
+  style->set_shape(static_cast<config::Config::IndicatorStyle::Shape>(
+      indicatorShapeComboBox_->currentIndex()));
 
   // tab5
   GetSendStatsCheckBox();

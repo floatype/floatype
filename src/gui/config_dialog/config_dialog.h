@@ -100,6 +100,22 @@ class ConfigDialog : public QDialog, private Ui::ConfigDialog {
   bool initial_use_mode_indicator_;
   std::map<QString, config::Config::SessionKeymap>
       keymapname_sessionkeymap_map_;
+
+  // floatype: the tab for floatype's settings, built in code so that the
+  // upstream .ui file and its translations stay as they are.
+  void SetUpFloatypeTab();
+  QCheckBox* useZenzCheckBox_;
+  QSpinBox* zenzTimeoutSpinBox_;
+  QCheckBox* zenzSuggestionLearningCheckBox_;
+  QCheckBox* liveConversionCheckBox_;
+  QSpinBox* liveConversionDelaySpinBox_;
+  QSpinBox* liveConversionMinCharsSpinBox_;
+  QSpinBox* zenzDelaySpinBox_;
+  QCheckBox* keepShownTextCheckBox_;
+  QCheckBox* showIndicatorCheckBox_;
+  QComboBox* indicatorPlacementComboBox_;
+  QComboBox* indicatorLabelComboBox_;
+  QComboBox* indicatorShapeComboBox_;
 };
 
 }  // namespace gui
