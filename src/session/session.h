@@ -314,6 +314,10 @@ class Session {
   // After a typed character: when it is one of the direct commit characters,
   // converts, asks zenz, and commits once it answers. Returns whether it did.
   bool MaybeCommitOnCharacter(commands::Command* command);
+  // Mixed English input: converts the composition to its letters when they
+  // were an English word. Returns whether it did.
+  bool MaybeConvertAsEnglish(commands::Command* command);
+  bool english_shown_ = false;
   // Shows the correction the user committed before for this conversion's
   // reading, if any. Returns whether it did.
   bool ApplyAcceptedCorrection();

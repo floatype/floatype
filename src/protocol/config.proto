@@ -440,6 +440,10 @@ message Config {
   optional string direct_commit_characters = 1015 [default = ""];
   // floatype: the reading above a live conversion, in small type.
   optional bool live_conversion_ruby = 1016 [default = false];
+  // floatype: an English word typed in a kana mode, told by romaji letters
+  // left over and a word list, converts to its letters, and the indicator
+  // shows あ or A for the word before the caret.
+  optional bool mixed_english = 1017 [default = false];
   // floatype: a correction stopped with Ctrl+Delete while it is shown is not
   // made again for the same reading. Clearing the user history forgets them.
   optional bool zenz_learning = 1013 [default = true];

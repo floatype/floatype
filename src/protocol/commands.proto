@@ -1463,6 +1463,9 @@ message Output {
     }
     optional State state = 1;
     optional mozc.config.Config.IndicatorStyle style = 2;
+    // With mixed English input on: whether the word before the caret is
+    // taken as English (A) or Japanese (あ).
+    optional bool english = 3;
   }
   optional Indicator indicator = 1001;
   // floatype: the candidate window's font sizes, in percent of Mozc's; unset

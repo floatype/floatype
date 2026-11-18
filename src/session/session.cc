@@ -55,6 +55,7 @@
 #include "converter/attribute.h"
 #include "engine/engine_converter_interface.h"
 #include "engine/engine_interface.h"
+#include "floatype/english/english_words.h"
 #include "floatype/zenz/zenz_memory.h"
 #include "protocol/commands.pb.h"
 #include "protocol/config.pb.h"
@@ -2519,6 +2520,9 @@ bool Session::DeleteCandidateFromHistory(commands::Command* command) {
 }
 
 bool Session::Convert(commands::Command* command) {
+  if (MaybeConvertAsEnglish(command)) {
+    return true;
+  }
   command->mutable_output()->set_consumed(true);
   const std::string composition = context_->composer().GetQueryForConversion();
 
@@ -2597,6 +2601,23 @@ void Session::MaybeScheduleLiveConversion(commands::Command* command) {
   }
   SetCallback(command, commands::SessionCommand::LIVE_CONVERT,
               config.live_conversion_delay_millisec());
+}
+
+bool Session::MaybeConvertAsEnglish(commands::Command* command) {
+  english_shown_ = false;
+  if (!floatype::SessionFeaturesEnabled() ||
+      !context_->GetConfig().mixed_english() ||
+      context_->state() != ImeContext::COMPOSITION) {
+    return false;
+  }
+  const composer::Composer& composer = context_->composer();
+  if (!floatype::LooksEnglish(composer.GetRawString(),
+                              composer.GetStringForPreedit(),
+                              floatype::EnglishWords::Default())) {
+    return false;
+  }
+  english_shown_ = ConvertToHalfASCII(command);
+  return english_shown_;
 }
 
 bool Session::MaybeCommitOnCharacter(commands::Command* command) {
@@ -2785,6 +2806,15 @@ void Session::SetIndicator(commands::Command* command) const {
   }
   output->mutable_indicator()->set_state(state);
   *output->mutable_indicator()->mutable_style() = config.indicator_style();
+  if (config.mixed_english()) {
+    const composer::Composer& composer = context_->composer();
+    output->mutable_indicator()->set_english(
+        context_->state() == ImeContext::CONVERSION
+            ? english_shown_
+            : floatype::LooksEnglish(composer.GetRawString(),
+                                     composer.GetStringForPreedit(),
+                                     floatype::EnglishWords::Default()));
+  }
 }
 
 void Session::OutputLiveConversion(commands::Command* command) {
@@ -2828,6 +2858,12 @@ bool Session::LiveConvert(commands::Command* command) {
               !context_->GetConfig().live_conversion_keeps_shown_text()
           ? ""
           : live_value_;
+  if (context_->state() == ImeContext::COMPOSITION &&
+      MaybeConvertAsEnglish(command)) {
+    // Typing on edits the word, as after any live conversion.
+    live_conversion_ = true;
+    return true;
+  }
   if (context_->state() != ImeContext::COMPOSITION ||
       !context_->mutable_converter()->Convert(context_->composer(),
                                               context_->client_context())) {

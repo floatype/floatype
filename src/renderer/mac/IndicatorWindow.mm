@@ -137,7 +137,11 @@ bool IndicatorWindow::UpdateIndicator(const commands::RendererCommand &command,
     return false;
   }
   const Config::IndicatorStyle &style = indicator.style();
-  const std::string label = floatype::IndicatorLabel(indicator.state(), style.label());
+  std::string label = floatype::IndicatorLabel(indicator.state(), style.label());
+  // Mixed English input: the word before the caret, Japanese or English.
+  if (indicator.has_english()) {
+    label += indicator.english() ? " A" : " あ";
+  }
   NSFont *font = [NSFont systemFontOfSize:style.font_size() weight:NSFontWeightSemibold];
   NSDictionary *attributes = @{
     NSFontAttributeName : font,

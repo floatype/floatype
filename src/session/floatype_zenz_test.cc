@@ -714,6 +714,31 @@ TEST_F(FloatypeZenzTest, ALiveConversionCanShowItsReading) {
   EXPECT_EQ(live.live_reading(), "きかい");
 }
 
+TEST_F(FloatypeZenzTest, MixedEnglishKeepsAnEnglishWordInLetters) {
+  floatype::EnableSessionFeatures(true);
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_mixed_english(true);
+  config.set_use_live_conversion(false);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+
+  const commands::Output typed =
+      SendKeys({"k", "e", "y", "b", "o", "a", "r", "d"});
+  EXPECT_NE(Preedit(typed), "keyboard") << "still kana while typing";
+  EXPECT_TRUE(typed.indicator().english());
+  const commands::Output converted = SendKeys({"Space"});
+  EXPECT_EQ(Preedit(converted), "keyboard");
+  EXPECT_TRUE(converted.indicator().english());
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(), "keyboard");
+
+  // Japanese stays Japanese.
+  const commands::Output japanese = SendKeys({"k", "i", "k", "a", "i"});
+  EXPECT_FALSE(japanese.indicator().english());
+  EXPECT_EQ(Preedit(SendKeys({"Space"})), "機会");
+}
+
 TEST_F(FloatypeZenzTest, ZenzCanBeTurnedOff) {
   config::Config config = config::ConfigHandler::DefaultConfig();
   config.set_use_zenz(false);

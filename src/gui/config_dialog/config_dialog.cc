@@ -565,6 +565,11 @@ void ConfigDialog::SetUpFloatypeTab() {
                liveConversionWaitSpinBox_);
   form->addRow(text("打つと zenz を待って確定する文字"), directCommitLineEdit_);
 
+  heading("日英混在入力");
+  mixedEnglishCheckBox_ = check(
+      "かなの入力中に打った英単語を英字のままにし、インジケータに あ / A "
+      "を出す");
+
   heading("候補の窓");
   candidateFontScaleSpinBox_ = spin(50, 300, 10, " %");
   form->addRow(text("文字の大きさ"), candidateFontScaleSpinBox_);
@@ -694,6 +699,7 @@ void ConfigDialog::ConvertFromProto(const config::Config& config) {
       config.live_conversion_waits_for_zenz_millisec());
   directCommitLineEdit_->setText(
       QString::fromStdString(config.direct_commit_characters()));
+  SET_CHECKBOX(mixedEnglishCheckBox_, mixed_english);
   candidateFontScaleSpinBox_->setValue(config.candidate_font_scale_percent());
   SET_CHECKBOX(showIndicatorCheckBox_, show_indicator);
   indicatorPlacementComboBox_->setCurrentIndex(
@@ -811,6 +817,7 @@ void ConfigDialog::ConvertToProto(config::Config* config) const {
       liveConversionWaitSpinBox_->value());
   config->set_direct_commit_characters(
       directCommitLineEdit_->text().trimmed().toStdString());
+  GET_CHECKBOX(mixedEnglishCheckBox_, mixed_english);
   config->set_candidate_font_scale_percent(candidateFontScaleSpinBox_->value());
   GET_CHECKBOX(showIndicatorCheckBox_, show_indicator);
   config::Config::IndicatorStyle* style = config->mutable_indicator_style();

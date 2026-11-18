@@ -1,0 +1,32 @@
+load("//:build_defs.bzl", "mozc_cc_library", "mozc_cc_test")
+
+package(default_visibility = ["//visibility:private"])
+
+mozc_cc_library(
+    name = "english_words",
+    srcs = ["english_words.cc"],
+    hdrs = ["english_words.h"],
+    visibility = [
+        "//floatype/eval:__pkg__",
+        "//session:__pkg__",
+    ],
+    deps = [
+        "//base:file_util",
+        "//base/strings:unicode",
+        "@com_google_absl//absl/base:no_destructor",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+mozc_cc_test(
+    name = "english_words_test",
+    srcs = ["english_words_test.cc"],
+    deps = [
+        ":english_words",
+        "//base:file_util",
+        "//base:system_util",
+        "//testing:gunit_main",
+        "//testing:mozctest",
+    ],
+)
