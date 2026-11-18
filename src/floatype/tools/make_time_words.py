@@ -13,6 +13,7 @@ from pathlib import Path
 # there made 30分語). A number on the left lost 10時 to 従事 instead.
 NOUN = 1851  # 名詞,一般
 COUNTER = {"分": 2004,  # 名詞,接尾,副詞可能,*,*,*,分
+           "間": 2011,  # 名詞,接尾,助数詞
            "時": 2007,  # 名詞,接尾,副詞可能,*,*,*,時
            "日": 2011,  # 名詞,接尾,助数詞
            "半": 2011}
@@ -84,7 +85,13 @@ def entries() -> list[tuple[str, str]]:
     rows += [(r + "はん", f"{h}時半") for r in hour_readings(h)]
   for m in range(10, 60):
     rows += [(r, f"{m}分") for r in minute_readings(m)]
-  return [(r, s) for r, s in rows if len(r) >= 4]
+  # Durations, or 30日間 becomes 30日感 and 15分間 15分澗.
+  rows += [(r + "かん", s + "間") for r, s in list(rows)
+           if s[-1] in "日分" or (s[-1] == "時" and not s.endswith("時半"))]
+  for h in range(1, 10):
+    rows += [(r + "かん", f"{h}時間") for r in hour_readings(h)]
+  # にじゅうじ is far more often に従事 than 20時.
+  return [(r, s) for r, s in rows if len(r) >= 4 and r != "にじゅうじ"]
 
 
 def self_check() -> None:
@@ -95,7 +102,11 @@ def self_check() -> None:
                            ("じゅうななじ", "17時"), ("にじゅうよじ", "24時"),
                            ("じゅうじはん", "10時半"), ("くじはん", "9時半"),
                            ("にじゅっぷん", "20分"), ("じゅうごふん", "15分"),
-                           ("ごじゅうきゅうふん", "59分"), ("さんじゅうはっぷん", "38分")]:
+                           ("ごじゅうきゅうふん", "59分"), ("さんじゅうはっぷん", "38分"),
+                           ("さんじゅうにちかん", "30日間"), ("じゅうごふんかん", "15分間"),
+                           ("にじゅうよじかん", "24時間"), ("いちじかん", "1時間"),
+                           ("にじゅうじかん", "20時間"), ("にじゅうじ", None),
+                           ("じゅうじはんかん", None)]:
     assert got.get(reading) == surface, (reading, got.get(reading))
 
 
