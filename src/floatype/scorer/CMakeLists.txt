@@ -13,6 +13,12 @@ set(LLAMA_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_SERVER OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_APP OFF CACHE BOOL "" FORCE)
 
+# CPU only. On an M4 Pro with AJIMEE-Bench, 4 CPU threads match Metal's latency
+# (p50 26ms vs 30ms) with a smaller footprint (95MB vs 138MB), give the same
+# output for any thread count, and leave the GPU to the user's apps.
+# Pass -DGGML_METAL=ON to compare.
+set(GGML_METAL OFF CACHE BOOL "ggml: use Metal")
+
 include(FetchContent)
 # llama.cpp v1.0.0 (commit b1b770d90d94cad9e9ea5b993bdbc383a522fb28).
 FetchContent_Declare(

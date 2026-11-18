@@ -7,7 +7,6 @@ Engines:
   zenz  runs zenz-v3.2-small through floatype/scorer's zenz_eval (greedy decoding).
         Build first: cmake -S floatype/scorer -B floatype/scorer/build \
             -DCMAKE_BUILD_TYPE=Release && cmake --build floatype/scorer/build
-        (add -DGGML_METAL=OFF, in another build directory, for the CPU backend)
 
 Run from src/, for example:
 
