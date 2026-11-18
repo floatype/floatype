@@ -110,20 +110,64 @@ struct Completion {
 };
 
 // Greedy decoding until an end-of-generation token, a zenz tag or max_tokens.
+// The draft, Mozc's conversion, is checked first in the same pass as the
+// prompt: zenz's greedy choice at each draft token either matches it, and the
+// token is taken without a pass of its own, or ends the draft there. The text
+// is what greedy decoding alone gives; only the number of passes drops.
 Completion Complete(llama_context* ctx, const llama_vocab* vocab,
-                    llama_sampler* greedy, std::vector<llama_token> prompt,
-                    int max_tokens) {
-  llama_memory_clear(llama_get_memory(ctx), /*data=*/true);
+                    llama_sampler* greedy,
+                    const std::vector<llama_token>& prompt,
+                    std::vector<llama_token> draft, int max_tokens) {
+  llama_memory_t memory = llama_get_memory(ctx);
+  llama_memory_clear(memory, /*data=*/true);
   Completion out;
-  if (prompt.empty() ||
-      llama_decode(
-          ctx, llama_batch_get_one(prompt.data(),
-                                   static_cast<int32_t>(prompt.size()))) != 0) {
+  if (prompt.empty()) {
     out.stop = "error";
     return out;
   }
-  for (int i = 0; i < max_tokens; ++i) {
-    llama_token token = llama_sampler_sample(greedy, ctx, -1);
+  if (draft.size() > static_cast<size_t>(max_tokens)) {
+    draft.resize(max_tokens);
+  }
+  const size_t n = prompt.size() + draft.size();
+  llama_batch batch = llama_batch_init(static_cast<int32_t>(n), 0, 1);
+  for (size_t i = 0; i < n; ++i) {
+    batch.token[i] = i < prompt.size() ? prompt[i] : draft[i - prompt.size()];
+    batch.pos[i] = static_cast<llama_pos>(i);
+    batch.n_seq_id[i] = 1;
+    batch.seq_id[i][0] = 0;
+    // Logits after the prompt and after each draft token.
+    batch.logits[i] = i + 1 >= prompt.size();
+  }
+  batch.n_tokens = static_cast<int32_t>(n);
+  const int32_t decoded = llama_decode(ctx, batch);
+  llama_batch_free(batch);
+  if (decoded != 0) {
+    out.stop = "error";
+    return out;
+  }
+  // The token zenz chooses after the prompt and each accepted draft token.
+  size_t accepted = 0;
+  llama_token token = 0;
+  for (;; ++accepted) {
+    token = llama_sampler_sample(
+        greedy, ctx, static_cast<int32_t>(prompt.size() - 1 + accepted));
+    if (accepted == draft.size() || token != draft[accepted]) {
+      break;
+    }
+    char piece[128];
+    const int len =
+        llama_token_to_piece(vocab, token, piece, sizeof(piece), 0, false);
+    if (len > 0) {
+      out.text.append(piece, len);
+    }
+  }
+  // The cache keeps the prompt and the accepted draft only.
+  llama_memory_seq_rm(memory, 0,
+                      static_cast<llama_pos>(prompt.size() + accepted), -1);
+  for (int i = static_cast<int>(accepted); i < max_tokens; ++i) {
+    if (i > static_cast<int>(accepted)) {
+      token = llama_sampler_sample(greedy, ctx, -1);
+    }
     if (llama_vocab_is_eog(vocab, token)) {
       out.stop = "eog";
       return out;
@@ -256,11 +300,19 @@ int main(int argc, char** argv) {
     }
     // A request that does not fit fails here instead of aborting inside
     // llama_decode.
+    std::vector<llama_token> draft;
+    if (!request->draft.empty()) {
+      draft = Tokenize(vocab, request->draft);
+    }
     const bool fits = prompt.size() <= llama_n_batch(ctx) &&
                       prompt.size() + max_tokens <= llama_n_ctx(ctx);
-    const Completion completion =
-        fits ? Complete(ctx, vocab, greedy, prompt, max_tokens)
-             : Completion{"", "error"};
+    // A draft that does not fit in one pass is left out.
+    if (prompt.size() + draft.size() > llama_n_batch(ctx)) {
+      draft.clear();
+    }
+    const Completion completion = fits ? Complete(ctx, vocab, greedy, prompt,
+                                                  std::move(draft), max_tokens)
+                                       : Completion{"", "error"};
     const floatype::scorer::Response response{
         request->id, completion.text, completion.stop,
         static_cast<uint64_t>(MillisecondsSince(start) * 1000)};

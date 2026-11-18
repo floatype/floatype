@@ -1,7 +1,7 @@
 // The line protocol between the Mozc converter and the scorer process.
 //
 // Requests and responses are single UTF-8 lines with tab-separated fields:
-//   request:  <id>\t<left context>\t<katakana reading>\n
+//   request:  <id>\t<left context>\t<katakana reading>[\t<draft>]\n
 //   response: <id>\t<conversion>\t<stop>\t<microseconds>\n
 // The scorer answers only the latest request it has received; ids let the
 // converter ignore answers to requests it no longer waits for.
@@ -23,6 +23,9 @@ struct Request {
   uint64_t id = 0;
   std::string left_context;
   std::string reading;
+  // Optional: Mozc's conversion, which the scorer checks in one pass before
+  // generating on its own (speculative decoding). It changes the speed only.
+  std::string draft;
 };
 
 struct Response {

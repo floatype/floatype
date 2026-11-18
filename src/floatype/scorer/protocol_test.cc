@@ -44,6 +44,11 @@ void TestRequestRoundTrip() {
   Expect(ParseRequest("1\tキョウ") == std::nullopt,
          "three fields are required");
   Expect(ParseRequest("x1\t\tキョウ") == std::nullopt, "ids are numbers");
+  const auto drafted = ParseRequest(
+      WithoutNewline(FormatRequest(Request{1, "", "キョウ", "今日"})));
+  Expect(drafted.has_value() && drafted->draft == "今日",
+         "a draft travels as a fourth field");
+  Expect(ParseRequest("1\t\tキョウ")->draft.empty(), "the draft is optional");
 }
 
 void TestResponseRoundTrip() {

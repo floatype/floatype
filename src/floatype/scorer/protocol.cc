@@ -48,20 +48,26 @@ std::optional<uint64_t> ParseNumber(std::string_view text) {
 }  // namespace
 
 std::string FormatRequest(const Request& request) {
-  return std::to_string(request.id) + '\t' + Sanitize(request.left_context) +
-         '\t' + Sanitize(request.reading) + '\n';
+  std::string line = std::to_string(request.id) + '\t' +
+                     Sanitize(request.left_context) + '\t' +
+                     Sanitize(request.reading);
+  if (!request.draft.empty()) {
+    line += '\t' + Sanitize(request.draft);
+  }
+  return line + '\n';
 }
 
 std::optional<Request> ParseRequest(std::string_view line) {
   const std::vector<std::string_view> fields = SplitTabs(line);
-  if (fields.size() != 3) {
+  if (fields.size() != 3 && fields.size() != 4) {
     return std::nullopt;
   }
   const std::optional<uint64_t> id = ParseNumber(fields[0]);
   if (!id.has_value()) {
     return std::nullopt;
   }
-  return Request{*id, std::string(fields[1]), std::string(fields[2])};
+  return Request{*id, std::string(fields[1]), std::string(fields[2]),
+                 fields.size() == 4 ? std::string(fields[3]) : ""};
 }
 
 std::string FormatResponse(const Response& response) {

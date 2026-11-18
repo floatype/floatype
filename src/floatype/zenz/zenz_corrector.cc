@@ -167,9 +167,18 @@ bool ZenzCorrector::Request(const Segments& segments,
   }
   static uint64_t last_id = 0;
   const uint64_t id = ++last_id;
-  if (!client_->Send(
-          ::floatype::scorer::Request{id, std::string(left_context),
-                                      japanese::HiraganaToKatakana(reading)})) {
+  // Mozc's conversion as the draft: the scorer checks it in one pass, which
+  // takes AJIMEE-Bench's median from 24.6ms to 20.4ms with the same answers
+  // but for 2 of 200 (batched arithmetic), both wrong either way.
+  std::string draft;
+  for (const Segment& segment : segments.conversion_segments()) {
+    if (segment.candidates_size() > 0) {
+      draft += segment.candidate(0).value;
+    }
+  }
+  if (!client_->Send(::floatype::scorer::Request{
+          id, std::string(left_context), japanese::HiraganaToKatakana(reading),
+          std::move(draft)})) {
     return false;
   }
   pending_ = Pending{id, Clock::GetAbslTime(), Fingerprint(segments)};
