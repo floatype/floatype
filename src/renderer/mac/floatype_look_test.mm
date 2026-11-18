@@ -176,6 +176,25 @@ TEST(FloatypeLookTest, TheReadingSitsAboveTheIndicator) {
   EXPECT_GE(NSMinY(ruby.window.frame), NSMaxY(indicator.window.frame));
   EXPECT_EQ(NSMinX(ruby.window.frame), 200);
   Save(ruby, "ruby");
+  // A larger, colored reading follows its style.
+  const double plain = NSHeight(ruby.window.frame);
+  command.mutable_output()->mutable_ruby_style()->set_font_size(18);
+  command.mutable_output()->mutable_ruby_style()->set_background_color(0xfff3c4);
+  window.Update(command, 1000);
+  EXPECT_GT(NSHeight(ruby.window.frame), plain);
+  Save(ruby, "ruby-styled");
+  command.mutable_output()->clear_ruby_style();
+
+  // A vertical column puts it beside the column, past the indicator.
+  line->set_left(200);
+  line->set_right(220);
+  line->set_top(300);
+  line->set_bottom(301);
+  window.Update(command, 1000);
+  EXPECT_TRUE(ruby.window.isVisible);
+  EXPECT_GE(NSMinX(ruby.window.frame), NSMaxX(indicator.window.frame));
+  EXPECT_EQ(NSMaxY(ruby.window.frame), 1000 - 300);
+
   // Without a reading there is no ruby.
   command.mutable_output()->clear_live_reading();
   window.Update(command, 1000);

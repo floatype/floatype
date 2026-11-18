@@ -64,8 +64,15 @@
 ## 続けて長い規則が成り立てばそれに変わり、成り立たなければ見えていた かな のまま続く。
 # display_ambiguous_romaji: false
 
-## ライブ変換の上に読みを小さく出す（ルビ）。
+## ライブ変換の上に読みを小さく出す（ルビ）。縦書きでは列の横に出す。
 # live_conversion_ruby: false
+
+## ルビの見た目。文字の大きさ（6〜72）、文字と背景の色（0xRRGGBB）。
+# ruby_style {
+#   font_size: 11
+#   text_color: 0x404040
+#   background_color: 0xffffff
+# }
 
 ## 候補の窓の文字の大きさ（Mozc の大きさに対する %、50〜300）。
 # candidate_font_scale_percent: 100

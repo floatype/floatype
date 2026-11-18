@@ -95,35 +95,48 @@ void IndicatorWindow::Update(const commands::RendererCommand &command, double ba
 void IndicatorWindow::UpdateRuby(const commands::RendererCommand &command,
                                  double base_screen_height, const NSRect *indicator) {
   const commands::RendererCommand::Rectangle &line = command.composition_rectangle();
-  const double line_width = line.right() - line.left();
-  const double line_height = line.bottom() - line.top();
   const std::string &reading = command.output().live_reading();
-  // Horizontal writing with a known caret only.
-  if (!command.visible() || reading.empty() || !command.has_composition_rectangle() ||
-      line_height < line_width) {
+  if (!command.visible() || reading.empty() || !command.has_composition_rectangle()) {
     [ruby_window_ orderOut:nil];
     return;
   }
+  const Config::RubyStyle &style = command.output().ruby_style();
   NSDictionary *attributes = @{
-    NSFontAttributeName : [NSFont systemFontOfSize:11],
-    NSForegroundColorAttributeName : [NSColor colorWithWhite:0.25 alpha:1.0],
+    NSFontAttributeName : [NSFont systemFontOfSize:style.font_size()],
+    NSForegroundColorAttributeName : ColorFromRGB(style.text_color(), 1.0),
   };
   ruby_view_.label = [[NSAttributedString alloc] initWithString:@(reading.c_str())
                                                      attributes:attributes];
-  ruby_view_.fillColor = [NSColor colorWithWhite:1.0 alpha:0.92];
+  ruby_view_.fillColor = ColorFromRGB(style.background_color(), 0.92);
   const NSSize size = ruby_view_.label.size;
   const double width = size.width + 8;
   const double height = size.height + 2;
   ruby_view_.cornerRadius = 4;
-  const double baseline = base_screen_height - line.bottom();
-  // Only an indicator above the line pushes the reading up.
-  const bool above = indicator != nullptr && NSMinY(*indicator) >= baseline + line_height;
-  const floatype::IndicatorRect indicator_rect =
-      above ? floatype::IndicatorRect{NSMinX(*indicator), NSMinY(*indicator),
-                                      NSWidth(*indicator), NSHeight(*indicator)}
-            : floatype::IndicatorRect();
-  const floatype::IndicatorRect rect = floatype::LayoutRuby(
-      width, height, line.left(), baseline + line_height, above ? &indicator_rect : nullptr);
+  const auto to_rect = [](const NSRect &frame) {
+    return floatype::IndicatorRect{NSMinX(frame), NSMinY(frame), NSWidth(frame),
+                                   NSHeight(frame)};
+  };
+  const double line_width = line.right() - line.left();
+  const double line_height = line.bottom() - line.top();
+  floatype::IndicatorRect rect;
+  // Vertical writing, by the indicator's test: a line wider than it is tall.
+  if (line_height < line_width) {
+    // Beside the column, past the indicator if it is there.
+    const bool beside = indicator != nullptr && NSMinX(*indicator) >= line.right();
+    const floatype::IndicatorRect indicator_rect =
+        beside ? to_rect(*indicator) : floatype::IndicatorRect();
+    rect = floatype::LayoutRubyVertical(width, height, line.right(),
+                                        base_screen_height - line.top(),
+                                        beside ? &indicator_rect : nullptr);
+  } else {
+    const double baseline = base_screen_height - line.bottom();
+    // Only an indicator above the line pushes the reading up.
+    const bool above = indicator != nullptr && NSMinY(*indicator) >= baseline + line_height;
+    const floatype::IndicatorRect indicator_rect =
+        above ? to_rect(*indicator) : floatype::IndicatorRect();
+    rect = floatype::LayoutRuby(width, height, line.left(), baseline + line_height,
+                                above ? &indicator_rect : nullptr);
+  }
   [ruby_window_ setFrame:NSMakeRect(rect.x, rect.y, rect.width, rect.height) display:NO];
   [ruby_view_ setNeedsDisplay:YES];
   [ruby_window_ orderFront:nil];

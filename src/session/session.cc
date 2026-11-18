@@ -2919,6 +2919,8 @@ void Session::OutputLiveConversion(commands::Command* command) {
   if (floatype::SessionFeaturesEnabled() &&
       context_->GetConfig().live_conversion_ruby()) {
     command->mutable_output()->set_live_reading(live_reading_);
+    *command->mutable_output()->mutable_ruby_style() =
+        context_->GetConfig().ruby_style();
   }
 }
 

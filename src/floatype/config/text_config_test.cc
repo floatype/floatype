@@ -65,6 +65,11 @@ TEST(ParseTextConfigTest, ChecksRangesLikeTypes) {
   EXPECT_TRUE(absl::StartsWith(opacity.status().message(), "2 行目"))
       << opacity.status();
 
+  EXPECT_FALSE(ParseTextConfig("ruby_style { font_size: 200 }\n").ok());
+  EXPECT_TRUE(
+      ParseTextConfig("ruby_style { font_size: 14 text_color: 0x112233 }\n")
+          .ok());
+
   EXPECT_FALSE(ParseTextConfig("zenz_timeout_millisec: 10\n").ok());
   EXPECT_TRUE(ParseTextConfig("zenz_timeout_millisec: 50\n").ok());
 }

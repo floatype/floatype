@@ -716,6 +716,7 @@ TEST_F(FloatypeZenzTest, ALiveConversionCanShowItsReading) {
   const commands::Output live = CallBack(SendKeys({"k", "i", "k", "a", "i"}));
   EXPECT_EQ(Preedit(live), "機会");
   EXPECT_EQ(live.live_reading(), "きかい");
+  EXPECT_EQ(live.ruby_style().font_size(), 11) << "the style goes with it";
 }
 
 TEST_F(FloatypeZenzTest, MixedEnglishKeepsAnEnglishWordInLetters) {

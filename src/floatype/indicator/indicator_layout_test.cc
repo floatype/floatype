@@ -79,6 +79,14 @@ TEST(IndicatorLayoutTest, TheRubySitsAboveTheLineOrAboveTheIndicator) {
   EXPECT_EQ(LayoutRuby(40, 14, 100, 520, &indicator).y, 525 + 22 + 2);
 }
 
+TEST(IndicatorLayoutTest, TheRubySitsBesideAVerticalColumn) {
+  const IndicatorRect alone = LayoutRubyVertical(40, 14, 300, 700, nullptr);
+  EXPECT_EQ(alone.x, 302);
+  EXPECT_EQ(alone.y, 700 - 14);
+  const IndicatorRect indicator{305, 678, 56, 22};
+  EXPECT_EQ(LayoutRubyVertical(40, 14, 300, 700, &indicator).x, 305 + 56 + 2);
+}
+
 TEST(IndicatorLayoutTest, GoesToTheBottomCenterWithoutACaret) {
   const IndicatorRect screen{0, 40, 1000, 800};
   const IndicatorRect rect = LayoutIndicatorWithoutCaret(Style(), 30, screen);

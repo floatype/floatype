@@ -80,6 +80,20 @@ IndicatorRect LayoutRuby(double width, double height, double line_left,
   return rect;
 }
 
+IndicatorRect LayoutRubyVertical(double width, double height,
+                                 double column_right, double column_top,
+                                 const IndicatorRect* indicator_beside) {
+  constexpr double kGap = 2;
+  IndicatorRect rect;
+  rect.width = width;
+  rect.height = height;
+  rect.x = indicator_beside != nullptr
+               ? indicator_beside->x + indicator_beside->width + kGap
+               : column_right + kGap;
+  rect.y = column_top - height;
+  return rect;
+}
+
 IndicatorRect LayoutIndicatorVertical(const Style& style, double label_width,
                                       double column_left, double column_right,
                                       double column_top, double screen_right) {

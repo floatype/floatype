@@ -74,6 +74,11 @@ constexpr Range kCandidateRanges[] = {
     {"focused_border_color", 0, 0xffffff},
     {"border_color", 0, 0xffffff},
 };
+constexpr Range kRubyRanges[] = {
+    {"font_size", 6, 72},
+    {"text_color", 0, 0xffffff},
+    {"background_color", 0, 0xffffff},
+};
 constexpr Range kIndicatorRanges[] = {
     {"reading_color", 0, 0xffffff},
     {"mozc_color", 0, 0xffffff},
@@ -213,6 +218,13 @@ absl::StatusOr<config::Config> ParseTextConfig(absl::string_view text) {
   if (absl::Status status =
           CheckRanges(config.candidate_style(),
                       tree.GetTreeForNested(candidate, -1), kCandidateRanges);
+      !status.ok()) {
+    return status;
+  }
+  const FieldDescriptor* ruby =
+      config::Config::descriptor()->FindFieldByName("ruby_style");
+  if (absl::Status status = CheckRanges(
+          config.ruby_style(), tree.GetTreeForNested(ruby, -1), kRubyRanges);
       !status.ok()) {
     return status;
   }

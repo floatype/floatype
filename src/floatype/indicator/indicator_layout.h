@@ -50,6 +50,12 @@ IndicatorRect LayoutIndicatorVertical(
 IndicatorRect LayoutRuby(double width, double height, double line_left,
                          double line_top, const IndicatorRect* indicator_above);
 
+// The same beside a vertical column: right of it at its top or, when the
+// indicator sits there, right of that.
+IndicatorRect LayoutRubyVertical(double width, double height,
+                                 double column_right, double column_top,
+                                 const IndicatorRect* indicator_beside);
+
 // The frame used when the app does not tell where the composition is: at the
 // bottom center of the screen area `screen`.
 IndicatorRect LayoutIndicatorWithoutCaret(
