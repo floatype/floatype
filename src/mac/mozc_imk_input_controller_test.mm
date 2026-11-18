@@ -488,6 +488,55 @@ TEST_F(MozcImkInputControllerTest, UpdateCandidates) {
   EXPECT_FALSE(rendererCommand.visible());
 }
 
+// floatype: an output with the indicator and, optionally, candidates.
+commands::Output IndicatorOutput(int candidates_at) {
+  commands::Output output;
+  output.mutable_indicator()->set_state(commands::Output::Indicator::MOZC);
+  if (candidates_at >= 0) {
+    commands::CandidateWindow *window = output.mutable_candidate_window();
+    window->set_position(candidates_at);
+    window->set_size(1);
+    window->add_candidate()->set_value("abc");
+  }
+  return output;
+}
+
+TEST_F(MozcImkInputControllerTest, PlacesCandidatesAgainAfterTheyHideBesideTheIndicator) {
+  mock_client_.expectedAttributes =
+      @{@"IMKBaseline" : [NSValue valueWithPoint:NSMakePoint(50, 718)]};
+  auto update = [&](const commands::Output &output) {
+    [controller_ updateCandidates:&output];
+    [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.1]];
+    return [mock_client_ getCounter:"attributesForCharacterIndex:lineHeightRectangle:"];
+  };
+  // The indicator alone: the composition's start, once.
+  EXPECT_EQ(update(IndicatorOutput(-1)), 1);
+  EXPECT_TRUE(controller_.rendererCommand.visible());
+  EXPECT_TRUE(controller_.rendererCommand.has_composition_rectangle());
+  EXPECT_EQ(update(IndicatorOutput(-1)), 1);
+  // Candidates appear: placed at their segment.
+  EXPECT_EQ(update(IndicatorOutput(0)), 2);
+  EXPECT_EQ(update(IndicatorOutput(0)), 2) << "kept while shown";
+  // The list hides while the indicator stays (Space converts), then opens for
+  // another segment: placed again, as Mozc does.
+  EXPECT_EQ(update(IndicatorOutput(-1)), 2);
+  EXPECT_EQ(update(IndicatorOutput(3)), 3);
+}
+
+TEST_F(MozcImkInputControllerTest, ACommitMovesTheIndicatorToTheNextComposition) {
+  mock_client_.expectedAttributes =
+      @{@"IMKBaseline" : [NSValue valueWithPoint:NSMakePoint(50, 718)]};
+  commands::Output output = IndicatorOutput(-1);
+  [controller_ updateCandidates:&output];
+  [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.1]];
+  ASSERT_EQ([mock_client_ getCounter:"attributesForCharacterIndex:lineHeightRectangle:"], 1);
+  // Typing on after Space commits and starts a composition in one output.
+  output.mutable_result()->set_value("機械");
+  [controller_ updateCandidates:&output];
+  [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.1]];
+  EXPECT_EQ([mock_client_ getCounter:"attributesForCharacterIndex:lineHeightRectangle:"], 2);
+}
+
 TEST_F(MozcImkInputControllerTest, OpenLink) {
   EXPECT_EQ(gOpenURLCount, 0);
   [controller_ openLink:[NSURL URLWithString:@"http://www.example.com/"]];

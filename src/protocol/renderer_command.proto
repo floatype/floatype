@@ -69,6 +69,11 @@ message RendererCommand {
   // Preedit rectangle
   optional Rectangle preedit_rectangle = 4;
 
+  // floatype: where the composition starts, in the same coordinates. The
+  // indicator sits next to it, while the candidate window follows
+  // preedit_rectangle, the focused segment.
+  optional Rectangle composition_rectangle = 1001;
+
   // An equivalent to IMECHARPOSITION in IMM32. (For Windows only)
   // TODO(yukawa): make a common candidate form format for all platforms.
   message CharacterPosition {

@@ -104,8 +104,11 @@
    * for zenz's correction. The next user action cancels it. */
   NSTimer *callbackTimer_;
 
-  /** floatype: whether the renderer is showing candidates, not only the indicator. */
+  /** floatype: whether the renderer is showing candidates, whose position is kept while shown. */
   bool candidatesShown_;
+
+  /** floatype: whether the indicator's place, the composition's start, is known. */
+  bool indicatorPlaced_;
 
   /** |menu_| is the NSMenu to be shown in the pulldown menu-list of the IME. */
   IBOutlet NSMenu *menu_;

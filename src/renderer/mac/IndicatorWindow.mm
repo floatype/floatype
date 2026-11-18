@@ -84,8 +84,8 @@ void IndicatorWindow::Update(const commands::RendererCommand &command, double ba
 
   // The preedit rectangle counts y down from the top of the base screen, as
   // CandidateController::AlignWindows reads it; Cocoa counts y up.
-  const commands::RendererCommand::Rectangle &line = command.preedit_rectangle();
-  const bool has_caret = command.has_preedit_rectangle() &&
+  const commands::RendererCommand::Rectangle &line = command.composition_rectangle();
+  const bool has_caret = command.has_composition_rectangle() &&
                          (line.left() != 0 || line.top() != 0 || line.bottom() != 0);
   const NSPoint origin = NSMakePoint(line.left(), base_screen_height - line.bottom());
   NSScreen *screen = [NSScreen mainScreen];

@@ -712,6 +712,8 @@ bool CanSurroundingText(absl::string_view bundle_id) {
 }
 
 - (void)clearCandidates {
+  candidatesShown_ = false;
+  indicatorPlaced_ = false;
   rendererCommand_.set_type(RendererCommand::UPDATE);
   rendererCommand_.set_visible(false);
   rendererCommand_.clear_output();
@@ -732,20 +734,64 @@ bool CanSurroundingText(absl::string_view bundle_id) {
              : NSMakeRange(cursorPosition_, 0);
 }
 
+// Fills `rect` with the line of the composition's character at `index`.
+// Returns false when the application does not tell.
+- (BOOL)fillRectangle:(RendererCommand::Rectangle *)rect atIndex:(int32_t)index {
+  NSRect lineRect = NSZeroRect;
+  // Some applications throws error when we call attributesForCharacterIndex.
+  DLOG(INFO) << "attributesForCharacterIndex: " << index;
+  @try {
+    NSDictionary *clientData = [[self client] attributesForCharacterIndex:index
+                                                      lineHeightRectangle:&lineRect];
+
+    // IMKBaseline: Left-bottom of the composition.
+    NSPoint baseline = [clientData[@"IMKBaseline"] pointValue];
+    // IMKTextOrientation: 0: vertical writing, 1: horizontal writing.
+    // IMKLineHeight: Height of the composition (in horizontal writing).
+    // NSFont: Font information of the composition.
+    // IMKLineAscent: Not sure. A float number. (e.g. 9.240234)
+
+    const int right_offset = lineRect.size.width;
+    const int top_offset = -lineRect.size.height;
+
+    rect->set_left(baseline.x);
+    rect->set_right(baseline.x + right_offset);
+    rect->set_top(baseline.y + top_offset);
+    rect->set_bottom(baseline.y);
+    return YES;
+  } @catch (NSException *exception) {
+    LOG(ERROR) << "Exception from [" << clientBundle_ << "] " << [[exception name] UTF8String]
+               << "," << [[exception reason] UTF8String];
+    return NO;
+  }
+}
+
 - (void)delayedUpdateCandidates {
   if (!mozcRenderer_) {
     return;
   }
 
-  // If there is no candidate, the candidate window is closed. floatype: the
-  // renderer still shows the indicator next to the composition.
   const bool hasCandidates = rendererCommand_.output().candidate_window().candidate_size() > 0;
-  if (!hasCandidates && rendererCommand_.output().indicator().state() ==
-                            mozc::commands::Output::Indicator::NONE) {
+  // floatype: the indicator next to the composition.
+  const bool hasIndicator =
+      rendererCommand_.output().indicator().state() != mozc::commands::Output::Indicator::NONE;
+  // If there is no candidate, the candidate window is closed.
+  if (!hasCandidates && !hasIndicator) {
     rendererCommand_.set_visible(false);
     candidatesShown_ = false;
+    indicatorPlaced_ = false;
     mozcRenderer_->ExecCommand(rendererCommand_);
     return;
+  }
+  rendererCommand_.set_visible(true);
+
+  // floatype: the indicator stays where the composition starts until it ends;
+  // a commit that starts the next composition in the same output moves it.
+  if (hasIndicator && (!indicatorPlaced_ || rendererCommand_.output().has_result())) {
+    if (![self fillRectangle:rendererCommand_.mutable_composition_rectangle() atIndex:0]) {
+      rendererCommand_.clear_composition_rectangle();
+    }
+    indicatorPlaced_ = true;
   }
 
   // The candidate window position is not recalculated if the
@@ -756,45 +802,11 @@ bool CanSurroundingText(absl::string_view bundle_id) {
   //    cursor position correctly.  The candidate window moves
   //    frequently with those application, which irritates users.
   //  - Kotoeri does this too.
-  // floatype: the indicator alone may have made the renderer visible; the
-  // position is computed again when candidates appear, as before.
-  if (rendererCommand_.visible() && (candidatesShown_ || !hasCandidates)) {
-    // Call ExecCommand anyway to update other information like candidate words.
-    mozcRenderer_->ExecCommand(rendererCommand_);
-    return;
+  if (hasCandidates && !candidatesShown_) {
+    [self fillRectangle:rendererCommand_.mutable_preedit_rectangle()
+                atIndex:rendererCommand_.output().candidate_window().position()];
   }
   candidatesShown_ = hasCandidates;
-
-  rendererCommand_.set_visible(true);
-
-  NSRect preeditRect = NSZeroRect;
-  const int32_t position = rendererCommand_.output().candidate_window().position();
-  // Some applications throws error when we call attributesForCharacterIndex.
-  DLOG(INFO) << "attributesForCharacterIndex: " << position;
-  @try {
-    NSDictionary *clientData = [[self client] attributesForCharacterIndex:position
-                                                      lineHeightRectangle:&preeditRect];
-
-    // IMKBaseline: Left-bottom of the composition.
-    NSPoint baseline = [clientData[@"IMKBaseline"] pointValue];
-    // IMKTextOrientation: 0: vertical writing, 1: horizontal writing.
-    // IMKLineHeight: Height of the composition (in horizontal writing).
-    // NSFont: Font information of the composition.
-    // IMKLineAscent: Not sure. A float number. (e.g. 9.240234)
-
-    const int right_offset = preeditRect.size.width;
-    const int top_offset = -preeditRect.size.height;
-
-    RendererCommand::Rectangle *rect = rendererCommand_.mutable_preedit_rectangle();
-    rect->set_left(baseline.x);
-    rect->set_right(baseline.x + right_offset);
-    rect->set_top(baseline.y + top_offset);
-    rect->set_bottom(baseline.y);
-
-  } @catch (NSException *exception) {
-    LOG(ERROR) << "Exception from [" << clientBundle_ << "] " << [[exception name] UTF8String]
-               << "," << [[exception reason] UTF8String];
-  }
 
   mozcRenderer_->ExecCommand(rendererCommand_);
 }
