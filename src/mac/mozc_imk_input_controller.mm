@@ -317,6 +317,14 @@ bool CanSurroundingText(absl::string_view bundle_id) {
     mozcRenderer_->ExecCommand(clearCommand);
   }
   [self cancelCallback];
+  // floatype: what was committed here stops standing in for the text before
+  // the caret elsewhere, which zenz reads when an application hides it.
+  if ([composedString_ length] == 0) {
+    SessionCommand reset;
+    reset.set_type(SessionCommand::RESET_CONTEXT);
+    Output output;
+    mozcClient_->SendCommand(reset, &output);
+  }
   DLOG(INFO) << kProductNameInEnglish << " client (" << self << "): deactivated";
   DLOG(INFO) << "sender bundleID: " << clientBundle_;
   [super deactivateServer:sender];

@@ -503,6 +503,19 @@ TEST_F(FloatypeZenzTest, WhatWasCommittedLastStandsInForTheContext) {
   EXPECT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
 }
 
+TEST_F(FloatypeZenzTest, LeavingTheFieldForgetsWhatStoodInForTheContext) {
+  ASSERT_OK(
+      FileUtil::SetContents(answers_, "キカイ\t機会\n機会|キカイ\t機械\n"));
+  PollWhileAsked(ConvertKikai());
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機会");
+  // What the macOS client sends when the field loses focus.
+  commands::Input input;
+  input.set_type(commands::Input::SEND_COMMAND);
+  input.mutable_command()->set_type(commands::SessionCommand::RESET_CONTEXT);
+  Eval(std::move(input));
+  EXPECT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機会");
+}
+
 TEST_F(FloatypeZenzTest, ZenzCanBeTurnedOff) {
   config::Config config = config::ConfigHandler::DefaultConfig();
   config.set_use_zenz(false);
