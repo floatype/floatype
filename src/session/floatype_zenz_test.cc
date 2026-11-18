@@ -182,7 +182,8 @@ TEST_F(FloatypeZenzTest, ShowsZenzsCorrectionAfterSpace) {
   ASSERT_TRUE(converted.has_callback()) << "the session asks to be polled";
   EXPECT_EQ(converted.callback().session_command().type(),
             commands::SessionCommand::POLL_ZENZ);
-  EXPECT_EQ(converted.callback().delay_millisec(), 20);
+  EXPECT_EQ(converted.callback().delay_millisec(),
+            absl::ToInt64Milliseconds(floatype::ZenzCorrector::kPollInterval));
 
   const commands::Output corrected = PollWhileAsked(converted);
   EXPECT_FALSE(corrected.has_callback());
