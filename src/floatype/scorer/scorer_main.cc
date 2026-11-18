@@ -254,8 +254,13 @@ int main(int argc, char** argv) {
       }
       std::fputc('\n', stderr);
     }
+    // A request that does not fit fails here instead of aborting inside
+    // llama_decode.
+    const bool fits = prompt.size() <= llama_n_batch(ctx) &&
+                      prompt.size() + max_tokens <= llama_n_ctx(ctx);
     const Completion completion =
-        Complete(ctx, vocab, greedy, prompt, max_tokens);
+        fits ? Complete(ctx, vocab, greedy, prompt, max_tokens)
+             : Completion{"", "error"};
     const floatype::scorer::Response response{
         request->id, completion.text, completion.stop,
         static_cast<uint64_t>(MillisecondsSince(start) * 1000)};
