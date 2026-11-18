@@ -687,8 +687,10 @@ bool Session::SendKey(commands::Command* command) {
       result = false;
       break;
   }
+  // A later command the state does not have is skipped; the key stays as the
+  // first command left it.
   for (const std::string& name : following) {
-    result = RunNamedCommand(name, command);
+    RunNamedCommand(name, command);
   }
 
   if (const std::string shown = ShownAfterLiveConversion(); !shown.empty()) {

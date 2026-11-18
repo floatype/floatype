@@ -775,7 +775,8 @@ TEST_F(FloatypeZenzTest, AKeyCanRunSeveralCommands) {
                     std::istreambuf_iterator<char>());
   table +=
       "Composition\tCtrl Enter\tCommit|IMEOff\n"
-      "Composition\tCtrl Space\tConvert|ConvertNext\n";
+      "Composition\tCtrl Space\tConvert|ConvertNext\n"
+      "Composition\tCtrl Tab\tCommit|ConvertNext\n";
   config::Config config = config::ConfigHandler::DefaultConfig();
   config.set_session_keymap(config::Config::CUSTOM);
   config.set_custom_keymap_table(table);
@@ -796,6 +797,13 @@ TEST_F(FloatypeZenzTest, AKeyCanRunSeveralCommands) {
   const commands::Output next = SendKeys({"Ctrl Space"});
   EXPECT_NE(Preedit(next), Preedit(first)) << "converted, then the next one";
   EXPECT_TRUE(next.has_candidate_window());
+  SendKeys({"Escape"});
+  SendKeys({"Escape"});
+
+  // ConvertNext has nothing to do after Commit; the commit stands.
+  const commands::Output partly = SendKeys({"k", "a", "s", "a", "Ctrl Tab"});
+  EXPECT_EQ(partly.result().value(), "かさ");
+  EXPECT_TRUE(partly.consumed());
 }
 
 TEST_F(FloatypeZenzTest, AmbiguousRomajiCanShowItsKana) {
