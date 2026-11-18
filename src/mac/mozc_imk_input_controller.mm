@@ -737,9 +737,13 @@ bool CanSurroundingText(absl::string_view bundle_id) {
     return;
   }
 
-  // If there is no candidate, the candidate window is closed.
-  if (rendererCommand_.output().candidate_window().candidate_size() == 0) {
+  // If there is no candidate, the candidate window is closed. floatype: the
+  // renderer still shows the indicator next to the composition.
+  const bool hasCandidates = rendererCommand_.output().candidate_window().candidate_size() > 0;
+  if (!hasCandidates && rendererCommand_.output().indicator().state() ==
+                            mozc::commands::Output::Indicator::NONE) {
     rendererCommand_.set_visible(false);
+    candidatesShown_ = false;
     mozcRenderer_->ExecCommand(rendererCommand_);
     return;
   }
@@ -752,11 +756,14 @@ bool CanSurroundingText(absl::string_view bundle_id) {
   //    cursor position correctly.  The candidate window moves
   //    frequently with those application, which irritates users.
   //  - Kotoeri does this too.
-  if (rendererCommand_.visible()) {
+  // floatype: the indicator alone may have made the renderer visible; the
+  // position is computed again when candidates appear, as before.
+  if (rendererCommand_.visible() && (candidatesShown_ || !hasCandidates)) {
     // Call ExecCommand anyway to update other information like candidate words.
     mozcRenderer_->ExecCommand(rendererCommand_);
     return;
   }
+  candidatesShown_ = hasCandidates;
 
   rendererCommand_.set_visible(true);
 

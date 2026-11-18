@@ -72,7 +72,7 @@ class FloatypeZenzTest : public testing::SessionHandlerTestBase {
   }
 
   void TearDown() override {
-    floatype::EnableLiveConversion(false);
+    floatype::EnableSessionFeatures(false);
     handler_.reset();
     floatype::ZenzCorrector::SetDefaultClientForTesting(nullptr);
     client_.reset();
@@ -248,7 +248,7 @@ TEST_F(FloatypeZenzTest, CtrlBackspaceDeletesTheSelectedSuggestion) {
 }
 
 TEST_F(FloatypeZenzTest, LiveConvertsWhenTheUserPausesAndZenzFollows) {
-  floatype::EnableLiveConversion(true);
+  floatype::EnableSessionFeatures(true);
   const commands::Output typed = SendKeys({"k", "i", "k", "a", "i"});
   EXPECT_EQ(Preedit(typed), "きかい");
   ASSERT_TRUE(typed.has_callback());
@@ -271,7 +271,7 @@ TEST_F(FloatypeZenzTest, LiveConvertsWhenTheUserPausesAndZenzFollows) {
 }
 
 TEST_F(FloatypeZenzTest, TypingAfterALiveConversionEditsTheReading) {
-  floatype::EnableLiveConversion(true);
+  floatype::EnableSessionFeatures(true);
   CallBack(SendKeys({"k", "i", "k", "a", "i"}));
   // The converted part stays; only what was typed after it is the reading.
   const commands::Output typed = SendKeys({"g", "a"});
@@ -287,7 +287,7 @@ TEST_F(FloatypeZenzTest, TypingAfterALiveConversionEditsTheReading) {
 }
 
 TEST_F(FloatypeZenzTest, ZenzsCorrectionStaysWhileTypingOn) {
-  floatype::EnableLiveConversion(true);
+  floatype::EnableSessionFeatures(true);
   const commands::Output live = CallBack(SendKeys({"k", "i", "k", "a", "i"}));
   ASSERT_EQ(Preedit(PollWhileAsked(CallBack(live))), "機械");
   const commands::Output typed = SendKeys({"g", "a"});
@@ -297,7 +297,7 @@ TEST_F(FloatypeZenzTest, ZenzsCorrectionStaysWhileTypingOn) {
 }
 
 TEST_F(FloatypeZenzTest, ALiveConversionCanConvertAfreshAsMozkeyDoes) {
-  floatype::EnableLiveConversion(true);
+  floatype::EnableSessionFeatures(true);
   config::Config config = config::ConfigHandler::DefaultConfig();
   config.set_live_conversion_keeps_shown_text(false);
   commands::Input input;
@@ -313,7 +313,7 @@ TEST_F(FloatypeZenzTest, ALiveConversionCanConvertAfreshAsMozkeyDoes) {
 }
 
 TEST_F(FloatypeZenzTest, ALiveConversionNeedsTwoCharactersAndCanBeOff) {
-  floatype::EnableLiveConversion(true);
+  floatype::EnableSessionFeatures(true);
   EXPECT_FALSE(SendKeys({"k", "i"}).has_callback());
   SendKeys({"Escape"});
 
@@ -324,6 +324,47 @@ TEST_F(FloatypeZenzTest, ALiveConversionNeedsTwoCharactersAndCanBeOff) {
   *input.mutable_config() = config;
   Eval(std::move(input));
   EXPECT_FALSE(SendKeys({"k", "i", "k", "a", "i"}).has_callback());
+}
+
+commands::Output::Indicator::State Indicator(const commands::Output& output) {
+  return output.indicator().state();
+}
+
+TEST_F(FloatypeZenzTest, TheIndicatorTellsWhoseResultIsShown) {
+  floatype::EnableSessionFeatures(true);
+  const commands::Output typed = SendKeys({"k", "i", "k", "a", "i"});
+  EXPECT_EQ(Indicator(typed), commands::Output::Indicator::READING);
+  EXPECT_EQ(typed.indicator().style().mozc_color(), 0x586b85u);
+
+  commands::Output converted = SendKeys({"Space"});
+  EXPECT_EQ(Preedit(converted), "機会");
+  EXPECT_EQ(Indicator(converted), commands::Output::Indicator::ZENZ_PENDING);
+  const commands::Output corrected = PollWhileAsked(converted);
+  EXPECT_EQ(Preedit(corrected), "機械");
+  EXPECT_EQ(Indicator(corrected), commands::Output::Indicator::ZENZ);
+
+  // Picking another candidate makes it the user's choice again.
+  EXPECT_EQ(Indicator(SendKeys({"Space"})), commands::Output::Indicator::MOZC);
+  EXPECT_FALSE(SendKeys({"Enter"}).has_indicator());
+}
+
+TEST_F(FloatypeZenzTest, TheIndicatorGoesBackToMozcWhenZenzAgrees) {
+  floatype::EnableSessionFeatures(true);
+  ASSERT_OK(FileUtil::SetContents(answers_, "キカイ\t機会\n"));
+  const commands::Output done = PollWhileAsked(ConvertKikai());
+  EXPECT_EQ(Preedit(done), "機会");
+  EXPECT_EQ(Indicator(done), commands::Output::Indicator::MOZC);
+}
+
+TEST_F(FloatypeZenzTest, TheIndicatorCanBeHidden) {
+  floatype::EnableSessionFeatures(true);
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_show_indicator(false);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+  EXPECT_FALSE(SendKeys({"k", "i"}).has_indicator());
 }
 
 TEST_F(FloatypeZenzTest, DropsTheAnswerAfterTheUserActs) {

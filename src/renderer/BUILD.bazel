@@ -308,6 +308,7 @@ mozc_objc_library(
         "mac/CandidateController.mm",
         "mac/CandidateView.mm",
         "mac/CandidateWindow.mm",
+        "mac/IndicatorWindow.mm",
         "mac/InfolistView.mm",
         "mac/InfolistWindow.mm",
         "mac/RendererBaseWindow.mm",
@@ -319,6 +320,7 @@ mozc_objc_library(
         "mac/CandidateController.h",
         "mac/CandidateView.h",
         "mac/CandidateWindow.h",
+        "mac/IndicatorWindow.h",
         "mac/InfolistView.h",
         "mac/InfolistWindow.h",
         "mac/RendererBaseWindow.h",
@@ -332,6 +334,7 @@ mozc_objc_library(
         "Foundation",
     ],
     deps = [
+        "//floatype/indicator:indicator_layout",
         ":renderer_interface",
         ":renderer_server",
         ":renderer_style_handler",

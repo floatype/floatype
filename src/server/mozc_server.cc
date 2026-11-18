@@ -103,7 +103,7 @@ int MozcServer::Run() {
 
   // floatype: correct conversions with zenz through the bundled scorer.
   mozc::floatype::ZenzCorrector::EnableDefaultClient();
-  mozc::floatype::EnableLiveConversion(true);
+  mozc::floatype::EnableSessionFeatures(true);
 
   {
     std::unique_ptr<mozc::SessionServer> session_server =

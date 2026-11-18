@@ -290,6 +290,10 @@ class Session {
   void MaybeScheduleLiveConversion(commands::Command* command);
   bool LiveConvert(commands::Command* command);
   bool RequestZenzAfterLiveConversion(commands::Command* command);
+  // True while the conversion on screen is zenz's correction.
+  bool zenz_shown_ = false;
+  // Tells the client what the indicator next to the composition shows.
+  void SetIndicator(commands::Command* command) const;
   // Output() with every segment underlined, as a live conversion looks.
   void OutputLiveConversion(commands::Command* command);
   // The reading and the text of the last live conversion. Typing on keeps that

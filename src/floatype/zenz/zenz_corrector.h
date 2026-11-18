@@ -60,6 +60,8 @@ class ZenzCorrector {
   PollResult Poll(const Segments& segments);
 
   void Cancel() { pending_.reset(); }
+  // True while an answer is awaited.
+  bool pending() const { return pending_.has_value(); }
 
   // The converter process's client for the bundled scorer and model. It is
   // null until EnableDefaultClient() is called, so tests never start a scorer.
@@ -80,11 +82,11 @@ class ZenzCorrector {
   std::optional<Pending> pending_;
 };
 
-// Live conversion runs only where the converter process turned it on at
-// startup, so Mozc's own tests, whose tools answer callbacks at once, keep
-// composing as before.
-void EnableLiveConversion(bool enabled);
-bool LiveConversionEnabled();
+// Live conversion and the indicator run only where the converter process
+// turned them on at startup, so Mozc's own tests, whose tools answer callbacks
+// at once and compare whole outputs, behave as before.
+void EnableSessionFeatures(bool enabled);
+bool SessionFeaturesEnabled();
 
 }  // namespace mozc::floatype
 

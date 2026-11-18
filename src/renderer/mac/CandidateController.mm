@@ -33,6 +33,7 @@
 #include "protocol/commands.pb.h"
 #include "renderer/mac/CandidateController.h"
 #include "renderer/mac/CandidateWindow.h"
+#include "renderer/mac/IndicatorWindow.h"
 #include "renderer/mac/InfolistWindow.h"
 #include "renderer/mac/mac_view_util.h"
 #include "renderer/table_layout.h"
@@ -107,7 +108,8 @@ int GetBaseScreenHeight() {
 CandidateController::CandidateController()
     : candidate_window_(new mac::CandidateWindow),
       cascading_window_(new mac::CandidateWindow),
-      infolist_window_(new mac::InfolistWindow) {
+      infolist_window_(new mac::InfolistWindow),
+      indicator_window_(new mac::IndicatorWindow) {
   candidate_window_->SetWindowLevel(NSPopUpMenuWindowLevel);
   // Cascading window should be over the normal candidate window.
   cascading_window_->SetWindowLevel(NSPopUpMenuWindowLevel + 1);
@@ -119,6 +121,7 @@ CandidateController::~CandidateController() {
   delete candidate_window_;
   delete cascading_window_;
   delete infolist_window_;
+  delete indicator_window_;
 }
 
 bool CandidateController::Activate() {
@@ -139,8 +142,10 @@ bool CandidateController::ExecCommand(const RendererCommand &command) {
     return false;
   }
   command_.CopyFrom(command);
+  indicator_window_->Update(command_);
 
-  if (!command_.visible()) {
+  // floatype: the client also sends commands to show the indicator alone.
+  if (!command_.visible() || command_.output().candidate_window().candidate_size() == 0) {
     candidate_window_->Hide();
     cascading_window_->Hide();
     infolist_window_->Hide();

@@ -232,11 +232,11 @@ ScorerClient* ZenzCorrector::DefaultClient() {
 }
 
 namespace {
-bool live_conversion_enabled = false;
+bool session_features_enabled = false;
 }  // namespace
 
-void EnableLiveConversion(bool enabled) { live_conversion_enabled = enabled; }
-bool LiveConversionEnabled() { return live_conversion_enabled; }
+void EnableSessionFeatures(bool enabled) { session_features_enabled = enabled; }
+bool SessionFeaturesEnabled() { return session_features_enabled; }
 
 void ZenzCorrector::EnableDefaultClient() { default_client_enabled = true; }
 

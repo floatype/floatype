@@ -377,6 +377,44 @@ message Config {
   // the whole reading afresh, as Mozkey does.
   optional bool live_conversion_keeps_shown_text = 1006 [default = true];
 
+  // floatype: the indicator next to the composition that tells whose result is
+  // on screen (reading, Mozc, zenz working, zenz). Defaults follow Mozkey.
+  message IndicatorStyle {
+    enum Shape {
+      PILL = 0;
+      ROUNDED_RECT = 1;
+      CIRCLE = 2;
+    }
+    enum Label {
+      FULL_LABEL = 0;  // 入力中, Mozc, Zenz…, Zenz
+      SYMBOL = 1;      // あ, M, …, Z
+      COLOR_ONLY = 2;
+    }
+    enum Placement {
+      ABOVE = 0;  // Above the start of the composition.
+      BELOW = 1;  // Below it.
+    }
+    optional Shape shape = 1 [default = PILL];
+    optional Label label = 2 [default = FULL_LABEL];
+    optional Placement placement = 3 [default = ABOVE];
+    // Colors are 0xRRGGBB.
+    optional uint32 reading_color = 4 [default = 0x747d8c];
+    optional uint32 mozc_color = 5 [default = 0x586b85];
+    optional uint32 zenz_pending_color = 6 [default = 0x847438];
+    optional uint32 zenz_color = 7 [default = 0x338d85];
+    optional uint32 text_color = 8 [default = 0xffffff];
+    optional uint32 width = 9 [default = 56];
+    optional uint32 height = 10 [default = 22];
+    optional uint32 font_size = 11 [default = 11];
+    optional uint32 corner_radius = 12 [default = 7];
+    optional uint32 opacity_percent = 13 [default = 93];
+    optional uint32 gap = 14 [default = 5];
+    optional int32 offset_x = 15 [default = 0];
+    optional int32 offset_y = 16 [default = 0];
+  }
+  optional bool show_indicator = 1007 [default = true];
+  optional IndicatorStyle indicator_style = 1008;
+
   //////////////////////////////////////////////////////////////
   //
   // Cloud (300-319)

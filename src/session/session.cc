@@ -299,6 +299,7 @@ bool Session::SendCommand(commands::Command* command) {
       break;  // Timer callbacks and queries, not user actions.
     default:
       zenz_.Cancel();
+      zenz_shown_ = false;
       live_conversion_ = false;
       live_reading_.clear();
   }
@@ -430,6 +431,7 @@ bool Session::SendCommand(commands::Command* command) {
       result = DoNothing(command);
       break;
   }
+  SetIndicator(command);
   MaybeSetUndoStatus(command);
   return result;
 }
@@ -532,6 +534,7 @@ bool Session::TestSendKey(commands::Command* command) {
 
 bool Session::SendKey(commands::Command* command) {
   zenz_.Cancel();
+  zenz_shown_ = false;
   const bool live = live_conversion_;
   live_conversion_ = false;
   UpdateTime();
@@ -605,6 +608,7 @@ bool Session::SendKey(commands::Command* command) {
     live_reading_.clear();
   }
   MaybeScheduleLiveConversion(command);
+  SetIndicator(command);
   MaybeSetUndoStatus(command);
   return result;
 }
@@ -2467,7 +2471,7 @@ void Session::MaybeScheduleLiveConversion(commands::Command* command) {
   const config::Config& config = context_->GetConfig();
   const transliteration::TransliterationType mode =
       context_->composer().GetInputMode();
-  if (!floatype::LiveConversionEnabled() || !config.use_live_conversion() ||
+  if (!floatype::SessionFeaturesEnabled() || !config.use_live_conversion() ||
       context_->state() != ImeContext::COMPOSITION ||
       command->output().has_callback() || mode == transliteration::HALF_ASCII ||
       mode == transliteration::FULL_ASCII ||
@@ -2476,6 +2480,29 @@ void Session::MaybeScheduleLiveConversion(commands::Command* command) {
   }
   SetCallback(command, commands::SessionCommand::LIVE_CONVERT,
               config.live_conversion_delay_millisec());
+}
+
+void Session::SetIndicator(commands::Command* command) const {
+  const config::Config& config = context_->GetConfig();
+  commands::Output* output = command->mutable_output();
+  if (!floatype::SessionFeaturesEnabled() || !config.show_indicator() ||
+      output->preedit().segment_size() == 0) {
+    return;
+  }
+  commands::Output::Indicator::State state;
+  if (context_->state() == ImeContext::COMPOSITION) {
+    state = commands::Output::Indicator::READING;
+  } else if (context_->state() != ImeContext::CONVERSION) {
+    return;
+  } else if (zenz_.pending()) {
+    state = commands::Output::Indicator::ZENZ_PENDING;
+  } else if (zenz_shown_) {
+    state = commands::Output::Indicator::ZENZ;
+  } else {
+    state = commands::Output::Indicator::MOZC;
+  }
+  output->mutable_indicator()->set_state(state);
+  *output->mutable_indicator()->mutable_style() = config.indicator_style();
 }
 
 void Session::OutputLiveConversion(commands::Command* command) {
@@ -2568,7 +2595,7 @@ bool Session::PollZenz(commands::Command* command) {
   if (result.kind == floatype::ZenzCorrector::PollResult::kApply) {
     // zenz's choices never teach the conversion ranking; the suggestion
     // history may learn the committed sentence.
-    context_->mutable_converter()->PromoteCandidates(
+    zenz_shown_ = context_->mutable_converter()->PromoteCandidates(
         result.candidate_indices,
         context_->GetConfig().zenz_suggestion_learning()
             ? converter::Attribute::NO_HISTORY_LEARNING

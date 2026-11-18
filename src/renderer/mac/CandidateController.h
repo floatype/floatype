@@ -41,6 +41,7 @@ class SendCommandInterface;
 namespace renderer {
 namespace mac {
 class CandidateWindow;
+class IndicatorWindow;
 class InfolistWindow;
 
 // CandidateController implements the renderer interface for Mac.  For
@@ -70,6 +71,8 @@ class CandidateController : public RendererInterface {
   CandidateWindow *candidate_window_;
   CandidateWindow *cascading_window_;
   InfolistWindow *infolist_window_;
+  // floatype: the indicator next to the composition.
+  IndicatorWindow *indicator_window_;
   mozc::commands::RendererCommand command_;
 };
 

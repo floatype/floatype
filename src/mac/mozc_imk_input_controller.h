@@ -104,6 +104,9 @@
    * for zenz's correction. The next user action cancels it. */
   NSTimer *callbackTimer_;
 
+  /** floatype: whether the renderer is showing candidates, not only the indicator. */
+  bool candidatesShown_;
+
   /** |menu_| is the NSMenu to be shown in the pulldown menu-list of the IME. */
   IBOutlet NSMenu *menu_;
 }
