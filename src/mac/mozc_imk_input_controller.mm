@@ -584,8 +584,18 @@ bool CanSurroundingText(absl::string_view bundle_id) {
     }
   }
 
-  [self updateComposedString:&(output->preedit())];
-  [self updateCandidates:output];
+  // floatype: timer callbacks come every 10ms while zenz works and mostly change
+  // nothing; those leave the application and the renderer alone.
+  std::string screen = output->preedit().SerializeAsString();
+  screen += '\0' + output->candidate_window().SerializeAsString();
+  screen += '\0' + output->indicator().SerializeAsString();
+  const bool unchanged = processingCallback_ && !output->has_result() &&
+                         !output->has_deletion_range() && screen == lastScreen_;
+  lastScreen_ = std::move(screen);
+  if (!unchanged) {
+    [self updateComposedString:&(output->preedit())];
+    [self updateCandidates:output];
+  }
 
   if (output->has_mode()) {
     CompositionMode new_mode = output->mode();
@@ -986,7 +996,9 @@ bool CanSurroundingText(absl::string_view bundle_id) {
                         strongSelf->callbackTimer_ = nil;
                         Output output;
                         if (strongSelf->mozcClient_->SendCommand(callbackCommand, &output)) {
+                          strongSelf->processingCallback_ = true;
                           [strongSelf processOutput:&output client:sender];
+                          strongSelf->processingCallback_ = false;
                         }
                       }];
   // Common modes keep the timer running while a menu or a candidate window is tracking.

@@ -104,6 +104,11 @@
    * for zenz's correction. The next user action cancels it. */
   NSTimer *callbackTimer_;
 
+  /** floatype: what the last output showed (composition, candidates and indicator), so that a
+   * timer callback that changes nothing, as while zenz works, is not drawn again. */
+  std::string lastScreen_;
+  bool processingCallback_;
+
   /** floatype: whether the renderer is showing candidates, whose position is kept while shown. */
   bool candidatesShown_;
 

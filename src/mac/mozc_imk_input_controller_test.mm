@@ -166,7 +166,7 @@
 - (void)setMarkedText:(id)string
        selectionRange:(NSRange)selectionRange
      replacementRange:(NSRange)replacementRange {
-  // Do nothing
+  counters_["setMarkedText:selectionRange:replacementRange:"]++;
 }
 
 - (void)insertText:(NSString *)result replacementRange:(NSRange)range {
@@ -881,6 +881,43 @@ TEST_F(MozcImkInputControllerTest, SendsADelayedCallbackAfterItsDelay) {
               SendCommandWithContext(Type(commands::SessionCommand::POLL_ZENZ), _, NotNull()))
       .WillOnce(Return(true));
   [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.2]];
+}
+
+TEST_F(MozcImkInputControllerTest, ACallbackThatChangesNothingIsNotDrawnAgain) {
+  commands::Output output;
+  output.set_consumed(true);
+  commands::Preedit::Segment *segment = output.mutable_preedit()->add_segment();
+  segment->set_annotation(commands::Preedit::Segment::UNDERLINE);
+  segment->set_value("機会");
+  segment->set_value_length(2);
+  output.mutable_callback()->mutable_session_command()->set_type(
+      commands::SessionCommand::POLL_ZENZ);
+  output.mutable_callback()->set_delay_millisec(10);
+  [controller_ processOutput:&output client:mock_client_];
+  const int drawn = [mock_client_ getCounter:"setMarkedText:selectionRange:replacementRange:"];
+  ASSERT_GT(drawn, 0);
+
+  // zenz is still working: the same composition and another poll.
+  EXPECT_CALL(*mock_mozc_client_,
+              SendCommandWithContext(Type(commands::SessionCommand::POLL_ZENZ), _, NotNull()))
+      .WillOnce(DoAll(SetArgPointee<2>(output), Return(true)))
+      .WillOnce(Return(true));
+  [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.2]];
+  EXPECT_EQ([mock_client_ getCounter:"setMarkedText:selectionRange:replacementRange:"], drawn)
+      << "nothing changed, so nothing is sent to the application";
+  Mock::VerifyAndClearExpectations(mock_mozc_client_);
+
+  // zenz's correction arrives through the timer: drawn.
+  [controller_ processOutput:&output client:mock_client_];
+  const int before = [mock_client_ getCounter:"setMarkedText:selectionRange:replacementRange:"];
+  commands::Output corrected = output;
+  corrected.clear_callback();
+  corrected.mutable_preedit()->mutable_segment(0)->set_value("機械");
+  EXPECT_CALL(*mock_mozc_client_,
+              SendCommandWithContext(Type(commands::SessionCommand::POLL_ZENZ), _, NotNull()))
+      .WillOnce(DoAll(SetArgPointee<2>(corrected), Return(true)));
+  [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.2]];
+  EXPECT_EQ([mock_client_ getCounter:"setMarkedText:selectionRange:replacementRange:"], before + 1);
 }
 
 TEST_F(MozcImkInputControllerTest, AKeyCancelsADelayedCallback) {
