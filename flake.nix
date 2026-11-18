@@ -14,7 +14,9 @@
         packages = [
           pkgs.bazelisk
           pkgs.cmake
-          pkgs.python3
+          # Mozc's minimum. Python 3.13+ verifies certificates strictly by default
+          # (VERIFY_X509_STRICT), which rejects common TLS-inspection proxy CAs.
+          pkgs.python312
         ];
       };
     };
