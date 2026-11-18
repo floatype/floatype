@@ -53,13 +53,13 @@
 ABSL_DECLARE_FLAG(bool, restricted);  // in SessionHandler
 
 namespace {
-mozc::SessionServer *g_session_server = nullptr;
+mozc::SessionServer* g_session_server = nullptr;
 }
 
 namespace mozc {
 namespace server {
 
-void InitMozcAndMozcServer(const char *arg0, int *argc, char ***argv,
+void InitMozcAndMozcServer(const char* arg0, int* argc, char*** argv,
                            bool remove_flags) {
   mozc::SystemUtil::DisableIME();
 
@@ -103,6 +103,7 @@ int MozcServer::Run() {
 
   // floatype: correct conversions with zenz through the bundled scorer.
   mozc::floatype::ZenzCorrector::EnableDefaultClient();
+  mozc::floatype::EnableLiveConversion(true);
 
   {
     std::unique_ptr<mozc::SessionServer> session_server =
@@ -133,9 +134,7 @@ int MozcServer::Run() {
   return 0;
 }
 
-int MozcServer::Finalize() {
-  return 0;
-}
+int MozcServer::Finalize() { return 0; }
 
 }  // namespace server
 }  // namespace mozc

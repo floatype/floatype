@@ -457,6 +457,12 @@ message SessionCommand {
     // to show zenz's correction once it is ready. A large number keeps clear
     // of values that upstream Mozc adds.
     POLL_ZENZ = 1001;
+    // floatype: sent back by the client after the user paused while composing,
+    // to show a live conversion of the reading.
+    LIVE_CONVERT = 1002;
+    // floatype: sent back by the client after a longer pause, to ask zenz to
+    // correct the live conversion.
+    REQUEST_ZENZ = 1003;
   }
   required CommandType type = 1;
 

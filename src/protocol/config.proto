@@ -366,6 +366,13 @@ message Config {
   // upstream Mozc adds.
   optional bool zenz_suggestion_learning = 1001 [default = true];
 
+  // floatype: live conversion converts the reading while the user pauses, and
+  // zenz corrects it after a longer pause. Both delays count from the last key.
+  optional bool use_live_conversion = 1002 [default = true];
+  optional uint32 live_conversion_delay_millisec = 1003 [default = 228];
+  optional uint32 live_conversion_min_chars = 1004 [default = 2];
+  optional uint32 zenz_delay_millisec = 1005 [default = 500];
+
   //////////////////////////////////////////////////////////////
   //
   // Cloud (300-319)

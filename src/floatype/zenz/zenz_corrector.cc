@@ -205,6 +205,13 @@ ScorerClient* ZenzCorrector::DefaultClient() {
   return client;
 }
 
+namespace {
+bool live_conversion_enabled = false;
+}  // namespace
+
+void EnableLiveConversion(bool enabled) { live_conversion_enabled = enabled; }
+bool LiveConversionEnabled() { return live_conversion_enabled; }
+
 void ZenzCorrector::EnableDefaultClient() { default_client_enabled = true; }
 
 void ZenzCorrector::SetDefaultClientForTesting(ScorerClient* client) {

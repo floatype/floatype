@@ -284,6 +284,14 @@ class Session {
   void RequestZenz(commands::Command* command);
   // Handles the callback: shows zenz's correction or asks to be called again.
   bool PollZenz(commands::Command* command);
+  // floatype live conversion: true while the conversion on screen is a live
+  // one that the next typed character turns back into the reading.
+  bool live_conversion_ = false;
+  void MaybeScheduleLiveConversion(commands::Command* command);
+  bool LiveConvert(commands::Command* command);
+  bool RequestZenzAfterLiveConversion(commands::Command* command);
+  // Output() with every segment underlined, as a live conversion looks.
+  void OutputLiveConversion(commands::Command* command);
 
   // Undo stack. *begin is the oldest, and *back is the newest.
   std::deque<std::unique_ptr<ImeContext>> undo_contexts_;

@@ -37,6 +37,15 @@ bool Suggests(const commands::Output& output, absl::string_view value) {
   return false;
 }
 
+bool AllUnderlined(const commands::Output& output) {
+  for (const commands::Preedit::Segment& segment : output.preedit().segment()) {
+    if (segment.annotation() != commands::Preedit::Segment::UNDERLINE) {
+      return false;
+    }
+  }
+  return output.preedit().segment_size() > 0;
+}
+
 std::string Preedit(const commands::Output& output) {
   std::string text;
   for (const commands::Preedit::Segment& segment : output.preedit().segment()) {
@@ -63,6 +72,7 @@ class FloatypeZenzTest : public testing::SessionHandlerTestBase {
   }
 
   void TearDown() override {
+    floatype::EnableLiveConversion(false);
     handler_.reset();
     floatype::ZenzCorrector::SetDefaultClientForTesting(nullptr);
     client_.reset();
@@ -108,6 +118,15 @@ class FloatypeZenzTest : public testing::SessionHandlerTestBase {
     commands::Input input;
     input.set_type(commands::Input::SEND_COMMAND);
     input.mutable_command()->set_type(commands::SessionCommand::POLL_ZENZ);
+    return Eval(std::move(input));
+  }
+
+  // Sends the callback the output asks for, as the client's timer does.
+  commands::Output CallBack(const commands::Output& output) {
+    EXPECT_TRUE(output.has_callback());
+    commands::Input input;
+    input.set_type(commands::Input::SEND_COMMAND);
+    *input.mutable_command() = output.callback().session_command();
     return Eval(std::move(input));
   }
 
@@ -226,6 +245,55 @@ TEST_F(FloatypeZenzTest, CtrlBackspaceDeletesTheSelectedSuggestion) {
   SendKeys({"Ctrl Backspace"});
   SendKeys({"Escape", "Escape"});
   EXPECT_FALSE(Suggests(TypeKikaiga(), "機械が機械"));
+}
+
+TEST_F(FloatypeZenzTest, LiveConvertsWhenTheUserPausesAndZenzFollows) {
+  floatype::EnableLiveConversion(true);
+  const commands::Output typed = SendKeys({"k", "i", "k", "a", "i"});
+  EXPECT_EQ(Preedit(typed), "きかい");
+  ASSERT_TRUE(typed.has_callback());
+  EXPECT_EQ(typed.callback().session_command().type(),
+            commands::SessionCommand::LIVE_CONVERT);
+  EXPECT_EQ(typed.callback().delay_millisec(), 228);
+
+  const commands::Output live = CallBack(typed);
+  EXPECT_EQ(Preedit(live), "機会");
+  EXPECT_TRUE(AllUnderlined(live));
+  ASSERT_TRUE(live.has_callback());
+  EXPECT_EQ(live.callback().session_command().type(),
+            commands::SessionCommand::REQUEST_ZENZ);
+  EXPECT_EQ(live.callback().delay_millisec(), 500 - 228);
+
+  const commands::Output corrected = PollWhileAsked(CallBack(live));
+  EXPECT_EQ(Preedit(corrected), "機械");
+  EXPECT_TRUE(AllUnderlined(corrected));
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(), "機械");
+}
+
+TEST_F(FloatypeZenzTest, TypingAfterALiveConversionEditsTheReading) {
+  floatype::EnableLiveConversion(true);
+  CallBack(SendKeys({"k", "i", "k", "a", "i"}));
+  const commands::Output typed = SendKeys({"g", "a"});
+  EXPECT_EQ(Preedit(typed), "きかいが");
+  EXPECT_EQ(typed.callback().session_command().type(),
+            commands::SessionCommand::LIVE_CONVERT);
+
+  CallBack(typed);
+  EXPECT_EQ(Preedit(SendKeys({"Backspace"})), "きかい");
+}
+
+TEST_F(FloatypeZenzTest, ALiveConversionNeedsTwoCharactersAndCanBeOff) {
+  floatype::EnableLiveConversion(true);
+  EXPECT_FALSE(SendKeys({"k", "i"}).has_callback());
+  SendKeys({"Escape"});
+
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_use_live_conversion(false);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+  EXPECT_FALSE(SendKeys({"k", "i", "k", "a", "i"}).has_callback());
 }
 
 TEST_F(FloatypeZenzTest, DropsTheAnswerAfterTheUserActs) {

@@ -290,9 +290,15 @@ bool Session::SendCommand(commands::Command* command) {
   TransformInput(command->mutable_input());
 
   const commands::SessionCommand& session_command = command->input().command();
-  if (session_command.type() != commands::SessionCommand::POLL_ZENZ &&
-      session_command.type() != commands::SessionCommand::GET_STATUS) {
-    zenz_.Cancel();
+  switch (session_command.type()) {
+    case commands::SessionCommand::POLL_ZENZ:
+    case commands::SessionCommand::LIVE_CONVERT:
+    case commands::SessionCommand::REQUEST_ZENZ:
+    case commands::SessionCommand::GET_STATUS:
+      break;  // Timer callbacks and queries, not user actions.
+    default:
+      zenz_.Cancel();
+      live_conversion_ = false;
   }
   bool result = false;
   if (session_command.type() ==
@@ -411,6 +417,12 @@ bool Session::SendCommand(commands::Command* command) {
     case commands::SessionCommand::POLL_ZENZ:
       result = PollZenz(command);
       break;
+    case commands::SessionCommand::LIVE_CONVERT:
+      result = LiveConvert(command);
+      break;
+    case commands::SessionCommand::REQUEST_ZENZ:
+      result = RequestZenzAfterLiveConversion(command);
+      break;
     default:
       LOG(WARNING) << "Unknown command" << *command;
       result = DoNothing(command);
@@ -518,12 +530,29 @@ bool Session::TestSendKey(commands::Command* command) {
 
 bool Session::SendKey(commands::Command* command) {
   zenz_.Cancel();
+  const bool live = live_conversion_;
+  live_conversion_ = false;
   UpdateTime();
   UpdatePreferences(command);
   TransformInput(command->mutable_input());
   // To support indirect IME on/off by using KeyEvent::activated, use effective
   // state instead of directly using context_->state().
   HandleIndirectImeOnOff(command);
+
+  // floatype: typing on or deleting after a live conversion edits the reading,
+  // so the conversion turns back into the composition first.
+  if (live && context_->state() == ImeContext::CONVERSION) {
+    const commands::KeyEvent& key = command->input().key();
+    keymap::ConversionState::Commands key_command;
+    const bool backspace = key.special_key() == commands::KeyEvent::BACKSPACE &&
+                           key.modifier_keys_size() == 0;
+    if (backspace ||
+        (context_->GetKeyMapManager().GetCommandConversion(key, &key_command) &&
+         key_command == keymap::ConversionState::INSERT_CHARACTER)) {
+      context_->mutable_converter()->Cancel();
+      SetSessionState(ImeContext::COMPOSITION, context_.get());
+    }
+  }
 
   bool result = false;
   switch (context_->state()) {
@@ -548,6 +577,7 @@ bool Session::SendKey(commands::Command* command) {
       break;
   }
 
+  MaybeScheduleLiveConversion(command);
   MaybeSetUndoStatus(command);
   return result;
 }
@@ -2393,16 +2423,79 @@ bool Session::Convert(commands::Command* command) {
   return true;
 }
 
+namespace {
+
+void SetCallback(commands::Command* command,
+                 commands::SessionCommand::CommandType type,
+                 uint32_t delay_millisec) {
+  commands::Output::Callback* callback =
+      command->mutable_output()->mutable_callback();
+  callback->mutable_session_command()->set_type(type);
+  callback->set_delay_millisec(delay_millisec);
+}
+
+}  // namespace
+
+void Session::MaybeScheduleLiveConversion(commands::Command* command) {
+  const config::Config& config = context_->GetConfig();
+  const transliteration::TransliterationType mode =
+      context_->composer().GetInputMode();
+  if (!floatype::LiveConversionEnabled() || !config.use_live_conversion() ||
+      context_->state() != ImeContext::COMPOSITION ||
+      command->output().has_callback() || mode == transliteration::HALF_ASCII ||
+      mode == transliteration::FULL_ASCII ||
+      context_->composer().GetLength() < config.live_conversion_min_chars()) {
+    return;
+  }
+  SetCallback(command, commands::SessionCommand::LIVE_CONVERT,
+              config.live_conversion_delay_millisec());
+}
+
+void Session::OutputLiveConversion(commands::Command* command) {
+  Output(command);
+  commands::Preedit* preedit = command->mutable_output()->mutable_preedit();
+  preedit->clear_highlighted_position();
+  for (commands::Preedit::Segment& segment : *preedit->mutable_segment()) {
+    segment.set_annotation(commands::Preedit::Segment::UNDERLINE);
+  }
+}
+
+bool Session::LiveConvert(commands::Command* command) {
+  if (context_->state() != ImeContext::COMPOSITION ||
+      !context_->mutable_converter()->Convert(context_->composer(),
+                                              context_->client_context())) {
+    return DoNothing(command);
+  }
+  command->mutable_output()->set_consumed(true);
+  SetSessionState(ImeContext::CONVERSION, context_.get());
+  live_conversion_ = true;
+  OutputLiveConversion(command);
+  // zenz_delay_millisec counts from the last key, like this conversion.
+  const config::Config& config = context_->GetConfig();
+  const uint32_t live_delay = config.live_conversion_delay_millisec();
+  const uint32_t zenz_delay = config.zenz_delay_millisec();
+  SetCallback(command, commands::SessionCommand::REQUEST_ZENZ,
+              zenz_delay > live_delay ? zenz_delay - live_delay : 0);
+  return true;
+}
+
+bool Session::RequestZenzAfterLiveConversion(commands::Command* command) {
+  if (!live_conversion_ || context_->state() != ImeContext::CONVERSION) {
+    return DoNothing(command);
+  }
+  command->mutable_output()->set_consumed(true);
+  OutputLiveConversion(command);
+  RequestZenz(command);
+  return true;
+}
+
 void Session::RequestZenz(commands::Command* command) {
   if (!zenz_.Request(context_->converter().GetSegments(),
                      context_->client_context().preceding_text())) {
     return;
   }
-  commands::Output::Callback* callback =
-      command->mutable_output()->mutable_callback();
-  callback->mutable_session_command()->set_type(
-      commands::SessionCommand::POLL_ZENZ);
-  callback->set_delay_millisec(
+  SetCallback(
+      command, commands::SessionCommand::POLL_ZENZ,
       absl::ToInt64Milliseconds(floatype::ZenzCorrector::kPollInterval));
 }
 
@@ -2423,13 +2516,14 @@ bool Session::PollZenz(commands::Command* command) {
             ? converter::Attribute::NO_HISTORY_LEARNING
             : converter::Attribute::NO_LEARNING);
   }
-  Output(command);
+  if (live_conversion_) {
+    OutputLiveConversion(command);
+  } else {
+    Output(command);
+  }
   if (result.kind == floatype::ZenzCorrector::PollResult::kWait) {
-    commands::Output::Callback* callback =
-        command->mutable_output()->mutable_callback();
-    callback->mutable_session_command()->set_type(
-        commands::SessionCommand::POLL_ZENZ);
-    callback->set_delay_millisec(
+    SetCallback(
+        command, commands::SessionCommand::POLL_ZENZ,
         absl::ToInt64Milliseconds(floatype::ZenzCorrector::kPollInterval));
   }
   return true;

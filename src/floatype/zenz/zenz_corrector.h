@@ -76,6 +76,12 @@ class ZenzCorrector {
   std::optional<Pending> pending_;
 };
 
+// Live conversion runs only where the converter process turned it on at
+// startup, so Mozc's own tests, whose tools answer callbacks at once, keep
+// composing as before.
+void EnableLiveConversion(bool enabled);
+bool LiveConversionEnabled();
+
 }  // namespace mozc::floatype
 
 #endif  // MOZC_FLOATYPE_ZENZ_ZENZ_CORRECTOR_H_
