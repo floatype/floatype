@@ -213,6 +213,9 @@ ZenzCorrector::PollResult ZenzCorrector::Poll(const Segments& segments) {
   // Nor does zenz's confidence (the lowest log probability among its tokens)
   // tell wins from harms: at the best threshold, -0.7, 1 harm fewer and 9
   // wins lost.
+  // Proper nouns (by Mozc's part of speech) were tried too: keeping Mozc's
+  // took the regression set from 254 to 252 right, and refusing zenz's
+  // traded a harm for a win; both made AJIMEE-Bench's MinCER worse.
   std::optional<std::vector<int>> indices =
       MapToCandidates(segments, response->conversion);
   if (!indices.has_value() ||
