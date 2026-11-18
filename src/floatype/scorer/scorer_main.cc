@@ -114,12 +114,16 @@ struct Completion {
 // prompt: zenz's greedy choice at each draft token either matches it, and the
 // token is taken without a pass of its own, or ends the draft there. The text
 // is what greedy decoding alone gives; only the number of passes drops.
+//
+// `cached` holds the tokens whose keys and values are in the context from the
+// last request. The part the new prompt shares with them is kept: while the
+// user types on, requests share the context and the start of the reading.
 Completion Complete(llama_context* ctx, const llama_vocab* vocab,
                     llama_sampler* greedy,
                     const std::vector<llama_token>& prompt,
-                    std::vector<llama_token> draft, int max_tokens) {
+                    std::vector<llama_token> draft, int max_tokens,
+                    std::vector<llama_token>& cached) {
   llama_memory_t memory = llama_get_memory(ctx);
-  llama_memory_clear(memory, /*data=*/true);
   Completion out;
   if (prompt.empty()) {
     out.stop = "error";
@@ -128,20 +132,33 @@ Completion Complete(llama_context* ctx, const llama_vocab* vocab,
   if (draft.size() > static_cast<size_t>(max_tokens)) {
     draft.resize(max_tokens);
   }
-  const size_t n = prompt.size() + draft.size();
+  // At least the prompt's last token is decoded again for its logits.
+  size_t kept = 0;
+  while (kept + 1 < prompt.size() && kept < cached.size() &&
+         cached[kept] == prompt[kept]) {
+    ++kept;
+  }
+  llama_memory_seq_rm(memory, 0, static_cast<llama_pos>(kept), -1);
+  cached.resize(kept);
+  const size_t n = prompt.size() - kept + draft.size();
   llama_batch batch = llama_batch_init(static_cast<int32_t>(n), 0, 1);
   for (size_t i = 0; i < n; ++i) {
-    batch.token[i] = i < prompt.size() ? prompt[i] : draft[i - prompt.size()];
-    batch.pos[i] = static_cast<llama_pos>(i);
+    const size_t position = kept + i;
+    batch.token[i] = position < prompt.size() ? prompt[position]
+                                              : draft[position - prompt.size()];
+    batch.pos[i] = static_cast<llama_pos>(position);
     batch.n_seq_id[i] = 1;
     batch.seq_id[i][0] = 0;
     // Logits after the prompt and after each draft token.
-    batch.logits[i] = i + 1 >= prompt.size();
+    batch.logits[i] = position + 1 >= prompt.size();
+    cached.push_back(batch.token[i]);
   }
   batch.n_tokens = static_cast<int32_t>(n);
   const int32_t decoded = llama_decode(ctx, batch);
   llama_batch_free(batch);
   if (decoded != 0) {
+    llama_memory_clear(memory, /*data=*/true);
+    cached.clear();
     out.stop = "error";
     return out;
   }
@@ -150,7 +167,7 @@ Completion Complete(llama_context* ctx, const llama_vocab* vocab,
   llama_token token = 0;
   for (;; ++accepted) {
     token = llama_sampler_sample(
-        greedy, ctx, static_cast<int32_t>(prompt.size() - 1 + accepted));
+        greedy, ctx, static_cast<int32_t>(prompt.size() - 1 - kept + accepted));
     if (accepted == draft.size() || token != draft[accepted]) {
       break;
     }
@@ -164,6 +181,7 @@ Completion Complete(llama_context* ctx, const llama_vocab* vocab,
   // The cache keeps the prompt and the accepted draft only.
   llama_memory_seq_rm(memory, 0,
                       static_cast<llama_pos>(prompt.size() + accepted), -1);
+  cached.resize(prompt.size() + accepted);
   for (int i = static_cast<int>(accepted); i < max_tokens; ++i) {
     if (i > static_cast<int>(accepted)) {
       token = llama_sampler_sample(greedy, ctx, -1);
@@ -185,9 +203,12 @@ Completion Complete(llama_context* ctx, const llama_vocab* vocab,
       return out;
     }
     if (llama_decode(ctx, llama_batch_get_one(&token, 1)) != 0) {
+      llama_memory_clear(memory, /*data=*/true);
+      cached.clear();
       out.stop = "error";
       return out;
     }
+    cached.push_back(token);
   }
   return out;
 }
@@ -212,6 +233,7 @@ int main(int argc, char** argv) {
   std::string model_path;
   int threads = 4;
   bool show_tokens = false;
+  bool reuse_cache = true;
   for (int i = 1; i < argc; ++i) {
     const std::string_view arg = argv[i];
     if (arg == "--model" && i + 1 < argc) {
@@ -220,6 +242,8 @@ int main(int argc, char** argv) {
       threads = std::atoi(argv[++i]);
     } else if (arg == "--show_tokens") {
       show_tokens = true;
+    } else if (arg == "--no_cache_reuse") {  // For measuring.
+      reuse_cache = false;
     } else {
       std::fprintf(stderr, "unknown argument: %s\n", argv[i]);
       return 2;
@@ -228,7 +252,7 @@ int main(int argc, char** argv) {
   if (model_path.empty() || threads < 1) {
     std::fprintf(stderr,
                  "usage: floatype_scorer --model <gguf> [--threads N] "
-                 "[--show_tokens]\n");
+                 "[--show_tokens] [--no_cache_reuse]\n");
     return 2;
   }
   // A closed socket must end the loop through write() errors, not a signal.
@@ -265,6 +289,7 @@ int main(int argc, char** argv) {
     return 1;
   }
   llama_sampler* greedy = llama_sampler_init_greedy();
+  std::vector<llama_token> cached;
   const double load_ms = MillisecondsSince(load_start);
 
   std::string buffer;
@@ -310,9 +335,13 @@ int main(int argc, char** argv) {
     if (prompt.size() + draft.size() > llama_n_batch(ctx)) {
       draft.clear();
     }
-    const Completion completion = fits ? Complete(ctx, vocab, greedy, prompt,
-                                                  std::move(draft), max_tokens)
-                                       : Completion{"", "error"};
+    if (!reuse_cache) {
+      cached.clear();
+    }
+    const Completion completion =
+        fits ? Complete(ctx, vocab, greedy, prompt, std::move(draft),
+                        max_tokens, cached)
+             : Completion{"", "error"};
     const floatype::scorer::Response response{
         request->id, completion.text, completion.stop,
         static_cast<uint64_t>(MillisecondsSince(start) * 1000)};
