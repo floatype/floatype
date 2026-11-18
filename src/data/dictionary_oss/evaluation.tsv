@@ -321,8 +321,8 @@ OK:	かいていこう	書いていこう	Conversion Expected 2	改訂稿	3.33.6
 OK:	けっていこう	決定稿	Conversion Expected	決定稿	2.29.5135
 OK:	さいしゅうこう	最終稿	Conversion Expected	最終稿	2.30.5618
 OK:	しゅうせいこう	修正稿	Conversion Expected	修正稿	2.30.5618
-FAILED:	さんじゅっぷん	三拾分	Conversion Expected 9	三十分	2.32.5981
-OK:	じゅうごふん	中五分	Conversion Expected 9	十五分	2.32.5981
+OK:	さんじゅっぷん	３０分	Conversion Expected 9	三十分	3.35.6354
+OK:	じゅうごふん	１５分	Conversion Expected 9	十五分	3.35.6354
 OK:	にじゅうごびょう	二重五秒	Conversion Expected 9	二十五秒	2.32.5981
 OK:	ごじゅうにち	五十日	Conversion Expected 9	五十日	2.32.5981
 OK:	じゅうはちねん	中八年	Conversion Expected 9	十八年	2.32.5981
@@ -485,7 +485,7 @@ OK:	ていせいぶん	訂正文	Conversion Expected 9	訂正文	2.31.5851
 FAILED:	もどりちのかた	戻り値の方	Conversion Expected	戻り値の型	2.31.5712
 FAILED:	あちらがわ	あちらがわ	Conversion Expected	あちら側	3.33.6089
 FAILED:	こちらがわ	こちらがわ	Conversion Expected	こちら側	3.33.6089
-FAILED:	さんじゅっぷん	三拾分	Conversion Expected	三十分	2.31.5712
+FAILED:	さんじゅっぷん	３０分	Conversion Expected	三十分	3.35.6354
 OK:	ぷらちなでびっと	プラチナデビット	Conversion Expected	プラチナデビット	2.31.5712
 OK:	あいこんかえるか	アイコン変えるか	Conversion Expected	アイコン変えるか	2.31.5712
 FAILED:	だいせいか	第せいか	Conversion Expected	大成果	2.31.5712
