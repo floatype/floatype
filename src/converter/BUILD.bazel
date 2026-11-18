@@ -145,6 +145,7 @@ mozc_cc_library(
     hdrs = ["attribute.h"],
     visibility = [
         "//engine:__pkg__",
+        "//floatype:__subpackages__",
         "//prediction:__pkg__",
         "//rewriter:__pkg__",
         "//session:__pkg__",

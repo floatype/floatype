@@ -1,0 +1,73 @@
+// Corrects a Mozc conversion once with zenz's answer.
+
+#ifndef MOZC_FLOATYPE_ZENZ_ZENZ_CORRECTOR_H_
+#define MOZC_FLOATYPE_ZENZ_ZENZ_CORRECTOR_H_
+
+#include <cstdint>
+#include <optional>
+#include <string>
+#include <vector>
+
+#include "absl/strings/string_view.h"
+#include "absl/time/time.h"
+#include "converter/segments.h"
+#include "floatype/zenz/scorer_client.h"
+
+namespace mozc::floatype {
+
+// Returns, for each conversion segment, the index of the candidate to show so
+// that the segments read `text`, preferring higher-ranked candidates. A segment
+// whose top candidate the user's history promoted keeps it. Returns nullopt
+// when `text` cannot be written with Mozc's candidates, which also rejects any
+// text whose reading differs from the conversion's.
+std::optional<std::vector<int>> MapToCandidates(const Segments& segments,
+                                                absl::string_view text);
+
+// The session calls Request() right after Mozc converts, Poll() whenever the
+// client calls back, and Cancel() on any user action.
+class ZenzCorrector {
+ public:
+  // Answers that come later are dropped (spec section 5: 300ms, provisional).
+  static constexpr absl::Duration kTimeout = absl::Milliseconds(300);
+  // How long the client waits before calling back.
+  static constexpr absl::Duration kPollInterval = absl::Milliseconds(20);
+
+  // `client` may be null, which turns zenz off.
+  explicit ZenzCorrector(ScorerClient* client) : client_(client) {}
+
+  // Sends the conversion's reading and `left_context` to the scorer. Returns
+  // true when an answer may follow, so the client should call back.
+  bool Request(const Segments& segments, absl::string_view left_context);
+
+  struct PollResult {
+    enum Kind {
+      kWait,   // No answer yet; call back again.
+      kApply,  // Show `candidate_indices`, one per conversion segment.
+      kDone,   // Keep Mozc's conversion.
+    };
+    Kind kind = kDone;
+    std::vector<int> candidate_indices;
+  };
+  PollResult Poll(const Segments& segments);
+
+  void Cancel() { pending_.reset(); }
+
+  // The converter process's client for the bundled scorer and model.
+  static ScorerClient* DefaultClient();
+  static void SetDefaultClientForTesting(ScorerClient* client);
+
+ private:
+  struct Pending {
+    uint64_t id = 0;
+    absl::Time sent;
+    // The conversion the answer is for; see Fingerprint() in the .cc file.
+    std::string fingerprint;
+  };
+
+  ScorerClient* const client_;
+  std::optional<Pending> pending_;
+};
+
+}  // namespace mozc::floatype
+
+#endif  // MOZC_FLOATYPE_ZENZ_ZENZ_CORRECTOR_H_

@@ -1,0 +1,12 @@
+# The scorer process itself is built with CMake (see CMakeLists.txt) because it
+# links llama.cpp. Bazel builds only the protocol, for the converter side.
+
+load("//:build_defs.bzl", "mozc_cc_library")
+
+package(default_visibility = ["//floatype:__subpackages__"])
+
+mozc_cc_library(
+    name = "protocol",
+    srcs = ["protocol.cc"],
+    hdrs = ["protocol.h"],
+)

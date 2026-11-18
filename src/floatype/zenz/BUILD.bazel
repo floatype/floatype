@@ -1,0 +1,80 @@
+load(
+    "//:build_defs.bzl",
+    "mozc_cc_binary",
+    "mozc_cc_library",
+    "mozc_cc_test",
+)
+
+package(default_visibility = ["//visibility:private"])
+
+mozc_cc_library(
+    name = "scorer_client",
+    srcs = ["scorer_client.cc"],
+    hdrs = ["scorer_client.h"],
+    deps = [
+        "//base:clock",
+        "//floatype/scorer:protocol",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/time",
+    ],
+)
+
+mozc_cc_binary(
+    name = "fake_scorer",
+    testonly = True,
+    srcs = ["fake_scorer_main.cc"],
+    deps = ["//floatype/scorer:protocol"],
+)
+
+mozc_cc_test(
+    name = "scorer_client_test",
+    srcs = ["scorer_client_test.cc"],
+    data = [":fake_scorer"],
+    deps = [
+        ":scorer_client",
+        "//base:clock",
+        "//base:clock_mock",
+        "//floatype/scorer:protocol",
+        "//testing:gunit_main",
+        "//testing:mozctest",
+        "@com_google_absl//absl/time",
+    ],
+)
+
+mozc_cc_library(
+    name = "zenz_corrector",
+    srcs = ["zenz_corrector.cc"],
+    hdrs = ["zenz_corrector.h"],
+    visibility = ["//session:__pkg__"],
+    deps = [
+        ":scorer_client",
+        "//base:clock",
+        "//base:file_util",
+        "//base:system_util",
+        "//base/strings:japanese",
+        "//converter:attribute",
+        "//converter:segments",
+        "//floatype/scorer:protocol",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
+    ],
+)
+
+mozc_cc_test(
+    name = "zenz_corrector_test",
+    srcs = ["zenz_corrector_test.cc"],
+    data = [":fake_scorer"],
+    deps = [
+        ":scorer_client",
+        ":zenz_corrector",
+        "//base:clock",
+        "//base:clock_mock",
+        "//converter:attribute",
+        "//converter:segments",
+        "//testing:gunit",
+        "//testing:gunit_main",
+        "//testing:mozctest",
+        "@com_google_absl//absl/strings",
+    ],
+)
