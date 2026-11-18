@@ -33,6 +33,7 @@ load(
     "mozc_cc_test",
     "mozc_macos_application",
     "mozc_objc_library",
+    "mozc_objc_test",
     "mozc_select",
 )
 load(
@@ -369,5 +370,20 @@ mozc_cc_library(
         "//base:init_mozc",
         "//base:run_level",
         "//base:system_util",
+    ],
+)
+
+# floatype: draws the candidate window and the indicator to look at them.
+mozc_objc_test(
+    name = "floatype_look_test",
+    size = "small",
+    srcs = ["mac/floatype_look_test.mm"],
+    deps = [
+        ":mozc_renderer_lib_macos",
+        "//protocol:candidate_window_cc_proto",
+        "//protocol:commands_cc_proto",
+        "//protocol:config_cc_proto",
+        "//protocol:renderer_cc_proto",
+        "//testing:gunit_main_objc",
     ],
 )

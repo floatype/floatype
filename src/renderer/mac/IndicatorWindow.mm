@@ -65,6 +65,8 @@ IndicatorWindow::~IndicatorWindow() { [window_ close]; }
 
 void IndicatorWindow::Hide() { [window_ orderOut:nil]; }
 
+NSView *IndicatorWindow::ViewForTesting() const { return view_; }
+
 void IndicatorWindow::Update(const commands::RendererCommand &command, double base_screen_height) {
   const commands::Output::Indicator &indicator = command.output().indicator();
   if (!command.visible() || indicator.state() == commands::Output::Indicator::NONE) {

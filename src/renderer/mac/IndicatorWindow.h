@@ -27,6 +27,8 @@ class IndicatorWindow {
   // preedit rectangle counts down from.
   void Update(const commands::RendererCommand &command, double base_screen_height);
   void Hide();
+  // The drawn indicator, for tests to look at.
+  NSView *ViewForTesting() const;
 
  private:
   NSPanel *window_;
