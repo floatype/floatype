@@ -70,6 +70,20 @@ TEST(MapToCandidatesTest, BacktracksWhenAShorterCandidateLeadsNowhere) {
   EXPECT_THAT(MapToCandidates(segments, "あいう").value(), ElementsAre(1, 0));
 }
 
+TEST(MapToCandidatesTest, KeepsMozcsWidthOfSymbols) {
+  Segments segments;
+  AddSegment(segments, "(", {"（", "("});
+  AddSegment(segments, "ごじつ", {"後日", "ご実"});
+  AddSegment(segments, ")", {"）", ")"});
+  // zenz writes half-width parentheses; Mozc's full-width ones stay.
+  EXPECT_THAT(MapToCandidates(segments, "(ご実)").value(),
+              ElementsAre(0, 1, 0));
+  // And the other way round, when Mozc ranks half width first.
+  Segments half;
+  AddSegment(half, "1", {"1", "１"});
+  EXPECT_THAT(MapToCandidates(half, "１").value(), ElementsAre(0));
+}
+
 TEST(MapToCandidatesTest, KeepsATopCandidateLearnedFromTheUser) {
   Segments segments = KyouHaIshaNiIku();
   segments.mutable_conversion_segment(0)->mutable_candidate(0)->attributes |=

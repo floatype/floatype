@@ -16,10 +16,11 @@
 namespace mozc::floatype {
 
 // Returns, for each conversion segment, the index of the candidate to show so
-// that the segments read `text`, preferring higher-ranked candidates. A segment
-// whose top candidate the user's history promoted keeps it. Returns nullopt
-// when `text` cannot be written with Mozc's candidates, which also rejects any
-// text whose reading differs from the conversion's.
+// that the segments read `text`, preferring higher-ranked candidates. Width is
+// ignored in the comparison, so Mozc's choice of full or half width stays. A
+// segment whose top candidate the user's history promoted keeps it. Returns
+// nullopt when `text` cannot be written with Mozc's candidates, which also
+// rejects any text whose reading differs from the conversion's.
 std::optional<std::vector<int>> MapToCandidates(const Segments& segments,
                                                 absl::string_view text);
 

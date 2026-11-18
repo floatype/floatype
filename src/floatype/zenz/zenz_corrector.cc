@@ -41,29 +41,26 @@ bool KeepsTopCandidate(const Segment& segment) {
 }
 
 // Searches segment by segment for candidates that spell `text` from `pos` on.
-// `dead_ends` remembers (segment, position) pairs that cannot be completed.
-bool Search(const Segments& segments, absl::string_view text, size_t segment,
-            size_t pos, std::vector<int>& chosen,
+// `values[i][j]` is candidate j of conversion segment i, or empty when it must
+// not be used. `dead_ends` remembers (segment, position) pairs that fail.
+bool Search(const std::vector<std::vector<std::string>>& values,
+            absl::string_view text, size_t segment, size_t pos,
+            std::vector<int>& chosen,
             absl::flat_hash_set<std::pair<size_t, size_t>>& dead_ends) {
-  if (segment == segments.conversion_segments_size()) {
+  if (segment == values.size()) {
     return pos == text.size();
   }
   if (dead_ends.contains({segment, pos})) {
     return false;
   }
-  const Segment& seg = segments.conversion_segment(segment);
-  const int limit =
-      KeepsTopCandidate(seg) ? 1 : static_cast<int>(seg.candidates_size());
-  for (int i = 0; i < limit; ++i) {
-    const converter::Candidate& candidate = seg.candidate(i);
-    // A candidate with another key covers a different part of the reading.
-    if (candidate.key != seg.key() || candidate.value.empty() ||
-        !absl::StartsWith(text.substr(pos), candidate.value)) {
+  for (int i = 0; i < static_cast<int>(values[segment].size()); ++i) {
+    const std::string& value = values[segment][i];
+    if (value.empty() || !absl::StartsWith(text.substr(pos), value)) {
       continue;
     }
     chosen[segment] = i;
-    if (Search(segments, text, segment + 1, pos + candidate.value.size(),
-               chosen, dead_ends)) {
+    if (Search(values, text, segment + 1, pos + value.size(), chosen,
+               dead_ends)) {
       return true;
     }
   }
@@ -87,9 +84,29 @@ std::string Fingerprint(const Segments& segments) {
 
 std::optional<std::vector<int>> MapToCandidates(const Segments& segments,
                                                 absl::string_view text) {
-  std::vector<int> chosen(segments.conversion_segments_size(), 0);
+  // Full-width and half-width ASCII compare equal, so that among candidates
+  // differing only in width, the one Mozc ranks higher wins: symbols, digits
+  // and letters keep Mozc's width (spec section 4).
+  std::vector<std::vector<std::string>> values;
+  for (const Segment& segment : segments.conversion_segments()) {
+    std::vector<std::string>& folded = values.emplace_back();
+    const int limit = KeepsTopCandidate(segment)
+                          ? 1
+                          : static_cast<int>(segment.candidates_size());
+    for (int i = 0; i < limit; ++i) {
+      const converter::Candidate& candidate = segment.candidate(i);
+      // A candidate with another key covers a different part of the reading.
+      folded.push_back(
+          candidate.key == segment.key()
+              ? japanese::FullWidthAsciiToHalfWidthAscii(candidate.value)
+              : "");
+    }
+  }
+  std::vector<int> chosen(values.size(), 0);
   absl::flat_hash_set<std::pair<size_t, size_t>> dead_ends;
-  if (chosen.empty() || !Search(segments, text, 0, 0, chosen, dead_ends)) {
+  if (values.empty() ||
+      !Search(values, japanese::FullWidthAsciiToHalfWidthAscii(text), 0, 0,
+              chosen, dead_ends)) {
     return std::nullopt;
   }
   return chosen;
