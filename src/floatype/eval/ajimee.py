@@ -7,6 +7,7 @@ Engines:
   zenz  runs zenz-v3.2-small through floatype/scorer's zenz_eval (greedy decoding).
         Build first: cmake -S floatype/scorer -B floatype/scorer/build \
             -DCMAKE_BUILD_TYPE=Release && cmake --build floatype/scorer/build
+        (add -DGGML_METAL=OFF, in another build directory, for the CPU backend)
 
 Run from src/, for example:
 
@@ -44,12 +45,6 @@ ZENZ_URL = (
 )
 ZENZ_SHA256 = "29c223d4c23327b80fd13ebb5ab2555057a46317997d5da391584ffbef0db673"
 
-# zenz-v3 prompt tags (see AzooKeyKanaKanjiConverter's ZenzPromptBuilder).
-ZENZ_INPUT_TAG = chr(0xEE00)
-ZENZ_OUTPUT_TAG = chr(0xEE01)
-ZENZ_CONTEXT_TAG = chr(0xEE02)
-ZENZ_MAX_CONTEXT = 40
-
 
 def katakana_to_hiragana(text: str) -> str:
   """Converts katakana (U+30A1..U+30F6) to hiragana and leaves the rest."""
@@ -58,14 +53,10 @@ def katakana_to_hiragana(text: str) -> str:
   )
 
 
-def zenz_prompt(reading_katakana: str, left_context: str) -> str:
-  """Builds a zenz-v3 conversion prompt; the model writes the output after it."""
-  prompt = ""
-  if left_context:
-    prompt += ZENZ_CONTEXT_TAG + left_context[-ZENZ_MAX_CONTEXT:]
-  prompt += ZENZ_INPUT_TAG + reading_katakana + ZENZ_OUTPUT_TAG
-  # The zenz tokenizer expects ideographic spaces and no newlines.
-  return prompt.replace(" ", chr(0x3000)).replace("\n", "")
+def zenz_input_line(left_context: str, reading_katakana: str) -> str:
+  """Formats one zenz_eval input line; zenz drops line breaks from the context anyway."""
+  context = left_context.replace("\t", " ").replace("\r", "").replace("\n", "")
+  return f"{context}\t{reading_katakana}\n"
 
 
 def levenshtein(a: str, b: str) -> int:
@@ -178,26 +169,24 @@ def convert_with_mozc(readings: list[str], binary: Path, data_file: Path) -> lis
 
 
 def convert_with_zenz(
-    prompts: list[str], binary: Path, model: Path, cpu: bool
-) -> tuple[list[str], list[float], dict]:
-  """Returns zenz's greedy output and latency for each prompt, plus load stats."""
-  command = [str(binary), "--model", str(model)] + (["--cpu"] if cpu else [])
+    lines: list[str], binary: Path, model: Path, threads: int
+) -> tuple[list[tuple[str, float, str]], dict]:
+  """Returns (output, milliseconds, stop reason) per input line, plus zenz_eval's stats."""
   done = subprocess.run(
-      command,
-      input="".join(p + "\n" for p in prompts),
+      [str(binary), "--model", str(model), "--threads", str(threads)],
+      input="".join(lines),
       capture_output=True,
-      text=True,
+      encoding="utf-8",
+      errors="replace",  # A length cap can cut a character in half.
       check=True,
   )
-  outputs, latencies = [], []
+  results = []
   for line in done.stdout.splitlines():
-    text, ms = line.rsplit("\t", 1)
-    outputs.append(text)
-    latencies.append(float(ms))
-  if len(outputs) != len(prompts):
-    raise SystemExit(f"expected {len(prompts)} results, got {len(outputs)}")
-  stats = json.loads(done.stderr.strip().splitlines()[-1])
-  return outputs, latencies, stats
+    text, ms, stop = line.rsplit("\t", 2)
+    results.append((text, float(ms), stop))
+  if len(results) != len(lines):
+    raise SystemExit(f"expected {len(lines)} results, got {len(results)}")
+  return results, json.loads(done.stderr.strip().splitlines()[-1])
 
 
 def main() -> None:
@@ -210,13 +199,13 @@ def main() -> None:
       "--data_file", type=Path, default=Path("bazel-bin/data_manager/oss/mozc.data")
   )
   parser.add_argument("--no_context", action="store_true", help="zenz: ignore the left context")
-  parser.add_argument("--cpu", action="store_true", help="zenz: run on the CPU only")
+  parser.add_argument("--threads", type=int, default=4, help="zenz: inference threads")
   parser.add_argument("--out", type=Path, help="write per-item results as JSON lines")
   args = parser.parse_args()
 
   items = json.loads(fetch(AJIMEE_URL, f"ajimee-v1-{AJIMEE_COMMIT[:12]}.json", AJIMEE_SHA256).read_bytes())
   report = {"engine": args.engine}
-  latencies: list[float] = []
+  extras: list[dict] = [{} for _ in items]
   if args.engine == "mozc":
     binary = args.binary or Path("bazel-bin/converter/quality_regression_main")
     top1 = convert_with_mozc(
@@ -225,17 +214,18 @@ def main() -> None:
   else:
     binary = args.binary or Path("floatype/scorer/build/zenz_eval")
     model = fetch(ZENZ_URL, f"zenz-v3.2-small-{ZENZ_REVISION[:12]}-Q5_K_M.gguf", ZENZ_SHA256)
-    prompts = [
-        zenz_prompt(item["input"], "" if args.no_context else item.get("context_text", ""))
+    lines = [
+        zenz_input_line("" if args.no_context else item.get("context_text", ""), item["input"])
         for item in items
     ]
-    top1, latencies, stats = convert_with_zenz(prompts, binary, model, args.cpu)
-    report.update(stats, context=not args.no_context, cpu=args.cpu)
-    report["latency"] = latency_summary(latencies)
+    results, stats = convert_with_zenz(lines, binary, model, args.threads)
+    top1 = [text for text, _, _ in results]
+    extras = [{"ms": ms, "stop": stop} for _, ms, stop in results]
+    report.update(stats, binary=str(binary), context=not args.no_context)
+    report["latency"] = latency_summary([ms for _, ms, _ in results])
+    report["stops"] = {s: sum(e["stop"] == s for e in extras) for s in sorted({e["stop"] for e in extras})}
 
-  rows = [score(item, t) for item, t in zip(items, top1)]
-  for row, ms in zip(rows, latencies):
-    row["ms"] = ms
+  rows = [score(item, t) | extra for item, t, extra in zip(items, top1, extras)]
   if args.out:
     args.out.write_text(
         "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows),
