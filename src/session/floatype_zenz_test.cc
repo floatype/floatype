@@ -46,6 +46,10 @@ bool AllUnderlined(const commands::Output& output) {
   return output.preedit().segment_size() > 0;
 }
 
+commands::Output::Indicator::State Indicator(const commands::Output& output) {
+  return output.indicator().state();
+}
+
 std::string Preedit(const commands::Output& output) {
   std::string text;
   for (const commands::Preedit::Segment& segment : output.preedit().segment()) {
@@ -207,17 +211,43 @@ TEST_F(FloatypeZenzTest, MozcStillLearnsWhatTheUserPicks) {
 }
 
 TEST_F(FloatypeZenzTest, BackspaceRightAfterACommitTakesBackTheLearning) {
-  for (const absl::string_view key : {"Backspace", "Escape"}) {
-    StartSession(/*zenz=*/false);
-    ASSERT_EQ(Preedit(SendKeys({"k", "i", "k", "a", "i", "Space", "Space"})),
-              "機械");
-    ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機械");
-    EXPECT_FALSE(SendKeys({key}).consumed()) << "the app deletes the text";
+  StartSession(/*zenz=*/false);
+  ASSERT_EQ(Preedit(SendKeys({"k", "i", "k", "a", "i", "Space", "Space"})),
+            "機械");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機械");
+  EXPECT_FALSE(SendKeys({"Backspace"}).consumed()) << "the app deletes it";
 
-    StartSession(/*zenz=*/false);
-    EXPECT_EQ(Preedit(ConvertKikai()), "機会") << key;
-    SendKeys({"Escape"});
-  }
+  StartSession(/*zenz=*/false);
+  EXPECT_EQ(Preedit(ConvertKikai()), "機会");
+}
+
+TEST_F(FloatypeZenzTest, EscapeAfterACommitKeepsTheLearning) {
+  StartSession(/*zenz=*/false);
+  ASSERT_EQ(Preedit(SendKeys({"k", "i", "k", "a", "i", "Space", "Space"})),
+            "機械");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機械");
+  SendKeys({"Escape"});  // As in vim, leaving insert mode.
+
+  StartSession(/*zenz=*/false);
+  EXPECT_EQ(Preedit(ConvertKikai()), "機械");
+}
+
+TEST_F(FloatypeZenzTest, PickingZenzsCandidateAfterShowingMozcIsLearned) {
+  ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
+  ASSERT_EQ(Preedit(SendKeys({"Space"})), "機会");
+  ASSERT_EQ(Preedit(SendKeys({"Space"})), "機械") << "zenz's is second";
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機械");
+
+  StartSession(/*zenz=*/false);
+  EXPECT_EQ(Preedit(ConvertKikai()), "機械");
+}
+
+TEST_F(FloatypeZenzTest, TheZenzKeyKeepsZenzsCorrectionWhenZenzAgrees) {
+  floatype::EnableSessionFeatures(true);
+  ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
+  const commands::Output again = PollWhileAsked(SendKeys({"Ctrl z"}));
+  EXPECT_EQ(Preedit(again), "機械");
+  EXPECT_EQ(Indicator(again), commands::Output::Indicator::ZENZ);
 }
 
 TEST_F(FloatypeZenzTest, KeepsWhatTheUserTaughtMozc) {
@@ -338,10 +368,6 @@ TEST_F(FloatypeZenzTest, ALiveConversionNeedsTwoCharactersAndCanBeOff) {
   *input.mutable_config() = config;
   Eval(std::move(input));
   EXPECT_FALSE(SendKeys({"k", "i", "k", "a", "i"}).has_callback());
-}
-
-commands::Output::Indicator::State Indicator(const commands::Output& output) {
-  return output.indicator().state();
 }
 
 TEST_F(FloatypeZenzTest, TheIndicatorTellsWhoseResultIsShown) {

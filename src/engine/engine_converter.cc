@@ -1176,7 +1176,8 @@ void EngineConverter::CandidateMoveToId(const int id,
 }
 
 bool EngineConverter::PromoteCandidates(absl::Span<const int> candidate_indices,
-                                        const uint32_t attributes) {
+                                        const uint32_t attributes,
+                                        const uint32_t cleared_attributes) {
   const size_t size = segments_.conversion_segments_size();
   if (!CheckState(CONVERSION) || candidate_indices.size() != size ||
       selected_candidate_indices_.size() != size) {
@@ -1195,6 +1196,9 @@ bool EngineConverter::PromoteCandidates(absl::Span<const int> candidate_indices,
       continue;
     }
     Segment* segment = segments_.mutable_conversion_segment(i);
+    // shortcut: clears the bits even where Mozc set them itself; only
+    // floatype's learning bits are cleared, on candidates floatype marked.
+    segment->mutable_candidate(0)->attributes &= ~cleared_attributes;
     segment->mutable_candidate(candidate_indices[i])->attributes |= attributes;
     segment->move_candidate(candidate_indices[i], 0);
   }

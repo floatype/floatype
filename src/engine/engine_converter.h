@@ -230,7 +230,8 @@ class EngineConverter : public EngineConverterInterface {
 
   const Segments& GetSegments() const override { return segments_; }
   bool PromoteCandidates(absl::Span<const int> candidate_indices,
-                         uint32_t attributes) override;
+                         uint32_t attributes,
+                         uint32_t cleared_attributes) override;
 
   // Operation for the candidate list.
   void SetCandidateListVisible(bool visible) override;

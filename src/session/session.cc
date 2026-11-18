@@ -583,14 +583,14 @@ bool Session::SendKey(commands::Command* command) {
     }
   }
 
-  // floatype: Backspace or Escape right after a commit takes back what the
-  // commit taught the converter, as Mozkey does; the key still reaches the
-  // app. Ctrl+Backspace (Undo) also brings the composition back.
+  // floatype: Backspace right after a commit takes back what the commit
+  // taught the converter; the key still reaches the app. Escape is left out:
+  // it follows a commit routinely in vim and terminals. Ctrl+Backspace (Undo)
+  // also brings the composition back.
   if (const commands::KeyEvent& key = command->input().key();
       context_->state() == ImeContext::PRECOMPOSITION && HasUndoContext() &&
       key.modifier_keys_size() == 0 &&
-      (key.special_key() == commands::KeyEvent::BACKSPACE ||
-       key.special_key() == commands::KeyEvent::ESCAPE)) {
+      key.special_key() == commands::KeyEvent::BACKSPACE) {
     context_->mutable_converter()->Revert();
     ClearUndoContext();
   }
@@ -604,13 +604,15 @@ bool Session::SendKey(commands::Command* command) {
       key_command == keymap::ConversionState::CONVERT_NEXT) {
     return ShowMozcAgain(zenz_indices, live, command);
   }
-  // The manual zenz key keeps a live conversion live.
+  // The manual zenz key changes nothing on screen: a live conversion stays
+  // live, and zenz's correction stays zenz's until a new answer comes.
   if (keymap::ConversionState::Commands key_command;
-      live && context_->state() == ImeContext::CONVERSION &&
+      context_->state() == ImeContext::CONVERSION &&
       context_->GetKeyMapManager().GetCommandConversion(command->input().key(),
                                                         &key_command) &&
       key_command == keymap::ConversionState::ZENZ_CORRECT) {
-    live_conversion_ = true;
+    live_conversion_ = live;
+    zenz_indices_ = zenz_indices;
   }
 
   // floatype: Enter commits what is on screen, kept live conversion included.
@@ -2583,7 +2585,9 @@ bool Session::ShowMozcAgain(absl::Span<const int> zenz_indices, bool live,
   for (const int index : zenz_indices) {
     mozc_indices.push_back(index == 0 ? 0 : 1);
   }
-  context_->mutable_converter()->PromoteCandidates(mozc_indices, 0);
+  // zenz's candidate is the user's to pick now, and learned if picked.
+  context_->mutable_converter()->PromoteCandidates(
+      mozc_indices, 0, converter::Attribute::NO_LEARNING);
   live_conversion_ = live;
   if (live) {
     OutputLiveConversion(command);
@@ -2662,9 +2666,11 @@ bool Session::LiveConvert(commands::Command* command) {
                                           kept);
       !kept.empty() && indices.has_value()) {
     context_->mutable_converter()->PromoteCandidates(
-        *indices, context_->GetConfig().zenz_suggestion_learning()
-                      ? converter::Attribute::NO_HISTORY_LEARNING
-                      : converter::Attribute::NO_LEARNING);
+        *indices,
+        context_->GetConfig().zenz_suggestion_learning()
+            ? converter::Attribute::NO_HISTORY_LEARNING
+            : converter::Attribute::NO_LEARNING,
+        0);
   }
   OutputLiveConversion(command);
   // zenz_delay_millisec counts from the last key, like this conversion.
@@ -2707,11 +2713,15 @@ bool Session::PollZenz(commands::Command* command) {
   if (result.kind == floatype::ZenzCorrector::PollResult::kApply) {
     // zenz's choices never teach the conversion ranking; the suggestion
     // history may learn the committed sentence.
+    // shortcut: an answer to the manual key after an earlier correction
+    // replaces its indices, so Space then brings back that correction rather
+    // than Mozc's result; fine while zenz rarely changes its mind.
     if (context_->mutable_converter()->PromoteCandidates(
             result.candidate_indices,
             context_->GetConfig().zenz_suggestion_learning()
                 ? converter::Attribute::NO_HISTORY_LEARNING
-                : converter::Attribute::NO_LEARNING)) {
+                : converter::Attribute::NO_LEARNING,
+            0)) {
       zenz_indices_ = result.candidate_indices;
     }
   }

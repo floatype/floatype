@@ -253,11 +253,13 @@ class EngineConverterInterface {
   // floatype: the segments of the current conversion.
   virtual const converter::Segments& GetSegments() const = 0;
   // floatype: shows candidate candidate_indices[i] first in conversion segment
-  // i and adds `attributes` (such as NO_HISTORY_LEARNING) to each candidate it
-  // moves. Works only on a conversion the user has not changed; otherwise
-  // returns false and changes nothing.
+  // i, adds `attributes` (such as NO_HISTORY_LEARNING) to each candidate it
+  // moves, and removes `cleared_attributes` from the candidate it moves down.
+  // Works only on a conversion the user has not changed; otherwise returns
+  // false and changes nothing.
   virtual bool PromoteCandidates(absl::Span<const int> candidate_indices,
-                                 uint32_t attributes) = 0;
+                                 uint32_t attributes,
+                                 uint32_t cleared_attributes) = 0;
 
   // Operation for the candidate list.
   virtual void SetCandidateListVisible(bool visible) = 0;
