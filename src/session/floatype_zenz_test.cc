@@ -39,13 +39,14 @@ class FloatypeZenzTest : public testing::SessionHandlerTestBase {
  protected:
   void SetUp() override {
     SessionHandlerTestBase::SetUp();
-    const std::string answers = FileUtil::JoinPath(
-        SystemUtil::GetUserProfileDirectory(), "answers.tsv");
-    ASSERT_OK(FileUtil::SetContents(answers, "キカイ\t機械\n"));
+    answers_ = FileUtil::JoinPath(SystemUtil::GetUserProfileDirectory(),
+                                  "answers.tsv");
+    ASSERT_OK(FileUtil::SetContents(answers_, "キカイ\t機械\n"));
+    // The fake scorer reads its answers when the first request starts it.
     client_ = std::make_unique<floatype::ScorerClient>(
         std::vector<std::string>{::mozc::testing::GetSourceFileOrDie(
                                      {"floatype", "zenz", "fake_scorer"}),
-                                 answers});
+                                 answers_});
     handler_ = std::make_unique<SessionHandler>(
         MockDataEngineFactory::Create().value());
     StartSession(/*zenz=*/true);
@@ -113,6 +114,7 @@ class FloatypeZenzTest : public testing::SessionHandlerTestBase {
     return SendKeys({"k", "i", "k", "a", "i", "Space"});
   }
 
+  std::string answers_;
   std::unique_ptr<floatype::ScorerClient> client_;
   std::unique_ptr<SessionHandler> handler_;
   uint64_t id_ = 0;
@@ -150,6 +152,22 @@ TEST_F(FloatypeZenzTest, MozcStillLearnsWhatTheUserPicks) {
 
   StartSession(/*zenz=*/false);
   EXPECT_EQ(Preedit(ConvertKikai()), "機械");
+}
+
+TEST_F(FloatypeZenzTest, KeepsWhatTheUserTaughtMozc) {
+  // Picking 機械 by hand makes Mozc put it first from now on.
+  StartSession(/*zenz=*/false);
+  ASSERT_EQ(Preedit(SendKeys({"k", "i", "k", "a", "i", "Space", "Space"})),
+            "機械");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機械");
+
+  // zenz would rather have 機会, but the learned choice stays.
+  ASSERT_OK(FileUtil::SetContents(answers_, "キカイ\t機会\n"));
+  StartSession(/*zenz=*/true);
+  const commands::Output converted = ConvertKikai();
+  ASSERT_EQ(Preedit(converted), "機械");
+  ASSERT_TRUE(converted.has_callback());
+  EXPECT_EQ(Preedit(PollWhileAsked(converted)), "機械");
 }
 
 TEST_F(FloatypeZenzTest, DropsTheAnswerAfterTheUserActs) {
