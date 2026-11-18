@@ -367,6 +367,51 @@ TEST_F(FloatypeZenzTest, TheIndicatorCanBeHidden) {
   EXPECT_FALSE(SendKeys({"k", "i"}).has_indicator());
 }
 
+TEST_F(FloatypeZenzTest, SpaceShowsMozcAgainAndTheZenzKeyAsksAgain) {
+  floatype::EnableSessionFeatures(true);
+  ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
+
+  const commands::Output mozc = SendKeys({"Space"});
+  EXPECT_EQ(Preedit(mozc), "機会");
+  EXPECT_EQ(Indicator(mozc), commands::Output::Indicator::MOZC);
+  EXPECT_FALSE(mozc.has_callback());
+
+  const commands::Output asked = SendKeys({"Ctrl z"});
+  EXPECT_EQ(Preedit(asked), "機会");
+  EXPECT_EQ(Indicator(asked), commands::Output::Indicator::ZENZ_PENDING);
+  const commands::Output corrected = PollWhileAsked(asked);
+  EXPECT_EQ(Preedit(corrected), "機械");
+  EXPECT_EQ(Indicator(corrected), commands::Output::Indicator::ZENZ);
+
+  // Showing Mozc's result again is not a choice the user made.
+  SendKeys({"Space"});
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(), "機会");
+}
+
+TEST_F(FloatypeZenzTest, SpaceAfterShowingMozcAgainPicksTheNextCandidate) {
+  ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
+  ASSERT_EQ(Preedit(SendKeys({"Space"})), "機会");
+  const commands::Output next = SendKeys({"Space"});
+  EXPECT_NE(Preedit(next), "機会");
+  EXPECT_TRUE(next.has_candidate_window());
+}
+
+TEST_F(FloatypeZenzTest, TheZenzKeyConvertsWhileComposing) {
+  const commands::Output asked = SendKeys({"k", "i", "k", "a", "i", "Ctrl z"});
+  EXPECT_EQ(Preedit(asked), "機会");
+  EXPECT_EQ(Preedit(PollWhileAsked(asked)), "機械");
+}
+
+TEST_F(FloatypeZenzTest, TheZenzKeyKeepsALiveConversionLive) {
+  floatype::EnableSessionFeatures(true);
+  const commands::Output asked = SendKeys({"k", "i", "k", "a", "i", "Ctrl z"});
+  EXPECT_EQ(Preedit(asked), "機会");
+  EXPECT_EQ(Indicator(asked), commands::Output::Indicator::ZENZ_PENDING);
+  EXPECT_EQ(Preedit(PollWhileAsked(asked)), "機械");
+  // Typing on edits the reading, as after any live conversion.
+  EXPECT_EQ(Preedit(SendKeys({"g", "a"})), "機械が");
+}
+
 TEST_F(FloatypeZenzTest, DropsTheAnswerAfterTheUserActs) {
   ASSERT_TRUE(ConvertKikai().has_callback());
   const commands::Output picked = SendKeys({"Space"});

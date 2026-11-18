@@ -17,6 +17,7 @@ Composition	Ctrl Left	MoveCursorToBeginning
 Composition	Ctrl m	Commit
 Composition	Ctrl m	Commit
 Composition	Ctrl Right	MoveCursorToEnd
+Composition	Ctrl z	ZenzCorrect
 Composition	Delete	Delete
 Composition	Eisu	ToggleAlphanumericMode
 Composition	End	MoveCursorToEnd
@@ -79,6 +80,7 @@ Conversion	Ctrl Right	SegmentFocusLast
 Conversion	Ctrl s	SegmentFocusLeft
 Conversion	Ctrl w	SegmentWidthExpand
 Conversion	Ctrl x	ConvertNext
+Conversion	Ctrl z	ZenzCorrect
 Conversion	Down	ConvertNext
 Conversion	End	SegmentFocusLast
 Conversion	Enter	Commit

@@ -299,7 +299,7 @@ bool Session::SendCommand(commands::Command* command) {
       break;  // Timer callbacks and queries, not user actions.
     default:
       zenz_.Cancel();
-      zenz_shown_ = false;
+      zenz_indices_.clear();
       live_conversion_ = false;
       live_reading_.clear();
   }
@@ -534,7 +534,7 @@ bool Session::TestSendKey(commands::Command* command) {
 
 bool Session::SendKey(commands::Command* command) {
   zenz_.Cancel();
-  zenz_shown_ = false;
+  const std::vector<int> zenz_indices = std::exchange(zenz_indices_, {});
   const bool live = live_conversion_;
   live_conversion_ = false;
   UpdateTime();
@@ -557,6 +557,24 @@ bool Session::SendKey(commands::Command* command) {
       context_->mutable_converter()->Cancel();
       SetSessionState(ImeContext::COMPOSITION, context_.get());
     }
+  }
+
+  // floatype: while zenz's correction is shown, Space (any key for the next
+  // candidate) shows Mozc's result again. Nothing learns from it.
+  if (keymap::ConversionState::Commands key_command;
+      !zenz_indices.empty() && context_->state() == ImeContext::CONVERSION &&
+      context_->GetKeyMapManager().GetCommandConversion(command->input().key(),
+                                                        &key_command) &&
+      key_command == keymap::ConversionState::CONVERT_NEXT) {
+    return ShowMozcAgain(zenz_indices, live, command);
+  }
+  // The manual zenz key keeps a live conversion live.
+  if (keymap::ConversionState::Commands key_command;
+      live && context_->state() == ImeContext::CONVERSION &&
+      context_->GetKeyMapManager().GetCommandConversion(command->input().key(),
+                                                        &key_command) &&
+      key_command == keymap::ConversionState::ZENZ_CORRECT) {
+    live_conversion_ = true;
   }
 
   // floatype: Enter commits what is on screen, kept live conversion included.
@@ -909,6 +927,9 @@ bool Session::SendKeyCompositionState(commands::Command* command) {
     case keymap::CompositionState::COMPOSITION_MODE_HALF_ALPHANUMERIC:
       return CompositionModeHalfASCII(command);
 
+    case keymap::CompositionState::ZENZ_CORRECT:
+      return CorrectWithZenzNow(command);
+
     case keymap::CompositionState::NONE:
       return DoNothing(command);
   }
@@ -1059,6 +1080,9 @@ bool Session::SendKeyConversionState(commands::Command* command) {
 
     case keymap::ConversionState::DELETE_SELECTED_CANDIDATE:
       return DeleteCandidateFromHistory(command);
+
+    case keymap::ConversionState::ZENZ_CORRECT:
+      return CorrectWithZenzNow(command);
 
     case keymap::ConversionState::NONE:
       return DoNothing(command);
@@ -2482,6 +2506,50 @@ void Session::MaybeScheduleLiveConversion(commands::Command* command) {
               config.live_conversion_delay_millisec());
 }
 
+bool Session::CorrectWithZenzNow(commands::Command* command) {
+  if (context_->state() == ImeContext::COMPOSITION) {
+    // Converts first, the way the user has set conversions to look.
+    const bool live = floatype::SessionFeaturesEnabled() &&
+                      context_->GetConfig().use_live_conversion();
+    if (!(live ? LiveConvert(command) : Convert(command)) ||
+        context_->state() != ImeContext::CONVERSION) {
+      return true;
+    }
+  } else {
+    command->mutable_output()->set_consumed(true);
+    if (live_conversion_) {
+      OutputLiveConversion(command);
+    } else {
+      Output(command);
+    }
+  }
+  // Asks zenz now, after an automatic correction too; the callback replaces
+  // any scheduled one.
+  RequestZenz(command);
+  return true;
+}
+
+bool Session::ShowMozcAgain(absl::Span<const int> zenz_indices, bool live,
+                            commands::Command* command) {
+  command->mutable_output()->set_consumed(true);
+  // zenz moved its candidate to the top, so Mozc's is second where it moved
+  // one. shortcut: zenz's candidate stays second instead of where Mozc ranked
+  // it, which also keeps it within reach.
+  std::vector<int> mozc_indices;
+  for (const int index : zenz_indices) {
+    mozc_indices.push_back(index == 0 ? 0 : 1);
+  }
+  context_->mutable_converter()->PromoteCandidates(mozc_indices, 0);
+  live_conversion_ = live;
+  if (live) {
+    OutputLiveConversion(command);
+  } else {
+    Output(command);
+  }
+  SetIndicator(command);
+  return true;
+}
+
 void Session::SetIndicator(commands::Command* command) const {
   const config::Config& config = context_->GetConfig();
   commands::Output* output = command->mutable_output();
@@ -2496,7 +2564,7 @@ void Session::SetIndicator(commands::Command* command) const {
     return;
   } else if (zenz_.pending()) {
     state = commands::Output::Indicator::ZENZ_PENDING;
-  } else if (zenz_shown_) {
+  } else if (!zenz_indices_.empty()) {
     state = commands::Output::Indicator::ZENZ;
   } else {
     state = commands::Output::Indicator::MOZC;
@@ -2595,11 +2663,13 @@ bool Session::PollZenz(commands::Command* command) {
   if (result.kind == floatype::ZenzCorrector::PollResult::kApply) {
     // zenz's choices never teach the conversion ranking; the suggestion
     // history may learn the committed sentence.
-    zenz_shown_ = context_->mutable_converter()->PromoteCandidates(
-        result.candidate_indices,
-        context_->GetConfig().zenz_suggestion_learning()
-            ? converter::Attribute::NO_HISTORY_LEARNING
-            : converter::Attribute::NO_LEARNING);
+    if (context_->mutable_converter()->PromoteCandidates(
+            result.candidate_indices,
+            context_->GetConfig().zenz_suggestion_learning()
+                ? converter::Attribute::NO_HISTORY_LEARNING
+                : converter::Attribute::NO_LEARNING)) {
+      zenz_indices_ = result.candidate_indices;
+    }
   }
   if (live_conversion_) {
     OutputLiveConversion(command);

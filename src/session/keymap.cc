@@ -582,6 +582,7 @@ void KeyMapManager::InitCommandData() {
   RegisterCompositionCommand("CommitFirstSuggestion",
                              CompositionState::COMMIT_FIRST_SUGGESTION);
   RegisterCompositionCommand("Convert", CompositionState::CONVERT);
+  RegisterCompositionCommand("ZenzCorrect", CompositionState::ZENZ_CORRECT);
   RegisterCompositionCommand("ConvertWithoutHistory",
                              CompositionState::CONVERT_WITHOUT_HISTORY);
   RegisterCompositionCommand("PredictAndConvert",
@@ -711,6 +712,7 @@ void KeyMapManager::InitCommandData() {
                             ConversionState::TRANSLATE_HALF_ASCII);
   RegisterConversionCommand("DeleteSelectedCandidate",
                             ConversionState::DELETE_SELECTED_CANDIDATE);
+  RegisterConversionCommand("ZenzCorrect", ConversionState::ZENZ_CORRECT);
   if (kCompositionModeXCommandSupported) {
     RegisterConversionCommand(kCommandStringCompositionModeHiragana,
                               ConversionState::COMPOSITION_MODE_HIRAGANA);

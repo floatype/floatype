@@ -145,6 +145,7 @@ struct CompositionState {
     COMPOSITION_MODE_HALF_KATAKANA,
     COMPOSITION_MODE_FULL_ALPHANUMERIC,
     COMPOSITION_MODE_HALF_ALPHANUMERIC,
+    ZENZ_CORRECT,  // floatype: ask zenz to correct the conversion now.
   };
 };
 
@@ -198,6 +199,7 @@ struct ConversionState {
     COMPOSITION_MODE_HALF_ALPHANUMERIC,
     DELETE_SELECTED_CANDIDATE,
     REPORT_BUG,
+    ZENZ_CORRECT,  // floatype: ask zenz to correct the conversion now.
   };
 };
 

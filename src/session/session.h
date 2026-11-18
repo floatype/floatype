@@ -36,9 +36,11 @@
 #include <deque>
 #include <memory>
 #include <utility>
+#include <vector>
 
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
+#include "absl/types/span.h"
 #include "composer/composer.h"
 #include "composer/table.h"
 #include "engine/engine_interface.h"
@@ -290,8 +292,14 @@ class Session {
   void MaybeScheduleLiveConversion(commands::Command* command);
   bool LiveConvert(commands::Command* command);
   bool RequestZenzAfterLiveConversion(commands::Command* command);
-  // True while the conversion on screen is zenz's correction.
-  bool zenz_shown_ = false;
+  // The candidates zenz moved to the top while its correction is on screen;
+  // empty otherwise.
+  std::vector<int> zenz_indices_;
+  // The manual zenz key: converts if needed and asks zenz now.
+  bool CorrectWithZenzNow(commands::Command* command);
+  // Space while zenz's correction is shown: Mozc's result again.
+  bool ShowMozcAgain(absl::Span<const int> zenz_indices, bool live,
+                     commands::Command* command);
   // Tells the client what the indicator next to the composition shows.
   void SetIndicator(commands::Command* command) const;
   // Output() with every segment underlined, as a live conversion looks.
