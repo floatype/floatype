@@ -12,6 +12,7 @@
 //
 // Run from src/ after building the scorer (floatype/scorer/CMakeLists.txt).
 
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <iostream>
@@ -62,6 +63,7 @@ ABSL_FLAG(int, pause_every, 0,
           "and the end)");
 ABSL_FLAG(int, wait_for_zenz, 0,
           "live mode: live_conversion_waits_for_zenz_millisec");
+ABSL_FLAG(bool, mixed_english, false, "live mode: turn mixed English input on");
 ABSL_FLAG(bool, keep_shown, true,
           "live mode: keep what a live conversion showed while typing on");
 
@@ -186,6 +188,8 @@ class Replayer {
     input.mutable_config()->set_live_conversion_keeps_shown_text(keep_shown);
     input.mutable_config()->set_live_conversion_waits_for_zenz_millisec(
         wait_for_zenz);
+    input.mutable_config()->set_mixed_english(
+        absl::GetFlag(FLAGS_mixed_english));
     Eval(std::move(input));
   }
 
@@ -194,6 +198,15 @@ class Replayer {
   static std::optional<std::vector<std::pair<char, bool>>> Keys(
       absl::string_view reading) {
     std::vector<std::pair<char, bool>> keys;
+    // A reading of lower-case letters is typed as it is: an English word.
+    if (!reading.empty() &&
+        std::all_of(reading.begin(), reading.end(), [](char c) {
+          return absl::ascii_islower(static_cast<unsigned char>(c));
+        })) {
+      for (const char c : reading) keys.emplace_back(c, false);
+      keys.back().second = true;
+      return keys;
+    }
     std::string kana;
     int typed = 0;
     auto flush = [&]() -> bool {
