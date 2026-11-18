@@ -559,6 +559,18 @@ bool Session::SendKey(commands::Command* command) {
     }
   }
 
+  // floatype: Backspace or Escape right after a commit takes back what the
+  // commit taught the converter, as Mozkey does; the key still reaches the
+  // app. Ctrl+Backspace (Undo) also brings the composition back.
+  if (const commands::KeyEvent& key = command->input().key();
+      context_->state() == ImeContext::PRECOMPOSITION && HasUndoContext() &&
+      key.modifier_keys_size() == 0 &&
+      (key.special_key() == commands::KeyEvent::BACKSPACE ||
+       key.special_key() == commands::KeyEvent::ESCAPE)) {
+    context_->mutable_converter()->Revert();
+    ClearUndoContext();
+  }
+
   // floatype: while zenz's correction is shown, Space (any key for the next
   // candidate) shows Mozc's result again. Nothing learns from it.
   if (keymap::ConversionState::Commands key_command;

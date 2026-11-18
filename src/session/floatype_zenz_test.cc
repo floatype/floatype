@@ -206,6 +206,20 @@ TEST_F(FloatypeZenzTest, MozcStillLearnsWhatTheUserPicks) {
   EXPECT_EQ(Preedit(ConvertKikai()), "機械");
 }
 
+TEST_F(FloatypeZenzTest, BackspaceRightAfterACommitTakesBackTheLearning) {
+  for (const absl::string_view key : {"Backspace", "Escape"}) {
+    StartSession(/*zenz=*/false);
+    ASSERT_EQ(Preedit(SendKeys({"k", "i", "k", "a", "i", "Space", "Space"})),
+              "機械");
+    ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機械");
+    EXPECT_FALSE(SendKeys({key}).consumed()) << "the app deletes the text";
+
+    StartSession(/*zenz=*/false);
+    EXPECT_EQ(Preedit(ConvertKikai()), "機会") << key;
+    SendKeys({"Escape"});
+  }
+}
+
 TEST_F(FloatypeZenzTest, KeepsWhatTheUserTaughtMozc) {
   // Picking 機械 by hand makes Mozc put it first from now on.
   StartSession(/*zenz=*/false);
