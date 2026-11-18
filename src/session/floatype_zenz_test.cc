@@ -697,6 +697,23 @@ TEST_F(DirectCommitTest, OtherCharactersCompose) {
   EXPECT_EQ(Preedit(SendKeys({"k", "i", "k", "a", "i"})), "きかい");
 }
 
+TEST_F(FloatypeZenzTest, ALiveConversionCanShowItsReading) {
+  floatype::EnableSessionFeatures(true);
+  EXPECT_FALSE(CallBack(SendKeys({"k", "i", "k", "a", "i"})).has_live_reading())
+      << "off by default";
+  SendKeys({"Escape"});
+  SendKeys({"Escape"});
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_live_conversion_ruby(true);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+  const commands::Output live = CallBack(SendKeys({"k", "i", "k", "a", "i"}));
+  EXPECT_EQ(Preedit(live), "機会");
+  EXPECT_EQ(live.live_reading(), "きかい");
+}
+
 TEST_F(FloatypeZenzTest, ZenzCanBeTurnedOff) {
   config::Config config = config::ConfigHandler::DefaultConfig();
   config.set_use_zenz(false);

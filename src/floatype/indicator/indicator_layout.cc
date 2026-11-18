@@ -66,6 +66,20 @@ IndicatorRect LayoutIndicatorWithoutCaret(const Style& style,
   return rect;
 }
 
+IndicatorRect LayoutRuby(double width, double height, double line_left,
+                         double line_top,
+                         const IndicatorRect* indicator_above) {
+  constexpr double kGap = 2;
+  IndicatorRect rect;
+  rect.width = width;
+  rect.height = height;
+  rect.x = line_left;
+  rect.y = indicator_above != nullptr
+               ? indicator_above->y + indicator_above->height + kGap
+               : line_top + kGap;
+  return rect;
+}
+
 IndicatorRect LayoutIndicatorVertical(const Style& style, double label_width,
                                       double column_left, double column_right,
                                       double column_top, double screen_right) {

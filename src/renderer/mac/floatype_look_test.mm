@@ -132,5 +132,29 @@ TEST(FloatypeLookTest, TheIndicatorShowsEachState) {
   window.Hide();
 }
 
+TEST(FloatypeLookTest, TheReadingSitsAboveTheIndicator) {
+  renderer::mac::IndicatorWindow window;
+  commands::RendererCommand command;
+  command.set_visible(true);
+  commands::RendererCommand::Rectangle *line = command.mutable_composition_rectangle();
+  line->set_left(200);
+  line->set_right(201);
+  line->set_top(300);
+  line->set_bottom(320);
+  command.mutable_output()->mutable_indicator()->set_state(commands::Output::Indicator::MOZC);
+  command.mutable_output()->set_live_reading("きかい");
+  window.Update(command, 1000);
+  NSView *ruby = window.RubyViewForTesting();
+  NSView *indicator = window.ViewForTesting();
+  EXPECT_GE(NSMinY(ruby.window.frame), NSMaxY(indicator.window.frame));
+  EXPECT_EQ(NSMinX(ruby.window.frame), 200);
+  Save(ruby, "ruby");
+  // Without a reading there is no ruby.
+  command.mutable_output()->clear_live_reading();
+  window.Update(command, 1000);
+  EXPECT_FALSE(ruby.window.isVisible);
+  window.Hide();
+}
+
 }  // namespace
 }  // namespace mozc

@@ -27,12 +27,23 @@ class IndicatorWindow {
   // preedit rectangle counts down from.
   void Update(const commands::RendererCommand &command, double base_screen_height);
   void Hide();
-  // The drawn indicator, for tests to look at.
+  // The drawn indicator and reading, for tests to look at.
   NSView *ViewForTesting() const;
+  NSView *RubyViewForTesting() const;
 
  private:
+  // Shows the indicator; returns whether it did, and where in `frame`.
+  bool UpdateIndicator(const commands::RendererCommand &command, double base_screen_height,
+                       NSRect *frame);
+  // Shows the reading above a live conversion, above `indicator` if given.
+  void UpdateRuby(const commands::RendererCommand &command, double base_screen_height,
+                  const NSRect *indicator);
+
   NSPanel *window_;
   FloatypeIndicatorView *view_;
+  // floatype: the reading above a live conversion.
+  NSPanel *ruby_window_;
+  FloatypeIndicatorView *ruby_view_;
 };
 
 }  // namespace mac

@@ -45,6 +45,11 @@ IndicatorRect LayoutIndicatorVertical(
     double column_left, double column_right, double column_top,
     double screen_right);
 
+// The frame of the reading shown above a live conversion: at the start of the
+// line, just above it or, when the indicator sits above the line, above that.
+IndicatorRect LayoutRuby(double width, double height, double line_left,
+                         double line_top, const IndicatorRect* indicator_above);
+
 // The frame used when the app does not tell where the composition is: at the
 // bottom center of the screen area `screen`.
 IndicatorRect LayoutIndicatorWithoutCaret(

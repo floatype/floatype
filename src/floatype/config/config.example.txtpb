@@ -54,6 +54,9 @@
 ## Enter を押すとその場で確定、ほかのキーは見えているものを確定してから効く。空で切る。
 # direct_commit_characters: ""
 
+## ライブ変換の上に読みを小さく出す（ルビ）。
+# live_conversion_ruby: false
+
 ## 候補の窓の文字の大きさ（Mozc の大きさに対する %、50〜300）。
 # candidate_font_scale_percent: 100
 

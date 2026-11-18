@@ -2797,6 +2797,10 @@ void Session::OutputLiveConversion(commands::Command* command) {
     segment.set_annotation(commands::Preedit::Segment::UNDERLINE);
     live_value_ += segment.value();
   }
+  if (floatype::SessionFeaturesEnabled() &&
+      context_->GetConfig().live_conversion_ruby()) {
+    command->mutable_output()->set_live_reading(live_reading_);
+  }
 }
 
 std::string Session::ShownAfterLiveConversion() const {
