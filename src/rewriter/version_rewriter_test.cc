@@ -109,7 +109,8 @@ TEST_F(VersionRewriterTest, RewriteTestVersion) {
   constexpr absl::string_view kVersionPrefixExpected = "GoogleJapaneseInput-";
   constexpr absl::string_view kVersionPrefixUnexpected = "Mozc-";
 #else   // GOOGLE_JAPANESE_INPUT_BUILD
-  constexpr absl::string_view kVersionPrefixExpected = "Mozc-";
+  // floatype: the OSS build is branded floatype (base/const.h).
+  constexpr absl::string_view kVersionPrefixExpected = "floatype-";
   constexpr absl::string_view kVersionPrefixUnexpected = "GoogleJapaneseInput-";
 #endif  // GOOGLE_JAPANESE_INPUT_BUILD
 
