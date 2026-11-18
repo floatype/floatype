@@ -166,6 +166,11 @@ class Replayer {
     undo.set_type(commands::Input::SEND_KEY);
     undo.mutable_key()->set_special_key(commands::KeyEvent::BACKSPACE);
     Eval(std::move(undo));
+    // Nor does the commit stand in for the next item's context.
+    commands::Input reset;
+    reset.set_type(commands::Input::SEND_COMMAND);
+    reset.mutable_command()->set_type(commands::SessionCommand::RESET_CONTEXT);
+    Eval(std::move(reset));
     return committed.result().value() + '\t' + committed.result().key() + '\t' +
            std::to_string(polls);
   }
