@@ -28,6 +28,8 @@
 	<string>${GOOGLE_VERSIONINFO_ABOUT}</string>
 	<key>CSResourcesFileMapped</key>
 	<true/>
+	<key>TISIconIsTemplate</key>
+	<true/>
 	<key>ComponentInputModeDict</key>
 	<dict>
 		<key>tsInputModeListKey</key>
@@ -36,6 +38,8 @@
 			<dict>
 				<key>TISInputSourceID</key>
 				<string>${PRODUCT_BUNDLE_IDENTIFIER}.base</string>
+				<key>TISIconIsTemplate</key>
+				<true/>
 				<key>TISIntendedLanguage</key>
 				<string>ja</string>
 				<key>tsInputModeAlternateMenuIconFileKey</key>
@@ -63,6 +67,8 @@
 			<dict>
 				<key>TISInputSourceID</key>
 				<string>${PRODUCT_BUNDLE_IDENTIFIER}.Katakana</string>
+				<key>TISIconIsTemplate</key>
+				<true/>
 				<key>TISIntendedLanguage</key>
 				<string>ja</string>
 				<key>tsInputModeAlternateMenuIconFileKey</key>
@@ -90,6 +96,8 @@
 			<dict>
 				<key>TISInputSourceID</key>
 				<string>${PRODUCT_BUNDLE_IDENTIFIER}.HalfWidthKana</string>
+				<key>TISIconIsTemplate</key>
+				<true/>
 				<key>TISIntendedLanguage</key>
 				<string>ja</string>
 				<key>tsInputModeAlternateMenuIconFileKey</key>
@@ -117,6 +125,8 @@
 			<dict>
 				<key>TISInputSourceID</key>
 				<string>${PRODUCT_BUNDLE_IDENTIFIER}.FullWidthRoman</string>
+				<key>TISIconIsTemplate</key>
+				<true/>
 				<key>TISIntendedLanguage</key>
 				<string>ja</string>
 				<key>tsInputModeAlternateMenuIconFileKey</key>
@@ -144,6 +154,8 @@
 			<dict>
 				<key>TISInputSourceID</key>
 				<string>${PRODUCT_BUNDLE_IDENTIFIER}.Roman</string>
+				<key>TISIconIsTemplate</key>
+				<true/>
 				<key>TISIntendedLanguage</key>
 				<string>en</string>
 				<key>tsInputModeAlternateMenuIconFileKey</key>
