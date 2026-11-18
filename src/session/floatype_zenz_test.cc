@@ -476,6 +476,17 @@ TEST_F(FloatypeZenzTest, KeepsSuggestionsWhileARomanSequenceIsUnfinished) {
   EXPECT_EQ(Preedit(SendKeys({"o"})), "きかいきょ");
 }
 
+TEST_F(FloatypeZenzTest, PickingAHeldSuggestionCommitsItAsMozcWould) {
+  floatype::EnableSessionFeatures(true);
+  SendKeys({"k", "i", "k", "a", "i", "k", "y"});
+  // Mozc alone suggests 機会 for きかいｋｙ too, dropping the unfinished ｋｙ.
+  ASSERT_EQ(Preedit(SendKeys({"Down"})), "機会");
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(), "機会");
+  // Enter without picking commits the composition as typed.
+  SendKeys({"k", "i", "k", "a", "i", "k", "y"});
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(), "きかいｋｙ");
+}
+
 TEST_F(FloatypeZenzTest, SuggestsForTheFirstLettersOfAComposition) {
   floatype::EnableSessionFeatures(true);
   EXPECT_EQ(Suggestions(SendKeys({"k"})), std::vector<std::string>{"k"});
