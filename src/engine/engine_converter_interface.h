@@ -38,12 +38,17 @@
 #include <string>
 
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "composer/composer.h"
 #include "protocol/commands.pb.h"
 #include "protocol/config.pb.h"
 #include "transliteration/transliteration.h"
 
 namespace mozc {
+namespace converter {
+class Segments;
+}  // namespace converter
+
 namespace engine {
 
 struct ConversionPreferences {
@@ -243,6 +248,15 @@ class EngineConverterInterface {
   // Move the focus to the candidate represented by the shortcut.  If
   // the shortcut is not bound with any candidate, false is returned.
   virtual bool CandidateMoveToShortcut(char shortcut) = 0;
+
+  // floatype: the segments of the current conversion.
+  virtual const converter::Segments& GetSegments() const = 0;
+  // floatype: shows candidate candidate_indices[i] first in conversion segment
+  // i, marked so that committing it teaches Mozc nothing. Works only on a
+  // conversion the user has not changed; otherwise returns false and changes
+  // nothing.
+  virtual bool PromoteCandidatesWithoutLearning(
+      absl::Span<const int> candidate_indices) = 0;
 
   // Operation for the candidate list.
   virtual void SetCandidateListVisible(bool visible) = 0;

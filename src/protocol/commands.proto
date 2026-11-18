@@ -452,6 +452,11 @@ message SessionCommand {
     // Note: This command resets the internal states (history segments) of the
     // converter.
     REQUEST_NWP = 27;
+
+    // floatype: sent back by the client as Output.callback after a conversion
+    // to show zenz's correction once it is ready. A large number keeps clear
+    // of values that upstream Mozc adds.
+    POLL_ZENZ = 1001;
   }
   required CommandType type = 1;
 

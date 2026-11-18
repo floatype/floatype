@@ -64,6 +64,7 @@ mozc_cc_library(
         "//composer:table",
         "//engine:engine_converter_interface",
         "//engine:engine_interface",
+        "//floatype/zenz:zenz_corrector",
         "//protocol:commands_cc_proto",
         "//protocol:config_cc_proto",
         "//transliteration",
@@ -684,6 +685,28 @@ mozc_cc_test(
         "//protocol:commands_cc_proto",
         "//protocol:config_cc_proto",
         "//testing:gunit_main",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+# floatype: zenz corrections through the session handler.
+mozc_cc_test(
+    name = "floatype_zenz_test",
+    srcs = ["floatype_zenz_test.cc"],
+    data = ["//floatype/zenz:fake_scorer"],
+    deps = [
+        ":session_handler",
+        ":session_handler_test_util",
+        "//base:file_util",
+        "//base:system_util",
+        "//composer:key_parser",
+        "//engine:mock_data_engine_factory",
+        "//floatype/zenz:scorer_client",
+        "//floatype/zenz:zenz_corrector",
+        "//protocol:commands_cc_proto",
+        "//testing:gunit",
+        "//testing:gunit_main",
+        "//testing:mozctest",
         "@com_google_absl//absl/strings",
     ],
 )

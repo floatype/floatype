@@ -52,8 +52,11 @@ class ZenzCorrector {
 
   void Cancel() { pending_.reset(); }
 
-  // The converter process's client for the bundled scorer and model.
+  // The converter process's client for the bundled scorer and model. It is
+  // null until EnableDefaultClient() is called, so tests never start a scorer.
   static ScorerClient* DefaultClient();
+  // Called by the converter process at startup.
+  static void EnableDefaultClient();
   static void SetDefaultClientForTesting(ScorerClient* client);
 
  private:

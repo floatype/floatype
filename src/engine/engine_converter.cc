@@ -46,6 +46,7 @@
 #include "absl/log/log.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "base/text_normalizer.h"
 #include "base/util.h"
 #include "base/vlog.h"
@@ -1172,6 +1173,35 @@ void EngineConverter::CandidateMoveToId(const int id,
   candidate_list_visible_ = false;
   UpdateSelectedCandidateIndex();
   SegmentFocus();
+}
+
+bool EngineConverter::PromoteCandidatesWithoutLearning(
+    absl::Span<const int> candidate_indices) {
+  const size_t size = segments_.conversion_segments_size();
+  if (!CheckState(CONVERSION) || candidate_indices.size() != size ||
+      selected_candidate_indices_.size() != size) {
+    return false;
+  }
+  for (size_t i = 0; i < size; ++i) {
+    // A non-zero selection means the user has picked a candidate.
+    if (selected_candidate_indices_[i] != 0 || candidate_indices[i] < 0 ||
+        candidate_indices[i] >=
+            segments_.conversion_segment(i).candidates_size()) {
+      return false;
+    }
+  }
+  for (size_t i = 0; i < size; ++i) {
+    if (candidate_indices[i] == 0) {
+      continue;
+    }
+    Segment* segment = segments_.mutable_conversion_segment(i);
+    segment->mutable_candidate(candidate_indices[i])->attributes |=
+        converter::Attribute::NO_LEARNING;
+    segment->move_candidate(candidate_indices[i], 0);
+  }
+  ResetResult();
+  UpdateCandidateList();
+  return true;
 }
 
 void EngineConverter::CandidateMoveToPageIndex(const size_t index) {

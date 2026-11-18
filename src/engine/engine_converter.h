@@ -41,6 +41,7 @@
 #include <vector>
 
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "converter/candidate.h"
 #include "converter/converter_interface.h"
 #include "converter/segments.h"
@@ -226,6 +227,10 @@ class EngineConverter : public EngineConverterInterface {
   // Moves the focus to the candidate represented by the shortcut.  If
   // the shortcut is not bound with any candidate, false is returned.
   bool CandidateMoveToShortcut(char shortcut) override;
+
+  const Segments& GetSegments() const override { return segments_; }
+  bool PromoteCandidatesWithoutLearning(
+      absl::Span<const int> candidate_indices) override;
 
   // Operation for the candidate list.
   void SetCandidateListVisible(bool visible) override;

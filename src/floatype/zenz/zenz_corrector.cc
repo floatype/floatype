@@ -27,6 +27,7 @@ namespace {
 using ::floatype::scorer::Request;
 using ::floatype::scorer::Response;
 
+bool default_client_enabled = false;
 ScorerClient* default_client_for_testing = nullptr;
 
 bool KeepsTopCandidate(const Segment& segment) {
@@ -143,6 +144,9 @@ ScorerClient* ZenzCorrector::DefaultClient() {
   if (default_client_for_testing != nullptr) {
     return default_client_for_testing;
   }
+  if (!default_client_enabled) {
+    return nullptr;
+  }
   // Never destroyed: the scorer exits when the converter process does.
   static ScorerClient* const client = [] {
     const std::string dir = SystemUtil::GetServerDirectory();
@@ -154,6 +158,8 @@ ScorerClient* ZenzCorrector::DefaultClient() {
   }();
   return client;
 }
+
+void ZenzCorrector::EnableDefaultClient() { default_client_enabled = true; }
 
 void ZenzCorrector::SetDefaultClientForTesting(ScorerClient* client) {
   default_client_for_testing = client;

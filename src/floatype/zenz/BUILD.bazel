@@ -11,6 +11,7 @@ mozc_cc_library(
     name = "scorer_client",
     srcs = ["scorer_client.cc"],
     hdrs = ["scorer_client.h"],
+    visibility = ["//session:__pkg__"],
     deps = [
         "//base:clock",
         "//floatype/scorer:protocol",
@@ -23,6 +24,7 @@ mozc_cc_binary(
     name = "fake_scorer",
     testonly = True,
     srcs = ["fake_scorer_main.cc"],
+    visibility = ["//session:__pkg__"],
     deps = ["//floatype/scorer:protocol"],
 )
 
@@ -45,7 +47,10 @@ mozc_cc_library(
     name = "zenz_corrector",
     srcs = ["zenz_corrector.cc"],
     hdrs = ["zenz_corrector.h"],
-    visibility = ["//session:__pkg__"],
+    visibility = [
+        "//server:__pkg__",
+        "//session:__pkg__",
+    ],
     deps = [
         ":scorer_client",
         "//base:clock",

@@ -43,6 +43,7 @@
 #include "base/run_level.h"
 #include "base/system_util.h"
 #include "base/vlog.h"
+#include "floatype/zenz/zenz_corrector.h"
 #include "session/session_server.h"
 
 #ifdef _WIN32
@@ -99,6 +100,9 @@ int MozcServer::Run() {
     LOG(INFO) << "Mozc Server is already running";
     return -1;
   }
+
+  // floatype: correct conversions with zenz through the bundled scorer.
+  mozc::floatype::ZenzCorrector::EnableDefaultClient();
 
   {
     std::unique_ptr<mozc::SessionServer> session_server =

@@ -289,6 +289,10 @@ bool Session::SendCommand(commands::Command* command) {
   TransformInput(command->mutable_input());
 
   const commands::SessionCommand& session_command = command->input().command();
+  if (session_command.type() != commands::SessionCommand::POLL_ZENZ &&
+      session_command.type() != commands::SessionCommand::GET_STATUS) {
+    zenz_.Cancel();
+  }
   bool result = false;
   if (session_command.type() ==
       commands::SessionCommand::SWITCH_COMPOSITION_MODE) {
@@ -403,6 +407,9 @@ bool Session::SendCommand(commands::Command* command) {
       }
       break;
     }
+    case commands::SessionCommand::POLL_ZENZ:
+      result = PollZenz(command);
+      break;
     default:
       LOG(WARNING) << "Unknown command" << *command;
       result = DoNothing(command);
@@ -509,6 +516,7 @@ bool Session::TestSendKey(commands::Command* command) {
 }
 
 bool Session::SendKey(commands::Command* command) {
+  zenz_.Cancel();
   UpdateTime();
   UpdatePreferences(command);
   TransformInput(command->mutable_input());
@@ -2380,6 +2388,44 @@ bool Session::Convert(commands::Command* command) {
 
   SetSessionState(ImeContext::CONVERSION, context_.get());
   Output(command);
+  RequestZenz(command);
+  return true;
+}
+
+void Session::RequestZenz(commands::Command* command) {
+  if (!zenz_.Request(context_->converter().GetSegments(),
+                     context_->client_context().preceding_text())) {
+    return;
+  }
+  commands::Output::Callback* callback =
+      command->mutable_output()->mutable_callback();
+  callback->mutable_session_command()->set_type(
+      commands::SessionCommand::POLL_ZENZ);
+  callback->set_delay_millisec(
+      absl::ToInt64Milliseconds(floatype::ZenzCorrector::kPollInterval));
+}
+
+bool Session::PollZenz(commands::Command* command) {
+  if (context_->state() != ImeContext::CONVERSION) {
+    zenz_.Cancel();
+    return DoNothing(command);
+  }
+  command->mutable_output()->set_consumed(true);
+  const floatype::ZenzCorrector::PollResult result =
+      zenz_.Poll(context_->converter().GetSegments());
+  if (result.kind == floatype::ZenzCorrector::PollResult::kApply) {
+    context_->mutable_converter()->PromoteCandidatesWithoutLearning(
+        result.candidate_indices);
+  }
+  Output(command);
+  if (result.kind == floatype::ZenzCorrector::PollResult::kWait) {
+    commands::Output::Callback* callback =
+        command->mutable_output()->mutable_callback();
+    callback->mutable_session_command()->set_type(
+        commands::SessionCommand::POLL_ZENZ);
+    callback->set_delay_millisec(
+        absl::ToInt64Milliseconds(floatype::ZenzCorrector::kPollInterval));
+  }
   return true;
 }
 

@@ -42,6 +42,7 @@
 #include "composer/composer.h"
 #include "composer/table.h"
 #include "engine/engine_interface.h"
+#include "floatype/zenz/zenz_corrector.h"
 #include "protocol/commands.pb.h"
 #include "protocol/config.pb.h"
 #include "session/ime_context.h"
@@ -276,6 +277,13 @@ class Session {
   friend class SessionTestPeer;
 
   std::unique_ptr<ImeContext> context_;
+
+  // floatype: corrects each conversion once with zenz.
+  floatype::ZenzCorrector zenz_{floatype::ZenzCorrector::DefaultClient()};
+  // Sends the new conversion to zenz and asks the client to call back.
+  void RequestZenz(commands::Command* command);
+  // Handles the callback: shows zenz's correction or asks to be called again.
+  bool PollZenz(commands::Command* command);
 
   // Undo stack. *begin is the oldest, and *back is the newest.
   std::deque<std::unique_ptr<ImeContext>> undo_contexts_;
