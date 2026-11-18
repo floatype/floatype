@@ -65,6 +65,7 @@ constexpr Range kConfigRanges[] = {
     {"live_conversion_min_chars", 1, 10},
     {"zenz_delay_millisec", 0, 5000},
     {"zenz_timeout_millisec", 50, 5000},
+    {"live_conversion_waits_for_zenz_millisec", 0, 1000},
 };
 constexpr Range kIndicatorRanges[] = {
     {"reading_color", 0, 0xffffff},

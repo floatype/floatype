@@ -323,6 +323,7 @@ bool Session::SendCommand(commands::Command* command) {
       break;  // Timer callbacks and queries, not user actions.
     default:
       zenz_.Cancel();
+      StopWaitingForZenz();
       zenz_indices_.clear();
       live_conversion_ = false;
       live_reading_.clear();
@@ -558,6 +559,7 @@ bool Session::TestSendKey(commands::Command* command) {
 
 bool Session::SendKey(commands::Command* command) {
   zenz_.Cancel();
+  StopWaitingForZenz();
   const std::vector<int> zenz_indices = std::exchange(zenz_indices_, {});
   const bool live = live_conversion_;
   live_conversion_ = false;
@@ -2552,6 +2554,34 @@ void Session::MaybeScheduleLiveConversion(commands::Command* command) {
               config.live_conversion_delay_millisec());
 }
 
+commands::Preedit Session::ShownPreedit() const {
+  commands::Command probe;
+  OutputComposition(&probe);
+  commands::Preedit preedit = probe.output().preedit();
+  if (const std::string shown = ShownAfterLiveConversion(); !shown.empty()) {
+    preedit.Clear();
+    commands::Preedit::Segment* segment = preedit.add_segment();
+    segment->set_annotation(commands::Preedit::Segment::UNDERLINE);
+    segment->set_value(shown);
+    segment->set_value_length(Util::CharsLen(shown));
+    segment->set_key(context_->composer().GetStringForPreedit());
+    preedit.set_cursor(Util::CharsLen(shown));
+  }
+  return preedit;
+}
+
+void Session::StopWaitingForZenz() {
+  if (!std::exchange(waiting_for_zenz_, false)) {
+    return;
+  }
+  // Nothing of the conversion was shown: back to what the user sees.
+  if (context_->state() == ImeContext::CONVERSION) {
+    context_->mutable_converter()->Cancel();
+    SetSessionState(ImeContext::COMPOSITION, context_.get());
+  }
+  live_conversion_ = false;
+}
+
 bool Session::CorrectWithZenzNow(commands::Command* command) {
   if (context_->state() == ImeContext::COMPOSITION) {
     // Converts first, the way the user has set conversions to look.
@@ -2647,6 +2677,11 @@ std::string Session::ShownAfterLiveConversion() const {
 }
 
 bool Session::LiveConvert(commands::Command* command) {
+  // floatype: while waiting for zenz, the screen keeps what it shows now.
+  const uint32_t wait_millisec =
+      context_->GetConfig().live_conversion_waits_for_zenz_millisec();
+  const commands::Preedit shown_before =
+      wait_millisec > 0 ? ShownPreedit() : commands::Preedit();
   // What the last live conversion showed stays; only zenz may change it.
   const std::string kept =
       ShownAfterLiveConversion().empty() ||
@@ -2671,6 +2706,19 @@ bool Session::LiveConvert(commands::Command* command) {
             ? converter::Attribute::NO_HISTORY_LEARNING
             : converter::Attribute::NO_LEARNING,
         0);
+  }
+  if (wait_millisec > 0) {
+    waiting_preedit_ = shown_before;
+    waiting_for_zenz_ = true;
+    zenz_wait_until_ = Clock::GetAbslTime() + absl::Milliseconds(wait_millisec);
+    Output(command);
+    *command->mutable_output()->mutable_preedit() = waiting_preedit_;
+    command->mutable_output()->clear_candidate_window();
+    RequestZenz(command);
+    if (zenz_.pending()) {
+      return true;
+    }
+    waiting_for_zenz_ = false;  // No zenz: Mozc's result at once.
   }
   OutputLiveConversion(command);
   // zenz_delay_millisec counts from the last key, like this conversion.
@@ -2739,6 +2787,19 @@ bool Session::PollZenz(commands::Command* command) {
             0)) {
       zenz_indices_ = result.candidate_indices;
     }
+  }
+  if (waiting_for_zenz_) {
+    if (result.kind == floatype::ZenzCorrector::PollResult::kWait &&
+        Clock::GetAbslTime() < zenz_wait_until_) {
+      Output(command);
+      *command->mutable_output()->mutable_preedit() = waiting_preedit_;
+      command->mutable_output()->clear_candidate_window();
+      SetCallback(
+          command, commands::SessionCommand::POLL_ZENZ,
+          absl::ToInt64Milliseconds(floatype::ZenzCorrector::kPollInterval));
+      return true;
+    }
+    waiting_for_zenz_ = false;  // Answered or out of time: shown now.
   }
   if (live_conversion_) {
     OutputLiveConversion(command);

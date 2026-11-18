@@ -420,6 +420,9 @@ message Config {
   optional bool use_zenz = 1009 [default = true];
   // floatype: zenz's answers that come later than this are dropped.
   optional uint32 zenz_timeout_millisec = 1010 [default = 300];
+  // floatype: a live conversion waits up to this long for zenz before showing
+  // anything, so that the text changes once; 0 shows Mozc's result first.
+  optional uint32 live_conversion_waits_for_zenz_millisec = 1011 [default = 0];
 
   //////////////////////////////////////////////////////////////
   //

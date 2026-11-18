@@ -551,6 +551,10 @@ void ConfigDialog::SetUpFloatypeTab() {
   zenzDelaySpinBox_ = spin(0, 5000, 10, " ms");
   form->addRow(text("zenz に頼むまでの待ち時間"), zenzDelaySpinBox_);
   keepShownTextCheckBox_ = check("打ち続けても、前に出た変換を残す");
+  liveConversionWaitSpinBox_ = spin(0, 1000, 10, " ms");
+  liveConversionWaitSpinBox_->setSpecialValueText(text("待たない"));
+  form->addRow(text("zenz の答えを待ってから出す上限"),
+               liveConversionWaitSpinBox_);
 
   heading("状態インジケータ");
   showIndicatorCheckBox_ = check("入力中の文字の近くに出す");
@@ -578,7 +582,7 @@ void ConfigDialog::SetUpFloatypeTab() {
   }
   for (QWidget* widget : std::initializer_list<QWidget*>{
            liveConversionDelaySpinBox_, liveConversionMinCharsSpinBox_,
-           keepShownTextCheckBox_}) {
+           keepShownTextCheckBox_, liveConversionWaitSpinBox_}) {
     connect(liveConversionCheckBox_, &QCheckBox::toggled, widget,
             &QWidget::setEnabled);
   }
@@ -670,6 +674,8 @@ void ConfigDialog::ConvertFromProto(const config::Config& config) {
   liveConversionMinCharsSpinBox_->setValue(config.live_conversion_min_chars());
   zenzDelaySpinBox_->setValue(config.zenz_delay_millisec());
   SET_CHECKBOX(keepShownTextCheckBox_, live_conversion_keeps_shown_text);
+  liveConversionWaitSpinBox_->setValue(
+      config.live_conversion_waits_for_zenz_millisec());
   SET_CHECKBOX(showIndicatorCheckBox_, show_indicator);
   indicatorPlacementComboBox_->setCurrentIndex(
       config.indicator_style().placement());
@@ -780,6 +786,8 @@ void ConfigDialog::ConvertToProto(config::Config* config) const {
       liveConversionMinCharsSpinBox_->value());
   config->set_zenz_delay_millisec(zenzDelaySpinBox_->value());
   GET_CHECKBOX(keepShownTextCheckBox_, live_conversion_keeps_shown_text);
+  config->set_live_conversion_waits_for_zenz_millisec(
+      liveConversionWaitSpinBox_->value());
   GET_CHECKBOX(showIndicatorCheckBox_, show_indicator);
   config::Config::IndicatorStyle* style = config->mutable_indicator_style();
   style->set_placement(static_cast<config::Config::IndicatorStyle::Placement>(

@@ -117,6 +117,16 @@ class FloatypeZenzTest : public testing::SessionHandlerTestBase {
     return output;
   }
 
+  // Sets how long a live conversion waits for zenz before it shows.
+  void SetLiveConversionWait(int millisec) {
+    config::Config config = config::ConfigHandler::DefaultConfig();
+    config.set_live_conversion_waits_for_zenz_millisec(millisec);
+    commands::Input input;
+    input.set_type(commands::Input::SET_CONFIG);
+    *input.mutable_config() = config;
+    Eval(std::move(input));
+  }
+
   // Sends the callback command, as the client does when its delay has passed.
   commands::Output Poll() {
     commands::Input input;
@@ -514,6 +524,37 @@ TEST_F(FloatypeZenzTest, LeavingTheFieldForgetsWhatStoodInForTheContext) {
   input.mutable_command()->set_type(commands::SessionCommand::RESET_CONTEXT);
   Eval(std::move(input));
   EXPECT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機会");
+}
+
+TEST_F(FloatypeZenzTest, ALiveConversionCanWaitForZenzAndChangeOnce) {
+  floatype::EnableSessionFeatures(true);
+  SetLiveConversionWait(250);
+  const commands::Output typed = SendKeys({"k", "i", "k", "a", "i"});
+  const commands::Output waiting = CallBack(typed);
+  EXPECT_EQ(Preedit(waiting), "きかい") << "Mozc's 機会 is never shown";
+  EXPECT_EQ(Indicator(waiting), commands::Output::Indicator::ZENZ_PENDING);
+  ASSERT_TRUE(waiting.has_callback());
+  EXPECT_EQ(waiting.callback().session_command().type(),
+            commands::SessionCommand::POLL_ZENZ);
+  EXPECT_EQ(Preedit(PollWhileAsked(waiting)), "機械");
+}
+
+TEST_F(FloatypeZenzTest, AKeyWhileWaitingForZenzMeetsWhatIsShown) {
+  floatype::EnableSessionFeatures(true);
+  SetLiveConversionWait(250);
+  // Enter commits what is on screen: the reading.
+  CallBack(SendKeys({"k", "i", "k", "a", "i"}));
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(), "きかい");
+  // Typing on edits the reading.
+  CallBack(SendKeys({"k", "i", "k", "a", "i"}));
+  EXPECT_EQ(Preedit(SendKeys({"g", "a"})), "きかいが");
+  SendKeys({"Escape"});
+  SendKeys({"Escape"});
+  // Space converts as it always does, and zenz follows.
+  CallBack(SendKeys({"k", "i", "k", "a", "i"}));
+  const commands::Output converted = SendKeys({"Space"});
+  EXPECT_EQ(Preedit(converted), "機会");
+  EXPECT_EQ(Preedit(PollWhileAsked(converted)), "機械");
 }
 
 TEST_F(FloatypeZenzTest, ZenzCanBeTurnedOff) {

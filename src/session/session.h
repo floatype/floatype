@@ -295,6 +295,16 @@ class Session {
   // The candidates zenz moved to the top while its correction is on screen;
   // empty otherwise.
   std::vector<int> zenz_indices_;
+  // A live conversion waiting for zenz before it shows (the setting
+  // live_conversion_waits_for_zenz_millisec): what stays on screen meanwhile
+  // and until when.
+  bool waiting_for_zenz_ = false;
+  absl::Time zenz_wait_until_;
+  commands::Preedit waiting_preedit_;
+  // What the composition looks like on screen now.
+  commands::Preedit ShownPreedit() const;
+  // A key or command during the wait meets the composition the user sees.
+  void StopWaitingForZenz();
   // The manual zenz key: converts if needed and asks zenz now.
   bool CorrectWithZenzNow(commands::Command* command);
   // Space while zenz's correction is shown: Mozc's result again.
