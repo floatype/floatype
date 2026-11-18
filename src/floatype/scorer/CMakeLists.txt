@@ -29,12 +29,14 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(llama_cpp)
 
-add_library(zenz_text STATIC zenz.cc)
+add_library(zenz_text STATIC zenz.cc protocol.cc)
 
-add_executable(zenz_eval zenz_eval.cc)
-target_link_libraries(zenz_eval PRIVATE zenz_text llama)
+add_executable(floatype_scorer scorer_main.cc)
+target_link_libraries(floatype_scorer PRIVATE zenz_text llama)
 
 enable_testing()
-add_executable(zenz_test zenz_test.cc)
-target_link_libraries(zenz_test PRIVATE zenz_text)
-add_test(NAME zenz_test COMMAND zenz_test)
+foreach(test zenz_test protocol_test)
+  add_executable(${test} ${test}.cc)
+  target_link_libraries(${test} PRIVATE zenz_text)
+  add_test(NAME ${test} COMMAND ${test})
+endforeach()

@@ -4,7 +4,8 @@ Engines:
   mozc  converts every reading with //converter:quality_regression_main.
         Build first: bazelisk build --config release_build \
             //converter:quality_regression_main //data_manager/oss:mozc.data
-  zenz  runs zenz-v3.2-small through floatype/scorer's zenz_eval (greedy decoding).
+  zenz  runs zenz-v3.2-small through floatype_scorer, the scorer process (greedy
+        decoding), sending one request at a time.
         Build first: cmake -S floatype/scorer -B floatype/scorer/build \
             -DCMAKE_BUILD_TYPE=Release && cmake --build floatype/scorer/build
 
@@ -52,10 +53,11 @@ def katakana_to_hiragana(text: str) -> str:
   )
 
 
-def zenz_input_line(left_context: str, reading_katakana: str) -> str:
-  """Formats one zenz_eval input line; zenz drops line breaks from the context anyway."""
-  context = left_context.replace("\t", " ").replace("\r", "").replace("\n", "")
-  return f"{context}\t{reading_katakana}\n"
+def zenz_request_line(request_id: int, left_context: str, reading_katakana: str) -> str:
+  """Formats a scorer request as floatype/scorer/protocol.h's FormatRequest does."""
+  def field(text: str) -> str:
+    return text.replace("\t", " ").replace("\r", "").replace("\n", "")
+  return f"{request_id}\t{field(left_context)}\t{field(reading_katakana)}\n"
 
 
 def levenshtein(a: str, b: str) -> int:
@@ -168,24 +170,32 @@ def convert_with_mozc(readings: list[str], binary: Path, data_file: Path) -> lis
 
 
 def convert_with_zenz(
-    lines: list[str], binary: Path, model: Path, threads: int
+    pairs: list[tuple[str, str]], binary: Path, model: Path, threads: int
 ) -> tuple[list[tuple[str, float, str]], dict]:
-  """Returns (output, milliseconds, stop reason) per input line, plus zenz_eval's stats."""
-  done = subprocess.run(
+  """Returns (output, milliseconds, stop reason) per (left context, reading), plus the scorer's stats.
+
+  Requests go one at a time because the scorer skips requests superseded by newer ones.
+  """
+  scorer = subprocess.Popen(
       [str(binary), "--model", str(model), "--threads", str(threads)],
-      input="".join(lines),
-      capture_output=True,
+      stdin=subprocess.PIPE,
+      stdout=subprocess.PIPE,
+      stderr=subprocess.PIPE,
       encoding="utf-8",
       errors="replace",  # A length cap can cut a character in half.
-      check=True,
   )
   results = []
-  for line in done.stdout.splitlines():
-    text, ms, stop = line.rsplit("\t", 2)
-    results.append((text, float(ms), stop))
-  if len(results) != len(lines):
-    raise SystemExit(f"expected {len(lines)} results, got {len(results)}")
-  return results, json.loads(done.stderr.strip().splitlines()[-1])
+  for request_id, (context, reading) in enumerate(pairs):
+    scorer.stdin.write(zenz_request_line(request_id, context, reading))
+    scorer.stdin.flush()
+    answer_id, text, stop, microseconds = scorer.stdout.readline().rstrip("\n").split("\t")
+    if int(answer_id) != request_id:
+      raise SystemExit(f"expected an answer to request {request_id}, got {answer_id}")
+    results.append((text, int(microseconds) / 1000, stop))
+  _, stderr = scorer.communicate()
+  if scorer.returncode != 0:
+    raise SystemExit(f"floatype_scorer exited with {scorer.returncode}: {stderr}")
+  return results, json.loads(stderr.strip().splitlines()[-1])
 
 
 def main() -> None:
@@ -211,13 +221,10 @@ def main() -> None:
         [katakana_to_hiragana(item["input"]) for item in items], binary, args.data_file
     )
   else:
-    binary = args.binary or Path("floatype/scorer/build/zenz_eval")
+    binary = args.binary or Path("floatype/scorer/build/floatype_scorer")
     model = fetch(ZENZ_URL, f"zenz-v3.2-small-{ZENZ_REVISION[:12]}-Q5_K_M.gguf", ZENZ_SHA256)
-    lines = [
-        zenz_input_line("" if args.no_context else item.get("context_text", ""), item["input"])
-        for item in items
-    ]
-    results, stats = convert_with_zenz(lines, binary, model, args.threads)
+    pairs = [("" if args.no_context else item.get("context_text", ""), item["input"]) for item in items]
+    results, stats = convert_with_zenz(pairs, binary, model, args.threads)
     top1 = [text for text, _, _ in results]
     extras = [{"ms": ms, "stop": stop} for _, ms, stop in results]
     report.update(stats, binary=str(binary), context=not args.no_context)

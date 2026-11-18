@@ -1,27 +1,29 @@
-// zenz_eval: converts katakana readings with a zenz model by greedy decoding.
+// floatype_scorer: the process that converts readings with zenz.
 //
-// Input (stdin): one "<left context>\t<katakana reading>" per line.
-// Output (stdout): "<conversion>\t<milliseconds>\t<stop>" per line, in order.
-// <stop> is
-//   eog (end-of-generation token), tag (zenz tag or line break) or cap (length
-//   cap).
-// On exit, prints load time and memory footprint as one JSON object to stderr.
+// The Mozc converter starts it with a socket as stdin and stdout and talks the
+// line protocol in protocol.h. Requests that are already superseded when the
+// scorer gets to them are skipped. The scorer exits when stdin closes, and then
+// prints its load time and memory footprint as one JSON object to stderr.
 //
-// Usage: zenz_eval --model <gguf> [--threads N] [--show_tokens]
+// Usage: floatype_scorer --model <gguf> [--threads N] [--show_tokens]
 // The backend is fixed at build time (GGML_METAL).
 
 #include <mach/mach.h>
+#include <unistd.h>
 
+#include <cerrno>
 #include <chrono>
+#include <csignal>
 #include <cstdio>
 #include <cstdlib>
-#include <iostream>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
 
 #include "gguf.h"
 #include "llama.h"
+#include "protocol.h"
 #include "zenz.h"
 
 namespace {
@@ -146,6 +148,18 @@ Completion Complete(llama_context* ctx, const llama_vocab* vocab,
   return out;
 }
 
+bool WriteAll(int fd, std::string_view data) {
+  while (!data.empty()) {
+    const ssize_t written = write(fd, data.data(), data.size());
+    if (written < 0) {
+      if (errno == EINTR) continue;
+      return false;
+    }
+    data.remove_prefix(written);
+  }
+  return true;
+}
+
 double ToMegabytes(double bytes) { return bytes / (1024.0 * 1024.0); }
 
 }  // namespace
@@ -168,11 +182,13 @@ int main(int argc, char** argv) {
     }
   }
   if (model_path.empty() || threads < 1) {
-    std::fprintf(
-        stderr,
-        "usage: zenz_eval --model <gguf> [--threads N] [--show_tokens]\n");
+    std::fprintf(stderr,
+                 "usage: floatype_scorer --model <gguf> [--threads N] "
+                 "[--show_tokens]\n");
     return 2;
   }
+  // A closed socket must end the loop through write() errors, not a signal.
+  std::signal(SIGPIPE, SIG_IGN);
 
   llama_log_set(LogErrorsOnly, nullptr);
   llama_backend_init();
@@ -182,6 +198,8 @@ int main(int argc, char** argv) {
   const std::vector<llama_model_kv_override> overrides =
       PreTokenizerOverrides(model_path);
   model_params.kv_overrides = overrides.data();
+  // The default callback prints progress dots to stderr.
+  model_params.progress_callback = [](float, void*) { return true; };
   llama_model* model =
       llama_model_load_from_file(model_path.c_str(), model_params);
   if (model == nullptr) {
@@ -205,21 +223,28 @@ int main(int argc, char** argv) {
   llama_sampler* greedy = llama_sampler_init_greedy();
   const double load_ms = MillisecondsSince(load_start);
 
+  std::string buffer;
   std::string line;
-  while (std::getline(std::cin, line)) {
-    const size_t tab = line.find('\t');
-    const std::string_view context =
-        tab == std::string::npos ? std::string_view()
-                                 : std::string_view(line).substr(0, tab);
-    const std::string_view reading =
-        tab == std::string::npos ? std::string_view(line)
-                                 : std::string_view(line).substr(tab + 1);
+  char chunk[1 << 16];
+  while (true) {
+    // read() returns what has arrived so far, so a burst of requests is seen
+    // together and only the latest one is converted.
+    const ssize_t n = read(STDIN_FILENO, chunk, sizeof(chunk));
+    if (n < 0 && errno == EINTR) continue;
+    if (n <= 0) break;
+    buffer.append(chunk, n);
+    if (floatype::scorer::TakeLatestLine(&buffer, &line) == 0) continue;
+    const std::optional<floatype::scorer::Request> request =
+        floatype::scorer::ParseRequest(line);
+    if (!request.has_value()) continue;
 
     const Clock::time_point start = Clock::now();
-    const std::vector<llama_token> prompt =
-        Tokenize(vocab, floatype::zenz::BuildPrompt(context, reading));
+    const std::vector<llama_token> prompt = Tokenize(
+        vocab,
+        floatype::zenz::BuildPrompt(request->left_context, request->reading));
     const int max_tokens =
-        static_cast<int>(Tokenize(vocab, reading).size()) + kOutputTokenMargin;
+        static_cast<int>(Tokenize(vocab, request->reading).size()) +
+        kOutputTokenMargin;
     if (show_tokens) {
       for (const llama_token token : prompt) {
         char piece[128];
@@ -231,9 +256,12 @@ int main(int argc, char** argv) {
     }
     const Completion completion =
         Complete(ctx, vocab, greedy, prompt, max_tokens);
-    std::cout << completion.text << '\t' << MillisecondsSince(start) << '\t'
-              << completion.stop << '\n'
-              << std::flush;
+    const floatype::scorer::Response response{
+        request->id, completion.text, completion.stop,
+        static_cast<uint64_t>(MillisecondsSince(start) * 1000)};
+    if (!WriteAll(STDOUT_FILENO, floatype::scorer::FormatResponse(response))) {
+      break;
+    }
   }
 
   // phys_footprint is what Activity Monitor shows as Memory; it includes GPU

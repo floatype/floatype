@@ -33,9 +33,12 @@ class AjimeeTest(unittest.TestCase):
     self.assertTrue(row["nfkc"])
     self.assertTrue(row["has_context"])
 
-  def test_zenz_input_line_keeps_the_line_protocol_intact(self):
-    self.assertEqual(ajimee.zenz_input_line("a\tb\r\nc", "キョウ"), "a bc\tキョウ\n")
-    self.assertEqual(ajimee.zenz_input_line("", "キョウ"), "\tキョウ\n")
+  def test_zenz_request_line_matches_the_scorer_protocol(self):
+    # Same expectation as FormatRequest in floatype/scorer/protocol_test.cc.
+    self.assertEqual(
+        ajimee.zenz_request_line(42, "熱が\tある\r\nよ", "キョウ"), "42\t熱が あるよ\tキョウ\n"
+    )
+    self.assertEqual(ajimee.zenz_request_line(0, "", "キョウ"), "0\t\tキョウ\n")
 
   def test_latency_summary(self):
     summary = ajimee.latency_summary([float(i) for i in range(1, 101)])
