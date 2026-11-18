@@ -1039,6 +1039,22 @@ TEST_F(KeyMapTest, Undo) {
   }
 }
 
+// floatype: in the Kotoeri keymap, the macOS default, Ctrl+Backspace deletes
+// the selected candidate from history while converting or predicting, next to
+// Ctrl+Delete, which needs fn on a laptop.
+TEST_F(KeyMapTest, KotoeriDeletesTheSelectedCandidateWithCtrlBackspace) {
+  KeyMapManager manager(GetDefaultConfig(config::Config::KOTOERI));
+  for (const absl::string_view key : {"Ctrl Backspace", "Ctrl Delete"}) {
+    commands::KeyEvent key_event;
+    ASSERT_TRUE(KeyParser::ParseKey(key, &key_event));
+    ConversionState::Commands command;
+    EXPECT_TRUE(manager.GetCommandPrediction(key_event, &command)) << key;
+    EXPECT_EQ(command, ConversionState::DELETE_SELECTED_CANDIDATE) << key;
+    EXPECT_TRUE(manager.GetCommandConversion(key_event, &command)) << key;
+    EXPECT_EQ(command, ConversionState::DELETE_SELECTED_CANDIDATE) << key;
+  }
+}
+
 TEST_F(KeyMapTest, Reconvert) {
   DirectInputState::Commands direct_command;
   PrecompositionState::Commands precomposition_command;

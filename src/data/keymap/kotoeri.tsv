@@ -57,6 +57,8 @@ Conversion	Backspace	Cancel
 Conversion	Ctrl ;	DisplayAsHalfWidth
 Conversion	Ctrl :	DisplayAsHalfAlphanumeric
 Conversion	Ctrl '	DisplayAsHalfAlphanumeric
+Conversion	Ctrl Backspace	DeleteSelectedCandidate
+Conversion	Ctrl Delete	DeleteSelectedCandidate
 Conversion	Ctrl a	SegmentFocusFirst
 Conversion	Ctrl b	SegmentFocusLeft
 Conversion	Ctrl d	SegmentFocusRight
@@ -135,6 +137,7 @@ Precomposition	OFF	IMEOff
 Precomposition	ON	IMEOn
 Precomposition	Shift Space	InsertAlternateSpace
 Precomposition	Space	InsertSpace
+Prediction	Ctrl Backspace	DeleteSelectedCandidate
 Prediction	Ctrl Delete	DeleteSelectedCandidate
 Suggestion	Ctrl n	PredictAndConvert
 Suggestion	Down	PredictAndConvert
