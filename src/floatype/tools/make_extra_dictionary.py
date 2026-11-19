@@ -35,6 +35,14 @@ PLACE_NAMES = (
     "71a3e28e8acead3793739ec3466826b01adedc168354957661ec57c18688a0a2",
 )
 
+# utuhiro78/mozcdic-ut-sudachidict, from WorksApplications' SudachiDict
+# (Apache License 2.0, with UniDic's and NEologd's notices).
+SUDACHIDICT = (
+    "https://raw.githubusercontent.com/utuhiro78/mozcdic-ut-sudachidict/"
+    "13129ddebe1cb8eabb63feccbe157adec4e1de01/mozcdic-ut-sudachidict.txt.bz2",
+    "1b9555338cc36606a5f497a2f57a0f9b948fa02d8c13d18ee9cfb5c99fb9d86e",
+)
+
 # Japanese Wikipedia's article titles (CC BY-SA), only to tell how well
 # known a word is; no title becomes an entry.
 JAWIKI_TITLES = (
@@ -48,6 +56,7 @@ NAME = "名詞,固有名詞,人名,一般,*,*,*"
 SURNAME = "名詞,固有名詞,人名,姓,*,*,*"
 GIVEN = "名詞,固有名詞,人名,名,*,*,*"
 PLACE = "名詞,固有名詞,地域,一般,*,*,*"
+NOUN = "名詞,一般,*,*,*,*,*"
 # Above most of Mozc's names (5000 to 8000), so a name never pushes an
 # ordinary word aside; it shows when nothing else spells the reading.
 NAME_COST = 9000
@@ -165,6 +174,18 @@ def plain(reading: str, value: str) -> bool:
           and 2 <= len(value) <= 25)
 
 
+def sudachi_cost(titles: Titles, surnames, given, reading: str, value: str):
+  """Words of letters alone only when Wikipedia knows them, as merge-ut does.
+  Names Mozc writes from a surname and a given name stay out: as plain nouns
+  they beat phrases (はやまるな became 葉山瑠菜)."""
+  if not plain(reading, value) or composable(reading, value, surnames, given):
+    return None
+  hits = titles.hits(value)
+  if hits == 0 and value.isascii():
+    return None
+  return known_cost(hits)
+
+
 def self_check() -> None:
   assert keeps_name("かとうまき", "加藤麻希")
   assert not keeps_name("やっちゃん", "やっちゃん"), "no kanji"
@@ -190,6 +211,8 @@ def main() -> None:
       "places": ut_rows(
           PLACE_NAMES, ids, pairs, seen, PLACE,
           lambda r, v: known_cost(titles.hits(v)) if plain(r, v) else None),
+      "sudachi": ut_rows(SUDACHIDICT, ids, pairs, seen, NOUN,
+                         lambda r, v: sudachi_cost(titles, surnames, given, r, v)),
   }
   for name, rows in outputs.items():
     out = OUT_DIR / f"dictionary_floatype_ut_{name}.txt"
