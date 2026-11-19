@@ -88,10 +88,22 @@ TEST_F(ScorerClientTest, RestartsADeadScorerAfterTheInterval) {
 TEST_F(ScorerClientTest, StartsAgainAtOnceAfterTheScorerIdledOut) {
   ScorerClient client({FakeScorer()});
   ASSERT_TRUE(client.Send(Request{1, "", "アイドル"}));
-  EXPECT_EQ(WaitForResponse(client, 1), std::nullopt);
+  // Nothing polls while the user is away, so the client only learns of the
+  // exit when the next request comes.
+  std::this_thread::sleep_for(std::chrono::milliseconds(200));
   // The scorer idles out a minute after its last request, so long after it
   // started; the request after that is not lost to the dead process.
   clock_.Advance(absl::Seconds(60));
+  ASSERT_TRUE(client.Send(Request{2, "", "ア"}));
+  EXPECT_TRUE(WaitForResponse(client, 2).has_value());
+}
+
+TEST_F(ScorerClientTest, WarmStartsAgainAfterTheScorerIdledOut) {
+  ScorerClient client({FakeScorer()});
+  ASSERT_TRUE(client.Send(Request{1, "", "アイドル"}));
+  std::this_thread::sleep_for(std::chrono::milliseconds(200));
+  clock_.Advance(absl::Seconds(60));
+  client.Warm();
   ASSERT_TRUE(client.Send(Request{2, "", "ア"}));
   EXPECT_TRUE(WaitForResponse(client, 2).has_value());
 }
