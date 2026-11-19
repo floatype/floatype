@@ -600,6 +600,11 @@ void ConfigDialog::SetUpFloatypeTab() {
       "かなの入力中に打った英単語を英字のままにし、インジケータに あ / A "
       "を出す");
 
+  heading("予測候補");
+  suggestAddedWordsCheckBox_ = check(
+      "足した辞書（人名、地名、SudachiDict、ニコニコ・pixiv）の語も出す"
+      "（オフなら、読みを最後まで打って変換したときだけ出る）");
+
   heading("候補の窓");
   candidateFontScaleSpinBox_ = spin(50, 300, 10, " %");
   form->addRow(text("文字の大きさ"), candidateFontScaleSpinBox_);
@@ -751,6 +756,7 @@ void ConfigDialog::ConvertFromProto(const config::Config& config) {
     directCommitCheckBoxes_[i]->setEnabled(config.use_direct_commit());
   }
   SET_CHECKBOX(mixedEnglishCheckBox_, mixed_english);
+  SET_CHECKBOX(suggestAddedWordsCheckBox_, suggest_added_words);
   SET_CHECKBOX(displayAmbiguousCheckBox_, display_ambiguous_romaji);
   candidateFontScaleSpinBox_->setValue(config.candidate_font_scale_percent());
   SET_CHECKBOX(showIndicatorCheckBox_, show_indicator);
@@ -877,6 +883,7 @@ void ConfigDialog::ConvertToProto(config::Config* config) const {
   }
   config->set_direct_commit_characters(characters);
   GET_CHECKBOX(mixedEnglishCheckBox_, mixed_english);
+  GET_CHECKBOX(suggestAddedWordsCheckBox_, suggest_added_words);
   GET_CHECKBOX(displayAmbiguousCheckBox_, display_ambiguous_romaji);
   config->set_candidate_font_scale_percent(candidateFontScaleSpinBox_->value());
   GET_CHECKBOX(showIndicatorCheckBox_, show_indicator);

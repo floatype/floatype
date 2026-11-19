@@ -121,6 +121,7 @@ class ConfigDialog : public QDialog, private Ui::ConfigDialog {
   // One per character Mozkey offers, in kDirectCommitCharacters' order.
   std::vector<QCheckBox*> directCommitCheckBoxes_;
   QCheckBox* mixedEnglishCheckBox_;
+  QCheckBox* suggestAddedWordsCheckBox_;
   QCheckBox* displayAmbiguousCheckBox_;
   QSpinBox* candidateFontScaleSpinBox_;
   QCheckBox* showIndicatorCheckBox_;
