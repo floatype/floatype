@@ -190,5 +190,29 @@ void CharacterFormEditor::Save(config::Config *config) {
     rule->set_conversion_character_form(conversion_form);
   }
 }
+std::optional<
+    std::pair<config::Config::CharacterForm, config::Config::CharacterForm>>
+CharacterFormEditor::Forms(absl::string_view group) const {
+  for (int row = 0; row < rowCount(); ++row) {
+    if (item(row, 0) != nullptr && StringToGroup(item(row, 0)->text()) == group) {
+      return std::pair{StringToForm(item(row, 1)->text()),
+                       StringToForm(item(row, 2)->text())};
+    }
+  }
+  return std::nullopt;
+}
+
+void CharacterFormEditor::SetForms(absl::string_view group,
+                                   config::Config::CharacterForm preedit,
+                                   config::Config::CharacterForm conversion) {
+  for (int row = 0; row < rowCount(); ++row) {
+    if (item(row, 0) != nullptr && StringToGroup(item(row, 0)->text()) == group) {
+      item(row, 1)->setText(FormToString(preedit));
+      item(row, 2)->setText(FormToString(conversion));
+      return;
+    }
+  }
+}
+
 }  // namespace gui
 }  // namespace mozc

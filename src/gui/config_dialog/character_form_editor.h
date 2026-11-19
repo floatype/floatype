@@ -32,6 +32,10 @@
 
 #include <QTableWidget>
 #include <memory>
+#include <optional>
+#include <utility>
+
+#include "absl/strings/string_view.h"
 
 #include "gui/config_dialog/combobox_delegate.h"
 #include "protocol/config.pb.h"
@@ -46,6 +50,14 @@ class CharacterFormEditor : public QTableWidget {
 
   void Load(const config::Config &config);
   void Save(config::Config *config);
+
+  // floatype: the typing and conversion forms of the row for `group` ("0" for
+  // digits), if the table has one, and setting them.
+  std::optional<std::pair<config::Config::CharacterForm,
+                          config::Config::CharacterForm>>
+  Forms(absl::string_view group) const;
+  void SetForms(absl::string_view group, config::Config::CharacterForm preedit,
+                config::Config::CharacterForm conversion);
 
  private:
   std::unique_ptr<ComboBoxDelegate> delegate_;

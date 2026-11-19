@@ -66,6 +66,7 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <iterator>
 #include <utility>
 #include <vector>
 
@@ -761,6 +762,33 @@ void ConfigDialog::SetUpFloatypeSettings() {
   zenzSuggestionLearningCheckBox_ =
       AddCheckBox(memory, "zenz が直した確定を予測候補に覚えさせる");
 
+  // 一般: the width of digits, the 全角・半角 table's digit row in one choice.
+  numberFormComboBox_ = new QComboBox();
+  for (const char* item :
+       {"半角", "全角", "打つと全角・変換は前回の形（Mozc の既定）",
+        "入力補助タブの表で個別に設定"}) {
+    numberFormComboBox_->addItem(Text(item));
+  }
+  {
+    const int row = gridLayout->rowCount();
+    gridLayout->addWidget(WithBadge(new QLabel(Text("数字の入力"))), row, 0);
+    gridLayout->addWidget(numberFormComboBox_, row, 1);
+  }
+  connect(numberFormComboBox_, &QComboBox::activated, this, [this](int index) {
+    constexpr std::pair<config::Config::CharacterForm,
+                        config::Config::CharacterForm>
+        kForms[] = {{config::Config::HALF_WIDTH, config::Config::HALF_WIDTH},
+                    {config::Config::FULL_WIDTH, config::Config::FULL_WIDTH},
+                    {config::Config::FULL_WIDTH, config::Config::LAST_FORM}};
+    if (index >= 0 && index < static_cast<int>(std::size(kForms))) {
+      characterFormEditor->SetForms("0", kForms[index].first,
+                                    kForms[index].second);
+    }
+    RefreshNumberForm();
+  });
+  connect(characterFormEditor, &QTableWidget::itemChanged, this,
+          &ConfigDialog::RefreshNumberForm);
+
   // サジェスト
   suggestAddedWordsCheckBox_ = new QCheckBox(
       Text("足した辞書（人名、地名、SudachiDict、ニコニコ・pixiv）の語も出す"
@@ -1296,6 +1324,7 @@ void ConfigDialog::ConvertFromProto(const config::Config& config) {
   SET_COMBOBOX(yenSignComboBox, YenSignCharacter, yen_sign_character);
 
   characterFormEditor->Load(config);
+  RefreshNumberForm();
 
 #ifdef __APPLE__
   startupCheckBox->setChecked(MacUtil::CheckPrelauncherLoginItemStatus());
@@ -1550,6 +1579,28 @@ void ConfigDialog::LaunchAdministrationDialog() {
   if constexpr (port::IsWindows()) {
     client_->LaunchTool("administration_dialog", "");
   }
+}
+
+// Shows the table's digit row in the 数字の入力 choice; a pair the choice does
+// not offer shows as set in the table, and is left as it is.
+void ConfigDialog::RefreshNumberForm() {
+  const QSignalBlocker blocker(numberFormComboBox_);
+  const auto forms = characterFormEditor->Forms("0");
+  int index = 3;
+  if (forms.has_value()) {
+    const auto [preedit, conversion] = *forms;
+    if (preedit == config::Config::HALF_WIDTH &&
+        conversion == config::Config::HALF_WIDTH) {
+      index = 0;
+    } else if (preedit == config::Config::FULL_WIDTH &&
+               conversion == config::Config::FULL_WIDTH) {
+      index = 1;
+    } else if (preedit == config::Config::FULL_WIDTH &&
+               conversion == config::Config::LAST_FORM) {
+      index = 2;
+    }
+  }
+  numberFormComboBox_->setCurrentIndex(index);
 }
 
 void ConfigDialog::EnableApplyButton() {

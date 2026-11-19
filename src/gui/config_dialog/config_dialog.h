@@ -129,6 +129,9 @@ class ConfigDialog : public QDialog, private Ui::ConfigDialog {
   QCheckBox* mixedEnglishCheckBox_;
   QCheckBox* suggestAddedWordsCheckBox_;
   QCheckBox* kindMarkCheckBox_;
+  // The width of digits: the 全角・半角 table's digit row in one choice.
+  QComboBox* numberFormComboBox_;
+  void RefreshNumberForm();
   QCheckBox* displayAmbiguousCheckBox_;
   QCheckBox* showIndicatorCheckBox_;
   QComboBox* indicatorPlacementComboBox_;
