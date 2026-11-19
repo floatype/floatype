@@ -2057,16 +2057,8 @@ TEST_F(EngineConverterTest, SuggestAndPredict) {
     EXPECT_FALSE(output.has_result());
     EXPECT_TRUE(output.has_preedit());
     EXPECT_TRUE(output.has_candidate_window());
-    EXPECT_TRUE(output.candidate_window().has_footer());
-#if defined(CHANNEL_DEV) && defined(GOOGLE_JAPANESE_INPUT_BUILD)
-    EXPECT_FALSE(output.candidate_window().footer().has_label());
-    EXPECT_TRUE(output.candidate_window().footer().has_sub_label());
-#else   // CHANNEL_DEV && GOOGLE_JAPANESE_INPUT_BUILD
-    EXPECT_TRUE(output.candidate_window().footer().has_label());
-    EXPECT_FALSE(output.candidate_window().footer().has_sub_label());
-#endif  // CHANNEL_DEV && GOOGLE_JAPANESE_INPUT_BUILD
-    EXPECT_FALSE(output.candidate_window().footer().index_visible());
-    EXPECT_FALSE(output.candidate_window().footer().logo_visible());
+    // floatype: suggestions have no footer.
+    EXPECT_FALSE(output.candidate_window().has_footer());
 
     const commands::CandidateWindow& candidate_window =
         output.candidate_window();
