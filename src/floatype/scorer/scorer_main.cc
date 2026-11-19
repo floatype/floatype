@@ -12,6 +12,7 @@
 #include <poll.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <cerrno>
 #include <chrono>
 #include <csignal>
@@ -105,10 +106,24 @@ std::vector<llama_token> Tokenize(const llama_vocab* vocab,
   return tokens;
 }
 
+// The most deviations from zenz's own answer tried for a request with
+// exclusions; each costs about as much as a short answer.
+constexpr size_t kMaxDeviations = 8;
+
 struct Completion {
   std::string text;
   const char* stop = "cap";
+  // The tokens taken: the accepted draft and the generated ones, including
+  // the end-of-generation or tag token that ended them.
+  std::vector<llama_token> tokens;
 };
+
+std::string Piece(const llama_vocab* vocab, llama_token token) {
+  char piece[128];
+  const int len =
+      llama_token_to_piece(vocab, token, piece, sizeof(piece), 0, false);
+  return len > 0 ? std::string(piece, len) : "";
+}
 
 // Greedy decoding until an end-of-generation token, a zenz tag or max_tokens.
 // The draft, Mozc's conversion, is checked first in the same pass as the
@@ -172,12 +187,8 @@ Completion Complete(llama_context* ctx, const llama_vocab* vocab,
     if (accepted == draft.size() || token != draft[accepted]) {
       break;
     }
-    char piece[128];
-    const int len =
-        llama_token_to_piece(vocab, token, piece, sizeof(piece), 0, false);
-    if (len > 0) {
-      out.text.append(piece, len);
-    }
+    out.text += Piece(vocab, token);
+    out.tokens.push_back(token);
   }
   // The cache keeps the prompt and the accepted draft only.
   llama_memory_seq_rm(memory, 0,
@@ -187,16 +198,12 @@ Completion Complete(llama_context* ctx, const llama_vocab* vocab,
     if (i > static_cast<int>(accepted)) {
       token = llama_sampler_sample(greedy, ctx, -1);
     }
+    out.tokens.push_back(token);
     if (llama_vocab_is_eog(vocab, token)) {
       out.stop = "eog";
       return out;
     }
-    char piece[128];
-    const int len =
-        llama_token_to_piece(vocab, token, piece, sizeof(piece), 0, false);
-    if (len > 0) {
-      out.text.append(piece, len);
-    }
+    out.text += Piece(vocab, token);
     if (const size_t stop = floatype::zenz::FindStop(out.text);
         stop != std::string::npos) {
       out.text.resize(stop);
@@ -212,6 +219,159 @@ Completion Complete(llama_context* ctx, const llama_vocab* vocab,
     cached.push_back(token);
   }
   return out;
+}
+
+bool IsExcluded(const std::vector<std::string>& excluded,
+                std::string_view text) {
+  const std::string folded = floatype::zenz::FoldWidth(text);
+  return std::any_of(excluded.begin(), excluded.end(),
+                     [&](const std::string& conversion) {
+                       return floatype::zenz::FoldWidth(conversion) == folded;
+                     });
+}
+
+// A place where zenz's answer could go another way: instead of the answer's
+// token at `position`, zenz's runner-up there, `token`, which scored `margin`
+// lower (a logit gap, which is also the log-probability gap).
+struct Fork {
+  size_t position = 0;
+  float margin = 0;
+  llama_token token = 0;
+  // The answer through the fork, once decoded.
+  std::optional<Completion> answer;
+};
+
+// zenz's answer to `prompt` and the forks along it. Each "not this" for the
+// same conversion asks again, so the forks are found and decoded only once.
+struct Answers {
+  std::vector<llama_token> prompt;
+  Completion best;
+  int max_tokens = 0;
+  // Closest first; nullopt until a request with exclusions needs them.
+  std::optional<std::vector<Fork>> forks;
+};
+
+// Scores the best answer in one pass and returns the closest kMaxDeviations
+// of its forks that keep its length; nullopt when the pass fails. `cached` as
+// in Complete().
+std::optional<std::vector<Fork>> FindForks(llama_context* ctx,
+                                           const llama_vocab* vocab,
+                                           const Answers& answers,
+                                           std::vector<llama_token>& cached) {
+  const std::vector<llama_token>& prompt = answers.prompt;
+  const std::vector<llama_token>& path = answers.best.tokens;
+  llama_memory_t memory = llama_get_memory(ctx);
+  size_t kept = 0;
+  while (kept + 1 < prompt.size() && kept < cached.size() &&
+         cached[kept] == prompt[kept]) {
+    ++kept;
+  }
+  llama_memory_seq_rm(memory, 0, static_cast<llama_pos>(kept), -1);
+  cached.resize(kept);
+  // Logits after the prompt and after each token of the path but its last.
+  const size_t n = prompt.size() - kept + path.size() - 1;
+  llama_batch batch = llama_batch_init(static_cast<int32_t>(n), 0, 1);
+  for (size_t i = 0; i < n; ++i) {
+    const size_t position = kept + i;
+    batch.token[i] = position < prompt.size() ? prompt[position]
+                                              : path[position - prompt.size()];
+    batch.pos[i] = static_cast<llama_pos>(position);
+    batch.n_seq_id[i] = 1;
+    batch.seq_id[i][0] = 0;
+    batch.logits[i] = position + 1 >= prompt.size();
+    cached.push_back(batch.token[i]);
+  }
+  batch.n_tokens = static_cast<int32_t>(n);
+  const int32_t decoded = llama_decode(ctx, batch);
+  llama_batch_free(batch);
+  if (decoded != 0) {
+    llama_memory_clear(memory, /*data=*/true);
+    cached.clear();
+    return std::nullopt;
+  }
+  // The token that ended the answer is no part of its text.
+  const size_t text_tokens = std::string_view(answers.best.stop) == "cap"
+                                 ? path.size()
+                                 : path.size() - 1;
+  const int32_t n_vocab = llama_vocab_n_tokens(vocab);
+  std::vector<Fork> forks;
+  for (size_t i = 0;
+       i < text_tokens && static_cast<int>(i) < answers.max_tokens; ++i) {
+    const float* logits = llama_get_logits_ith(
+        ctx, static_cast<int32_t>(prompt.size() - 1 - kept + i));
+    llama_token best = -1;
+    for (llama_token token = 0; token < n_vocab; ++token) {
+      if (token != path[i] && (best < 0 || logits[token] > logits[best])) {
+        best = token;
+      }
+    }
+    // Ending the answer earlier or later changes its length, and the answer
+    // must still spell the whole reading in Mozc's segments.
+    if (best >= 0 && !llama_vocab_is_eog(vocab, best) &&
+        floatype::zenz::FindStop(Piece(vocab, best)) == std::string::npos) {
+      forks.push_back({i, logits[path[i]] - logits[best], best});
+    }
+  }
+  std::stable_sort(
+      forks.begin(), forks.end(),
+      [](const Fork& a, const Fork& b) { return a.margin < b.margin; });
+  if (forks.size() > kMaxDeviations) {
+    forks.resize(kMaxDeviations);
+  }
+  return forks;
+}
+
+// zenz's next best answer when its own is excluded: the runner-up at one fork
+// of it, then greedy decoding, trying the closest forks first. The stop is
+// "exhausted" when no fork gives an answer that is not excluded.
+Completion NextBest(llama_context* ctx, const llama_vocab* vocab,
+                    llama_sampler* greedy, Answers& answers,
+                    const std::vector<std::string>& excluded,
+                    std::vector<llama_token>& cached, bool show_tokens) {
+  const std::vector<llama_token>& path = answers.best.tokens;
+  if (path.empty()) {
+    return {"", "exhausted"};
+  }
+  if (!answers.forks.has_value()) {
+    answers.forks = FindForks(ctx, vocab, answers, cached);
+    if (!answers.forks.has_value()) {
+      return {"", "error"};
+    }
+  }
+  const size_t text_tokens = std::string_view(answers.best.stop) == "cap"
+                                 ? path.size()
+                                 : path.size() - 1;
+  for (Fork& fork : *answers.forks) {
+    if (!fork.answer.has_value()) {
+      std::vector<llama_token> start = answers.prompt;
+      start.insert(start.end(), path.begin(), path.begin() + fork.position);
+      start.push_back(fork.token);
+      // The rest of the answer often follows again, so it is the draft.
+      Completion next = Complete(
+          ctx, vocab, greedy, start,
+          std::vector<llama_token>(path.begin() + fork.position + 1,
+                                   path.begin() + text_tokens),
+          answers.max_tokens - static_cast<int>(fork.position) - 1, cached);
+      if (std::string_view(next.stop) == "error") {
+        return next;
+      }
+      std::string text;
+      for (size_t i = 0; i < fork.position; ++i) {
+        text += Piece(vocab, path[i]);
+      }
+      next.text = text + Piece(vocab, fork.token) + next.text;
+      if (show_tokens) {
+        std::fprintf(stderr, "fork %zu margin %.3f: %s %s\n", fork.position,
+                     fork.margin, next.text.c_str(), next.stop);
+      }
+      fork.answer = std::move(next);
+    }
+    if (!fork.answer->text.empty() &&
+        !IsExcluded(excluded, fork.answer->text)) {
+      return *fork.answer;
+    }
+  }
+  return {"", "exhausted"};
 }
 
 bool WriteAll(int fd, std::string_view data) {
@@ -302,6 +462,8 @@ int main(int argc, char** argv) {
   }
   llama_sampler* greedy = llama_sampler_init_greedy();
   std::vector<llama_token> cached;
+  // The last request's answers.
+  std::optional<Answers> last;
   const double load_ms = MillisecondsSince(load_start);
 
   std::string buffer;
@@ -358,10 +520,26 @@ int main(int argc, char** argv) {
     if (!reuse_cache) {
       cached.clear();
     }
-    const Completion completion =
-        fits ? Complete(ctx, vocab, greedy, prompt, std::move(draft),
-                        max_tokens, cached)
-             : Completion{"", "error"};
+    Completion completion;
+    if (!request->excluded.empty() && last.has_value() &&
+        last->prompt == prompt) {
+      // Asked again for the same conversion: zenz's answer is known.
+      completion = last->best;
+    } else {
+      completion = fits ? Complete(ctx, vocab, greedy, prompt, std::move(draft),
+                                   max_tokens, cached)
+                        : Completion{"", "error"};
+      last.reset();
+      if (std::string_view(completion.stop) != "error") {
+        last = Answers{prompt, completion, max_tokens, std::nullopt};
+      }
+    }
+    if (last.has_value() && !request->excluded.empty() &&
+        (completion.text.empty() ||
+         IsExcluded(request->excluded, completion.text))) {
+      completion = NextBest(ctx, vocab, greedy, *last, request->excluded,
+                            cached, show_tokens);
+    }
     const floatype::scorer::Response response{
         request->id, completion.text, completion.stop,
         static_cast<uint64_t>(MillisecondsSince(start) * 1000)};

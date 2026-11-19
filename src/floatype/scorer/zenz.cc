@@ -67,4 +67,25 @@ size_t FindStop(std::string_view text) {
   return std::string_view::npos;
 }
 
+std::string FoldWidth(std::string_view text) {
+  std::string out;
+  out.reserve(text.size());
+  for (size_t i = 0; i < text.size(); ++i) {
+    // U+FF01..U+FF5E are EF BC 81..BF and EF BD 80..9E in UTF-8.
+    if (i + 2 < text.size() && static_cast<unsigned char>(text[i]) == 0xEF) {
+      const unsigned char second = text[i + 1];
+      const unsigned char third = text[i + 2];
+      if ((second == 0xBC && third >= 0x81 && third <= 0xBF) ||
+          (second == 0xBD && third >= 0x80 && third <= 0x9E)) {
+        out.push_back(static_cast<char>(
+            (second == 0xBC ? 0x21 - 0x81 : 0x60 - 0x80) + third));
+        i += 2;
+        continue;
+      }
+    }
+    out.push_back(text[i]);
+  }
+  return out;
+}
+
 }  // namespace floatype::zenz

@@ -51,6 +51,20 @@ void TestRequestRoundTrip() {
   Expect(ParseRequest("1\t\tキョウ")->draft.empty(), "the draft is optional");
 }
 
+void TestExcludedConversions() {
+  const std::string line =
+      FormatRequest(Request{3, "", "キョウ", "", {"今日", "京\t"}});
+  Expect(line == "3\t\tキョウ\t\t今日\t京 \n",
+         "exclusions follow the draft field, which may be empty");
+  const auto request = ParseRequest(WithoutNewline(line));
+  Expect(request.has_value() && request->draft.empty() &&
+             request->excluded.size() == 2 && request->excluded[0] == "今日" &&
+             request->excluded[1] == "京 ",
+         "exclusions parse back in order");
+  Expect(ParseRequest("1\t\tキョウ\t今日")->excluded.empty(),
+         "a request with a draft only excludes nothing");
+}
+
 void TestResponseRoundTrip() {
   const std::string line = FormatResponse(Response{7, "今日", "eog", 12500});
   Expect(line == "7\t今日\teog\t12500\n", "a response is one line");
@@ -85,6 +99,7 @@ void TestTakeLatestLine() {
 
 int main() {
   TestRequestRoundTrip();
+  TestExcludedConversions();
   TestResponseRoundTrip();
   TestTakeLatestLine();
   if (failures == 0) {

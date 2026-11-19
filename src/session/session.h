@@ -283,8 +283,10 @@ class Session {
 
   // floatype: corrects each conversion once with zenz.
   floatype::ZenzCorrector zenz_{floatype::ZenzCorrector::DefaultClient()};
-  // Sends the new conversion to zenz and asks the client to call back.
-  void RequestZenz(commands::Command* command);
+  // Sends the new conversion to zenz and asks the client to call back. With
+  // `not_this`, the user turned down the conversion on screen (see
+  // ZenzCorrector::Request()).
+  void RequestZenz(commands::Command* command, bool not_this = false);
   // After a typed character: starts the scorer if it ended after idling, so
   // it has the model loaded when the user pauses.
   void WarmZenz();
@@ -340,11 +342,15 @@ class Session {
   // Shows the correction the user committed before for this conversion's
   // reading, if any. Returns whether it did.
   bool ApplyAcceptedCorrection();
-  // The manual zenz key: converts if needed and asks zenz now.
+  // The manual zenz key: converts if needed and asks zenz now. On a
+  // conversion already shown, it means "not this": zenz answers something
+  // else.
   bool CorrectWithZenzNow(commands::Command* command);
   // Space while zenz's correction is shown: Mozc's result again.
   bool ShowMozcAgain(absl::Span<const int> zenz_indices, bool live,
                      commands::Command* command);
+  // Puts Mozc's candidates back on top where zenz's correction moved others.
+  void RestoreMozcOrder(absl::Span<const int> zenz_indices);
   // Tells the client what the indicator next to the composition shows.
   void SetIndicator(commands::Command* command) const;
   // Tells the renderer the candidate window's font scale and colors, when

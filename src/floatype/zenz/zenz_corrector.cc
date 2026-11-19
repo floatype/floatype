@@ -26,6 +26,7 @@
 #include "converter/segments.h"
 #include "floatype/scorer/protocol.h"
 #include "floatype/zenz/scorer_client.h"
+#include "floatype/zenz/zenz_memory.h"
 
 namespace mozc::floatype {
 namespace {
@@ -138,6 +139,24 @@ std::string Fingerprint(const Segments& segments) {
   return fingerprint;
 }
 
+uint64_t NextId() {
+  static uint64_t last_id = 0;
+  return ++last_id;
+}
+
+// A request goes in one write to a socket whose buffer holds 8KB (macOS's
+// net.local.stream.sendspace), and a partial write stops the scorer, so
+// "not this" ends where its exclusions would take more than this.
+constexpr size_t kMaxRejectedBytes = 4096;
+
+bool FitsRequest(const std::vector<std::string>& rejected) {
+  size_t bytes = 0;
+  for (const std::string& conversion : rejected) {
+    bytes += conversion.size() + 1;
+  }
+  return bytes <= kMaxRejectedBytes;
+}
+
 }  // namespace
 
 namespace {
@@ -205,7 +224,7 @@ void ZenzCorrector::Warm() {
 }
 
 bool ZenzCorrector::Request(const Segments& segments,
-                            absl::string_view left_context) {
+                            absl::string_view left_context, bool not_this) {
   pending_.reset();
   if (client_ == nullptr || segments.conversion_segments_size() == 0) {
     return false;
@@ -221,8 +240,11 @@ bool ZenzCorrector::Request(const Segments& segments,
   if (Util::CharsLen(reading) > kMaxReadingChars) {
     return false;
   }
-  static uint64_t last_id = 0;
-  const uint64_t id = ++last_id;
+  if (std::string key = absl::StrCat(reading, "\t", left_context);
+      !not_this || key != rejected_for_) {
+    rejected_for_ = std::move(key);
+    rejected_.clear();
+  }
   // Mozc's conversion as the draft: the scorer checks it in one pass, which
   // takes AJIMEE-Bench's median from 24.6ms to 20.4ms with the same answers
   // but for 2 of 200 (batched arithmetic), both wrong either way.
@@ -232,12 +254,22 @@ bool ZenzCorrector::Request(const Segments& segments,
       draft += segment.candidate(0).value;
     }
   }
-  if (!client_->Send(::floatype::scorer::Request{
-          id, std::string(left_context), japanese::HiraganaToKatakana(reading),
-          std::move(draft)})) {
+  if (not_this) {
+    Reject(draft);
+    if (!FitsRequest(rejected_)) {
+      return false;
+    }
+  }
+  Pending pending{{NextId(), std::string(left_context),
+                   japanese::HiraganaToKatakana(reading), std::move(draft),
+                   not_this ? rejected_ : std::vector<std::string>()},
+                  Clock::GetAbslTime(),
+                  Fingerprint(segments),
+                  not_this};
+  if (!client_->Send(pending.request)) {
     return false;
   }
-  pending_ = Pending{id, Clock::GetAbslTime(), Fingerprint(segments)};
+  pending_ = std::move(pending);
   return true;
 }
 
@@ -247,27 +279,48 @@ ZenzCorrector::PollResult ZenzCorrector::Poll(const Segments& segments) {
     return {PollResult::kDone, {}};
   }
   const std::optional<Response> response = client_->Poll();
-  if (!response.has_value() || response->id != pending_->id) {
+  if (!response.has_value() || response->id != pending_->request.id) {
     if (Clock::GetAbslTime() - pending_->sent >= timeout_) {
       Cancel();
       return {PollResult::kDone, {}};
     }
     return {PollResult::kWait, {}};
   }
+  Pending pending = *std::move(pending_);
   Cancel();
+  PollResult result = Judge(segments, *response);
+  if (result.kind == PollResult::kApply || response->conversion.empty()) {
+    return result;
+  }
+  // An answer that shows nothing new is not asked for again.
+  Reject(response->conversion);
+  if (pending.not_this && pending.asks < kMaxAsks && FitsRequest(rejected_)) {
+    pending.request.id = NextId();
+    pending.request.excluded = rejected_;
+    ++pending.asks;
+    if (client_->Send(pending.request)) {
+      pending_ = std::move(pending);
+      return {PollResult::kWait, {}};
+    }
+  }
+  return result;
+}
+
+ZenzCorrector::PollResult ZenzCorrector::Judge(const Segments& segments,
+                                               const Response& response) const {
   // A length cap means zenz did not finish its answer.
-  if (response->stop != "eog" && response->stop != "tag") {
+  if (response.stop != "eog" && response.stop != "tag") {
     return {PollResult::kDone, {}};
   }
   // zenz hands the reading back unconverted when it does not know the words,
   // where Mozc's dictionary usually does. On Mozc's regression set this halves
   // the conversions zenz makes worse (20 to 10), at the cost of 2 of 48 wins.
   if (japanese::FullWidthAsciiToHalfWidthAscii(
-          japanese::KatakanaToHiragana(response->conversion)) ==
+          japanese::KatakanaToHiragana(response.conversion)) ==
       japanese::FullWidthAsciiToHalfWidthAscii(Reading(segments))) {
     return {PollResult::kDone, {}};
   }
-  if (!KeepsTypedAscii(segments, response->conversion)) {
+  if (!KeepsTypedAscii(segments, response.conversion)) {
     return {PollResult::kDone, {}};
   }
   // Rules measured and left out (floatype/eval/regression.py on Mozc's
@@ -285,14 +338,27 @@ ZenzCorrector::PollResult ZenzCorrector::Poll(const Segments& segments) {
   // took the regression set from 254 to 252 right, and refusing zenz's
   // traded a harm for a win; both made AJIMEE-Bench's MinCER worse.
   std::optional<std::vector<int>> indices =
-      MapToCandidates(segments, response->conversion);
+      MapToCandidates(segments, response.conversion);
   if (!indices.has_value() ||
       std::all_of(indices->begin(), indices->end(),
                   [](int index) { return index == 0; })) {
     return {PollResult::kDone, {}};
   }
-  return {PollResult::kApply, *std::move(indices), Reading(segments),
-          response->conversion};
+  // A correction the user stopped before is not made again.
+  std::string reading = Reading(segments);
+  if (learning_ &&
+      ZenzMemory::Stopped().Contains(reading, response.conversion)) {
+    return {PollResult::kDone, {}};
+  }
+  return {PollResult::kApply, *std::move(indices), std::move(reading),
+          response.conversion};
+}
+
+void ZenzCorrector::Reject(absl::string_view conversion) {
+  if (std::find(rejected_.begin(), rejected_.end(), conversion) ==
+      rejected_.end()) {
+    rejected_.emplace_back(conversion);
+  }
 }
 
 ScorerClient* ZenzCorrector::DefaultClient() {

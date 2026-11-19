@@ -61,3 +61,8 @@ foreach(test zenz_test protocol_test)
   target_link_libraries(${test} PRIVATE zenz_text)
   add_test(NAME ${test} COMMAND ${test})
 endforeach()
+# Runs the scorer with the model.
+add_executable(scorer_test scorer_test.cc)
+target_link_libraries(scorer_test PRIVATE zenz_text)
+add_test(NAME scorer_test
+  COMMAND scorer_test $<TARGET_FILE:floatype_scorer> ${ZENZ_MODEL})

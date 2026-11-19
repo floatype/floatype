@@ -19,6 +19,10 @@ std::string BuildPrompt(std::string_view left_context,
 // in generated text, where the conversion ends; npos when there is none.
 size_t FindStop(std::string_view text);
 
+// `text` with full-width ASCII (U+FF01..U+FF5E) in half width, so that
+// conversions that differ only in width compare equal, as Mozc shows them.
+std::string FoldWidth(std::string_view text);
+
 }  // namespace floatype::zenz
 
 #endif  // FLOATYPE_SCORER_ZENZ_H_

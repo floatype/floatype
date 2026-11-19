@@ -58,6 +58,14 @@ void TestFindStop() {
   Expect(FindStop("ab\rcd") == 2, "stops at a carriage return");
 }
 
+void TestFoldWidth() {
+  using floatype::zenz::FoldWidth;
+  Expect(FoldWidth("？（３）ａＺ～") == "?(3)aZ~", "full-width ASCII folds");
+  Expect(FoldWidth("今日は") == "今日は", "other text stays");
+  Expect(FoldWidth("！＂") == "!\"", "the first code points of the range");
+  Expect(FoldWidth("｟") == "｟", "U+FF5F is not ASCII");
+}
+
 }  // namespace
 
 int main() {
@@ -65,6 +73,7 @@ int main() {
   TestPromptWithContext();
   TestPromptKeepsLast40Characters();
   TestFindStop();
+  TestFoldWidth();
   if (failures == 0) {
     std::puts("zenz_test: all passed");
   }

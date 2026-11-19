@@ -2992,7 +2992,9 @@ void Session::StopWaitingForZenz() {
 }
 
 bool Session::CorrectWithZenzNow(commands::Command* command) {
-  if (context_->state() == ImeContext::COMPOSITION) {
+  // On a conversion already shown, Mozc's or zenz's, the key says "not this".
+  const bool not_this = context_->state() != ImeContext::COMPOSITION;
+  if (!not_this) {
     // Converts first, the way the user has set conversions to look.
     const bool live = floatype::SessionFeaturesEnabled() &&
                       context_->GetConfig().use_live_conversion();
@@ -3008,15 +3010,12 @@ bool Session::CorrectWithZenzNow(commands::Command* command) {
       Output(command);
     }
   }
-  // Asks zenz now, after an automatic correction too; the callback replaces
-  // any scheduled one.
-  RequestZenz(command);
+  // Asks zenz now; the callback replaces any scheduled correction.
+  RequestZenz(command, not_this);
   return true;
 }
 
-bool Session::ShowMozcAgain(absl::Span<const int> zenz_indices, bool live,
-                            commands::Command* command) {
-  command->mutable_output()->set_consumed(true);
+void Session::RestoreMozcOrder(absl::Span<const int> zenz_indices) {
   // zenz moved its candidate to the top, so Mozc's is second where it moved
   // one. shortcut: zenz's candidate stays second instead of where Mozc ranked
   // it, which also keeps it within reach.
@@ -3027,6 +3026,12 @@ bool Session::ShowMozcAgain(absl::Span<const int> zenz_indices, bool live,
   // zenz's candidate is the user's to pick now, and learned if picked.
   context_->mutable_converter()->PromoteCandidates(
       mozc_indices, 0, converter::Attribute::NO_LEARNING);
+}
+
+bool Session::ShowMozcAgain(absl::Span<const int> zenz_indices, bool live,
+                            commands::Command* command) {
+  command->mutable_output()->set_consumed(true);
+  RestoreMozcOrder(zenz_indices);
   live_conversion_ = live;
   if (live) {
     OutputLiveConversion(command);
@@ -3217,16 +3222,18 @@ void Session::WarmZenz() {
   zenz_.Warm();
 }
 
-void Session::RequestZenz(commands::Command* command) {
+void Session::RequestZenz(commands::Command* command, bool not_this) {
   const config::Config& config = context_->GetConfig();
   if (!config.use_zenz()) {
     return;
   }
   zenz_.set_timeout(absl::Milliseconds(config.zenz_timeout_millisec()));
+  zenz_.set_learning(config.zenz_learning());
   zenz_.Configure(config.zenz_stop_when_idle(), config.zenz_low_memory());
   // A correction the user committed before shows at once; zenz still looks,
-  // as the context may call for another.
-  if (ApplyAcceptedCorrection()) {
+  // as the context may call for another. Not after "not this", which may have
+  // turned it down.
+  if (!not_this && ApplyAcceptedCorrection()) {
     waiting_for_zenz_ = false;
     // Output() adds to what is there: the conversion is shown afresh.
     commands::Output* output = command->mutable_output();
@@ -3250,7 +3257,7 @@ void Session::RequestZenz(commands::Command* command) {
       }
     }
   }
-  if (!zenz_.Request(segments, left_context)) {
+  if (!zenz_.Request(segments, left_context, not_this)) {
     return;
   }
   SetCallback(
@@ -3266,19 +3273,22 @@ bool Session::PollZenz(commands::Command* command) {
   command->mutable_output()->set_consumed(true);
   floatype::ZenzCorrector::PollResult result =
       zenz_.Poll(context_->converter().GetSegments());
-  // floatype: a correction the user stopped before is not made again.
-  if (result.kind == floatype::ZenzCorrector::PollResult::kApply &&
-      context_->GetConfig().zenz_learning() &&
-      floatype::ZenzMemory::Stopped().Contains(result.reading, result.text)) {
-    result.kind = floatype::ZenzCorrector::PollResult::kDone;
-  }
   if (result.kind == floatype::ZenzCorrector::PollResult::kApply) {
+    // An answer that replaces zenz's correction goes on Mozc's order, so that
+    // Space still brings back Mozc's result. It may be Mozc's result itself.
+    if (!zenz_indices_.empty()) {
+      RestoreMozcOrder(std::exchange(zenz_indices_, {}));
+      result.candidate_indices =
+          floatype::MapToCandidates(context_->converter().GetSegments(),
+                                    result.text)
+              .value_or(std::vector<int>());
+    }
     // zenz's choices never teach the conversion ranking; the suggestion
     // history may learn the committed sentence.
-    // shortcut: an answer to the manual key after an earlier correction
-    // replaces its indices, so Space then brings back that correction rather
-    // than Mozc's result; fine while zenz rarely changes its mind.
-    if (context_->mutable_converter()->PromoteCandidates(
+    if (std::any_of(result.candidate_indices.begin(),
+                    result.candidate_indices.end(),
+                    [](int index) { return index != 0; }) &&
+        context_->mutable_converter()->PromoteCandidates(
             result.candidate_indices,
             context_->GetConfig().zenz_suggestion_learning()
                 ? converter::Attribute::NO_HISTORY_LEARNING

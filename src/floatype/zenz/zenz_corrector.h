@@ -42,13 +42,24 @@ class ZenzCorrector {
   // 40 characters of context, the reading and an answer as long as the
   // reading for readings up to about 230 characters.
   static constexpr size_t kMaxReadingChars = 200;
+  // How often one "not this" asks the scorer, while its answers would not
+  // change what is shown (see Request()). As many as the scorer's forks
+  // (kMaxDeviations in scorer_main.cc); each ask decodes at least one more.
+  static constexpr int kMaxAsks = 8;
 
   // `client` may be null, which turns zenz off.
   explicit ZenzCorrector(ScorerClient* client) : client_(client) {}
 
   // Sends the conversion's reading and `left_context` to the scorer. Returns
   // true when an answer may follow, so the client should call back.
-  bool Request(const Segments& segments, absl::string_view left_context);
+  //
+  // With `not_this`, the user turned down the conversion on screen. zenz is
+  // asked for an answer other than it and than every conversion turned down
+  // or answered without showing for the same reading and context since the
+  // last request without `not_this`. While its answers would not change what
+  // is shown, Poll() asks again, up to kMaxAsks times within the timeout.
+  bool Request(const Segments& segments, absl::string_view left_context,
+               bool not_this = false);
 
   struct PollResult {
     enum Kind {
@@ -68,6 +79,9 @@ class ZenzCorrector {
   // Whether a scorer is there to ask.
   bool available() const { return client_ != nullptr; }
   void set_timeout(absl::Duration timeout) { timeout_ = timeout; }
+  // Whether answers the user stopped (ZenzMemory::Stopped()) are kept off
+  // screen: the zenz_learning setting.
+  void set_learning(bool learning) { learning_ = learning; }
   // The settings zenz_stop_when_idle and zenz_low_memory, applied from the
   // scorer's next start. Call it before Warm() and Request().
   void Configure(bool stop_when_idle, bool low_memory);
@@ -85,15 +99,28 @@ class ZenzCorrector {
 
  private:
   struct Pending {
-    uint64_t id = 0;
+    ::floatype::scorer::Request request;
+    // When the first request went; asking again keeps it.
     absl::Time sent;
     // The conversion the answer is for; see Fingerprint() in the .cc file.
     std::string fingerprint;
+    bool not_this = false;
+    int asks = 1;
   };
+
+  // kApply when `response` changes what is shown, otherwise kDone.
+  PollResult Judge(const Segments& segments,
+                   const ::floatype::scorer::Response& response) const;
+  void Reject(absl::string_view conversion);
 
   ScorerClient* const client_;
   absl::Duration timeout_ = kTimeout;
+  bool learning_ = false;
   std::optional<Pending> pending_;
+  // What zenz may not answer for "<reading>\t<left context>" in
+  // rejected_for_, kept for Request() with `not_this`.
+  std::string rejected_for_;
+  std::vector<std::string> rejected_;
 };
 
 // Live conversion and the indicator run only where the converter process

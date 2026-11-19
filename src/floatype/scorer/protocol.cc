@@ -1,5 +1,6 @@
 #include "protocol.h"
 
+#include <algorithm>
 #include <charconv>
 #include <vector>
 
@@ -51,23 +52,29 @@ std::string FormatRequest(const Request& request) {
   std::string line = std::to_string(request.id) + '\t' +
                      Sanitize(request.left_context) + '\t' +
                      Sanitize(request.reading);
-  if (!request.draft.empty()) {
+  if (!request.draft.empty() || !request.excluded.empty()) {
     line += '\t' + Sanitize(request.draft);
+  }
+  for (const std::string& excluded : request.excluded) {
+    line += '\t' + Sanitize(excluded);
   }
   return line + '\n';
 }
 
 std::optional<Request> ParseRequest(std::string_view line) {
   const std::vector<std::string_view> fields = SplitTabs(line);
-  if (fields.size() != 3 && fields.size() != 4) {
+  if (fields.size() < 3) {
     return std::nullopt;
   }
   const std::optional<uint64_t> id = ParseNumber(fields[0]);
   if (!id.has_value()) {
     return std::nullopt;
   }
-  return Request{*id, std::string(fields[1]), std::string(fields[2]),
-                 fields.size() == 4 ? std::string(fields[3]) : ""};
+  return Request{
+      *id, std::string(fields[1]), std::string(fields[2]),
+      fields.size() > 3 ? std::string(fields[3]) : "",
+      std::vector<std::string>(
+          fields.begin() + std::min<size_t>(fields.size(), 4), fields.end())};
 }
 
 std::string FormatResponse(const Response& response) {

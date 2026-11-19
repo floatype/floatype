@@ -8,6 +8,7 @@
 #include <thread>
 #include <vector>
 
+#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "base/clock.h"
 #include "base/clock_mock.h"
@@ -118,14 +119,15 @@ class ZenzCorrectorTest : public testing::TestWithTempUserProfile {
  protected:
   void SetUp() override {
     Clock::SetClockForUnitTest(&clock_);
-    const std::string answers = FileUtil::JoinPath(
-        SystemUtil::GetUserProfileDirectory(), "answers.tsv");
-    ASSERT_OK(FileUtil::SetContents(
-        answers, "キョウハ\t京歯\nアメ\t雨\nカップ\t河童\n"
-                 "３カイ\t三回\nサンカイ\t3回\n５カイ\t5回\n"));
+    answers_ = FileUtil::JoinPath(SystemUtil::GetUserProfileDirectory(),
+                                  "answers.tsv");
+    ASSERT_OK(
+        FileUtil::SetContents(answers_,
+                              "キョウハ\t京歯\nアメ\t雨\nカップ\t河童\n"
+                              "３カイ\t三回\nサンカイ\t3回\n５カイ\t5回\n"));
     client_ = std::make_unique<ScorerClient>(std::vector<std::string>{
         testing::GetSourceFileOrDie({"floatype", "zenz", "fake_scorer"}),
-        answers});
+        answers_});
   }
   void TearDown() override {
     client_.reset();
@@ -144,6 +146,8 @@ class ZenzCorrectorTest : public testing::TestWithTempUserProfile {
   }
 
   ClockMock clock_{absl::FromUnixSeconds(1000)};
+  // The fake scorer reads it when the first request starts it.
+  std::string answers_;
   std::unique_ptr<ScorerClient> client_;
 };
 
@@ -261,6 +265,122 @@ TEST_F(ZenzCorrectorTest, DoesNothingWithoutAScorer) {
   const Segments segments = KyouHa();
   EXPECT_FALSE(corrector.Request(segments, ""));
   EXPECT_EQ(corrector.Poll(segments).kind, ZenzCorrector::PollResult::kDone);
+}
+
+// KyouHa() with the candidates `text` names on top, as the session shows a
+// correction.
+Segments KyouHaShowing(absl::string_view text) {
+  Segments segments = KyouHa();
+  const std::vector<int> indices = MapToCandidates(segments, text).value();
+  for (size_t i = 0; i < indices.size(); ++i) {
+    segments.mutable_conversion_segment(i)->move_candidate(indices[i], 0);
+  }
+  return segments;
+}
+
+TEST_F(ZenzCorrectorTest, NotThisCyclesThroughZenzsNextBest) {
+  ASSERT_OK(FileUtil::SetContents(answers_, "キョウハ\t京歯\t今日歯\t京は\n"));
+  ZenzCorrector corrector(client_.get());
+  ASSERT_TRUE(corrector.Request(KyouHa(), "熱が"));
+  ASSERT_EQ(PollUntilDone(corrector, KyouHa()).text, "京歯");
+
+  const Segments first = KyouHaShowing("京歯");
+  ASSERT_TRUE(corrector.Request(first, "熱が", /*not_this=*/true));
+  const ZenzCorrector::PollResult second = PollUntilDone(corrector, first);
+  EXPECT_EQ(second.kind, ZenzCorrector::PollResult::kApply);
+  EXPECT_EQ(second.text, "今日歯");
+
+  const Segments shown = KyouHaShowing("今日歯");
+  ASSERT_TRUE(corrector.Request(shown, "熱が", /*not_this=*/true));
+  EXPECT_EQ(PollUntilDone(corrector, shown).text, "京は");
+
+  const Segments last = KyouHaShowing("京は");
+  ASSERT_TRUE(corrector.Request(last, "熱が", /*not_this=*/true));
+  EXPECT_EQ(PollUntilDone(corrector, last).kind,
+            ZenzCorrector::PollResult::kDone)
+      << "nothing is left";
+}
+
+TEST_F(ZenzCorrectorTest, NotThisOnMozcsConversionWhenZenzAgreed) {
+  ASSERT_OK(FileUtil::SetContents(answers_, "アメ\t雨\t飴\n"));
+  ZenzCorrector corrector(client_.get());
+  Segments segments;
+  AddSegment(segments, "あめ", {"雨", "飴"});
+  ASSERT_TRUE(corrector.Request(segments, ""));
+  ASSERT_EQ(PollUntilDone(corrector, segments).kind,
+            ZenzCorrector::PollResult::kDone);
+  ASSERT_TRUE(corrector.Request(segments, "", /*not_this=*/true));
+  const ZenzCorrector::PollResult result = PollUntilDone(corrector, segments);
+  EXPECT_EQ(result.kind, ZenzCorrector::PollResult::kApply);
+  EXPECT_THAT(result.candidate_indices, ElementsAre(1));
+}
+
+TEST_F(ZenzCorrectorTest, NotThisSkipsAnswersThatDidNotShow) {
+  // zenz's first answer cannot be written with Mozc's candidates.
+  ASSERT_OK(FileUtil::SetContents(answers_, "キョウハ\t今日葉\t京歯\n"));
+  ZenzCorrector corrector(client_.get());
+  ASSERT_TRUE(corrector.Request(KyouHa(), ""));
+  ASSERT_EQ(PollUntilDone(corrector, KyouHa()).kind,
+            ZenzCorrector::PollResult::kDone);
+  ASSERT_TRUE(corrector.Request(KyouHa(), "", /*not_this=*/true));
+  EXPECT_EQ(PollUntilDone(corrector, KyouHa()).text, "京歯");
+}
+
+TEST_F(ZenzCorrectorTest, NotThisAsksAgainWhileAnswersDoNotShow) {
+  // No earlier answer is known, as after a timeout, and zenz's next two
+  // cannot be written with Mozc's candidates.
+  // After them, kMaxAsks answers that cannot either: asking stops there.
+  std::string ima_answers = "イマ";
+  for (int i = 0; i < ZenzCorrector::kMaxAsks; ++i) {
+    absl::StrAppend(&ima_answers, "\t今", i);
+  }
+  ASSERT_OK(FileUtil::SetContents(
+      answers_, absl::StrCat("キョウハ\t今日ハ\t今日葉\t今日歯\n", ima_answers,
+                             "\t居間\n")));
+  ZenzCorrector corrector(client_.get());
+  const Segments segments = KyouHa();
+  ASSERT_TRUE(corrector.Request(segments, "", /*not_this=*/true));
+  EXPECT_EQ(PollUntilDone(corrector, segments).text, "今日歯")
+      << "the third ask";
+
+  Segments ima;
+  AddSegment(ima, "いま", {"今", "居間"});
+  ASSERT_TRUE(corrector.Request(ima, "", /*not_this=*/true));
+  EXPECT_EQ(PollUntilDone(corrector, ima).kind,
+            ZenzCorrector::PollResult::kDone);
+}
+
+TEST_F(ZenzCorrectorTest, NotThisEndsWhereTheRequestWouldGrowTooLong) {
+  ZenzCorrector corrector(client_.get());
+  std::string value;
+  for (int i = 0; i < 2000; ++i) value += "亜";  // 6000 bytes.
+  Segments segments;
+  AddSegment(segments, "あ", {value, "阿"});
+  EXPECT_TRUE(corrector.Request(segments, ""));
+  EXPECT_FALSE(corrector.Request(segments, "", /*not_this=*/true));
+}
+
+TEST_F(ZenzCorrectorTest, NotThisForgetsWithAnotherReadingOrAPlainRequest) {
+  ASSERT_OK(FileUtil::SetContents(answers_, "アメ\t雨\t飴\nキョウハ\t京歯\n"));
+  ZenzCorrector corrector(client_.get());
+  Segments ame;
+  AddSegment(ame, "あめ", {"雨", "飴"});
+  ASSERT_TRUE(corrector.Request(ame, "", /*not_this=*/true));
+  ASSERT_EQ(PollUntilDone(corrector, ame).text, "飴");
+  // 飴 is shown now; turning it down too leaves nothing.
+  Segments candy;
+  AddSegment(candy, "あめ", {"飴", "雨"});
+  ASSERT_TRUE(corrector.Request(candy, "", /*not_this=*/true));
+  ASSERT_EQ(PollUntilDone(corrector, candy).kind,
+            ZenzCorrector::PollResult::kDone);
+  // Another context is another conversion.
+  ASSERT_TRUE(corrector.Request(candy, "空から", /*not_this=*/true));
+  EXPECT_EQ(PollUntilDone(corrector, candy).text, "雨");
+  // So is a plain request, as for a new conversion of the same reading.
+  ASSERT_TRUE(corrector.Request(ame, ""));
+  PollUntilDone(corrector, ame);
+  ASSERT_TRUE(corrector.Request(ame, "", /*not_this=*/true));
+  EXPECT_EQ(PollUntilDone(corrector, ame).text, "飴");
 }
 
 }  // namespace

@@ -1,7 +1,8 @@
 // The line protocol between the Mozc converter and the scorer process.
 //
 // Requests and responses are single UTF-8 lines with tab-separated fields:
-//   request:  <id>\t<left context>\t<katakana reading>[\t<draft>]\n
+//   request:  <id>\t<left context>\t<katakana reading>[\t<draft>
+//             [\t<excluded>...]]\n
 //   response: <id>\t<conversion>\t<stop>\t<microseconds>\n
 // The scorer answers only the latest request it has received; ids let the
 // converter ignore answers to requests it no longer waits for.
@@ -16,6 +17,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace floatype::scorer {
 
@@ -26,13 +28,18 @@ struct Request {
   // Optional: Mozc's conversion, which the scorer checks in one pass before
   // generating on its own (speculative decoding). It changes the speed only.
   std::string draft;
+  // Optional: conversions the user turned down. When zenz's own answer is one
+  // of them, ignoring full and half width, the scorer answers with its next
+  // best or with the stop "exhausted".
+  std::vector<std::string> excluded;
 };
 
 struct Response {
   uint64_t id = 0;
   std::string conversion;
   // Why generation ended: "eog" (end of generation), "tag" (zenz tag or line
-  // break), "cap" (length cap) or "error".
+  // break), "cap" (length cap), "exhausted" (no answer left that is not
+  // excluded) or "error".
   std::string stop;
   // Time the scorer spent on the request.
   uint64_t microseconds = 0;

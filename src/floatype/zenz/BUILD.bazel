@@ -68,6 +68,7 @@ mozc_cc_library(
     ],
     deps = [
         ":scorer_client",
+        ":zenz_memory",
         "//base:clock",
         "//base:file_util",
         "//base:system_util",

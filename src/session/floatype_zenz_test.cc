@@ -257,12 +257,83 @@ TEST_F(FloatypeZenzTest, PickingZenzsCandidateAfterShowingMozcIsLearned) {
   EXPECT_EQ(Preedit(ConvertKikai()), "機械");
 }
 
-TEST_F(FloatypeZenzTest, TheZenzKeyKeepsZenzsCorrectionWhenZenzAgrees) {
+TEST_F(FloatypeZenzTest, TheZenzKeyKeepsZenzsCorrectionWhenNothingElseIsLeft) {
   floatype::EnableSessionFeatures(true);
   ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
   const commands::Output again = PollWhileAsked(SendKeys({"Ctrl z"}));
   EXPECT_EQ(Preedit(again), "機械");
   EXPECT_EQ(Indicator(again), commands::Output::Indicator::ZENZ);
+}
+
+TEST_F(FloatypeZenzTest, TheZenzKeyOnZenzsCorrectionShowsItsNextBest) {
+  floatype::EnableSessionFeatures(true);
+  ASSERT_OK(FileUtil::SetContents(answers_, "キカイ\t機械\t既介\t機会\n"));
+  ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
+
+  const commands::Output asked = SendKeys({"Ctrl z"});
+  EXPECT_EQ(Preedit(asked), "機械") << "shown until zenz answers";
+  EXPECT_EQ(Indicator(asked), commands::Output::Indicator::ZENZ_PENDING);
+  const commands::Output next = PollWhileAsked(asked);
+  EXPECT_EQ(Preedit(next), "既介");
+  EXPECT_EQ(Indicator(next), commands::Output::Indicator::ZENZ);
+
+  // zenz's next is Mozc's own conversion, which is Mozc's again.
+  const commands::Output mozc = PollWhileAsked(SendKeys({"Ctrl z"}));
+  EXPECT_EQ(Preedit(mozc), "機会");
+  EXPECT_EQ(Indicator(mozc), commands::Output::Indicator::MOZC);
+  // Nothing is left: what is shown stays.
+  EXPECT_EQ(Preedit(PollWhileAsked(SendKeys({"Ctrl z"}))), "機会");
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(), "機会");
+
+  // A new conversion starts over.
+  ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
+  EXPECT_EQ(Preedit(PollWhileAsked(SendKeys({"Ctrl z"}))), "既介");
+}
+
+TEST_F(FloatypeZenzTest, SpaceAfterTheNextBestShowsMozcsConversion) {
+  ASSERT_OK(FileUtil::SetContents(answers_, "キカイ\t機械\t既介\n"));
+  ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
+  ASSERT_EQ(Preedit(PollWhileAsked(SendKeys({"Ctrl z"}))), "既介");
+  EXPECT_EQ(Preedit(SendKeys({"Space"})), "機会");
+}
+
+TEST_F(FloatypeZenzTest, TheZenzKeyAfterZenzAgreedShowsItsNextBest) {
+  ASSERT_OK(FileUtil::SetContents(answers_, "キカイ\t機会\t機械\n"));
+  ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機会");
+  EXPECT_EQ(Preedit(PollWhileAsked(SendKeys({"Ctrl z"}))), "機械");
+}
+
+TEST_F(FloatypeZenzTest, TheZenzKeyAfterADroppedAnswerShowsTheNextBest) {
+  // Mozc cannot write 奇怪 here, so zenz's first answer is dropped.
+  ASSERT_OK(FileUtil::SetContents(answers_, "キカイ\t奇怪\t機械\n"));
+  ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機会");
+  EXPECT_EQ(Preedit(PollWhileAsked(SendKeys({"Ctrl z"}))), "機械");
+}
+
+TEST_F(FloatypeZenzTest, TheZenzKeySkipsACorrectionTheUserStopped) {
+  ASSERT_OK(FileUtil::SetContents(answers_, "キカイ\t機械\t既介\n"));
+  ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
+  ASSERT_EQ(Preedit(SendKeys({"Ctrl Delete"})), "機会");
+  EXPECT_EQ(Preedit(PollWhileAsked(SendKeys({"Ctrl z"}))), "既介");
+}
+
+TEST_F(FloatypeZenzTest, TheZenzKeyAfterATimeoutAsksAgain) {
+  // The fake answers readings starting with スロウ after 200ms, but at once
+  // to "not this".
+  ASSERT_OK(FileUtil::SetContents(answers_, "スロウキカイ\tすろう機会\n"));
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_zenz_timeout_millisec(50);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+  ASSERT_EQ(Preedit(PollWhileAsked(SendKeys(
+                {"s", "u", "r", "o", "u", "k", "i", "k", "a", "i", "Space"}))),
+            "すろう機械")
+      << "zenz's answer came too late";
+  // The late answer is out of the way before the key.
+  std::this_thread::sleep_for(std::chrono::milliseconds(300));
+  EXPECT_EQ(Preedit(PollWhileAsked(SendKeys({"Ctrl z"}))), "すろう機会");
 }
 
 TEST_F(FloatypeZenzTest, KeepsWhatTheUserTaughtMozc) {

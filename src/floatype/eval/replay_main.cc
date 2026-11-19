@@ -8,7 +8,8 @@
 //   <mozc>\t<final>\t<space ms>\t<final ms>\t<polls>
 // <mozc> is shown right after Space and <final> once the session stops asking
 // to be called back. <space ms> is the Space key's own latency, <final ms> the
-// time from pressing Space to <final>.
+// time from pressing Space to <final>. With --not_this N, each of N presses of
+// the zenz key that follow adds <shown>\t<ms>.
 //
 // Run from src/ after building the scorer (floatype/scorer/CMakeLists.txt).
 
@@ -26,6 +27,7 @@
 #include "absl/flags/flag.h"
 #include "absl/log/check.h"
 #include "absl/strings/ascii.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
@@ -53,6 +55,9 @@ ABSL_FLAG(std::string, model,
           "floatype/scorer/build/zenz-v3.2-small-Q5_K_M.gguf",
           "the zenz model");
 ABSL_FLAG(bool, zenz, true, "correct conversions with zenz");
+ABSL_FLAG(int, not_this, 0,
+          "press the zenz key (Ctrl+z) this many times after each Space "
+          "conversion settles");
 ABSL_FLAG(bool, live, false,
           "type each reading key by key with live conversion on, pausing "
           "after 、 and 。 and at the end, and commit it with Enter; prints "
@@ -130,17 +135,34 @@ class Replayer {
     const double space_ms = MillisecondsSince(start);
     const std::string mozc = Preedit(output);
     int polls = 0;
-    while (output.has_callback()) {
-      std::this_thread::sleep_for(
-          std::chrono::milliseconds(output.callback().delay_millisec()));
-      commands::Input poll;
-      poll.set_type(commands::Input::SEND_COMMAND);
-      *poll.mutable_command() = output.callback().session_command();
-      output = Eval(std::move(poll));
-      ++polls;
-    }
+    const auto call_back = [&] {
+      while (output.has_callback()) {
+        std::this_thread::sleep_for(
+            std::chrono::milliseconds(output.callback().delay_millisec()));
+        commands::Input poll;
+        poll.set_type(commands::Input::SEND_COMMAND);
+        *poll.mutable_command() = output.callback().session_command();
+        output = Eval(std::move(poll));
+        ++polls;
+      }
+    };
+    call_back();
     const double final_ms = MillisecondsSince(start);
     const std::string final = Preedit(output);
+    const int final_polls = polls;
+    std::string not_this;
+    for (int i = 0; i < absl::GetFlag(FLAGS_not_this); ++i) {
+      commands::Input key;
+      key.set_type(commands::Input::SEND_KEY);
+      key.mutable_key()->set_key_code('z');
+      key.mutable_key()->add_modifier_keys(commands::KeyEvent::CTRL);
+      const absl::Time pressed = absl::Now();
+      output = Eval(std::move(key));
+      CHECK(output.consumed()) << "Ctrl+z is not the zenz key";
+      call_back();
+      absl::StrAppend(&not_this, "\t", Preedit(output), "\t",
+                      MillisecondsSince(pressed));
+    }
 
     commands::Input revert;
     revert.set_type(commands::Input::SEND_COMMAND);
@@ -148,7 +170,8 @@ class Replayer {
     Eval(std::move(revert));
 
     return mozc + '\t' + final + '\t' + std::to_string(space_ms) + '\t' +
-           std::to_string(final_ms) + '\t' + std::to_string(polls);
+           std::to_string(final_ms) + '\t' + std::to_string(final_polls) +
+           not_this;
   }
 
   // Types `reading` key by key as romaji and lists what the suggestion window
