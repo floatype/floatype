@@ -71,6 +71,8 @@ ABSL_FLAG(bool, suggest, false,
           "after the last key, separated by |; with --live, after the pause "
           "that follows it");
 ABSL_FLAG(bool, mixed_english, false, "live mode: turn mixed English input on");
+ABSL_FLAG(bool, suggest_added_words, false,
+          "suggest the words of the added dictionaries too");
 ABSL_FLAG(bool, display_ambiguous, false,
           "live mode: show ambiguous romaji as kana");
 
@@ -231,6 +233,8 @@ class Replayer {
         absl::GetFlag(FLAGS_mixed_english));
     input.mutable_config()->set_display_ambiguous_romaji(
         absl::GetFlag(FLAGS_display_ambiguous));
+    input.mutable_config()->set_suggest_added_words(
+        absl::GetFlag(FLAGS_suggest_added_words));
     Eval(std::move(input));
   }
 
@@ -355,7 +359,7 @@ int main(int argc, char** argv) {
   const bool live = absl::GetFlag(FLAGS_live);
   mozc::floatype::EnableSessionFeatures(live);
   mozc::Replayer replayer(*std::move(engine));
-  if (live) {
+  if (live || absl::GetFlag(FLAGS_suggest_added_words)) {
     replayer.SetLiveConfig(absl::GetFlag(FLAGS_wait_for_zenz));
   }
 
