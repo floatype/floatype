@@ -426,7 +426,8 @@ message Config {
   reserved 1012;
   reserved "candidate_font_scale_percent";
   // floatype: the look of a candidate window. Colors are 0xRRGGBB and apply
-  // only with CUSTOM; an unset one there is the LIGHT palette's.
+  // only with CUSTOM; an unset one there is the LIGHT palette's, or the DARK
+  // one's when background_color is dark.
   message CandidateStyle {
     optional uint32 text_color = 1;
     optional uint32 focused_background_color = 2;

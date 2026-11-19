@@ -29,6 +29,13 @@ void SetColor(RendererStyle::RGBAColor* color, uint32_t rgb) {
   color->set_b(rgb & 0xff);
 }
 
+// Whether `rgb` is a dark color, by its perceived brightness.
+bool IsDark(uint32_t rgb) {
+  const double brightness = 0.299 * ((rgb >> 16) & 0xff) +
+                            0.587 * ((rgb >> 8) & 0xff) + 0.114 * (rgb & 0xff);
+  return brightness < 128;
+}
+
 RendererStyle Palette(bool dark) {
   return RendererStyleHandler::GetRendererStyle(
       dark ? RendererStyleHandler::ColorTheme::kDark
@@ -68,8 +75,22 @@ void ScaleIn(Message& message, double factor) {
 WindowLook ResolveWindowLook(const Config::CandidateStyle& style,
                              bool system_dark) {
   WindowLook look;
-  look.dark = style.theme() == Config::CandidateStyle::DARK ||
-              (style.theme() == Config::CandidateStyle::AUTO && system_dark);
+  switch (style.theme()) {
+    case Config::CandidateStyle::DARK:
+      look.dark = true;
+      break;
+    case Config::CandidateStyle::CUSTOM:
+      // The palette under the colors set follows the background, so that the
+      // numbers, descriptions and footer stay readable on a dark one.
+      look.dark =
+          style.has_background_color() && IsDark(style.background_color());
+      break;
+    case Config::CandidateStyle::LIGHT:
+      break;
+    default:  // AUTO
+      look.dark = system_dark;
+      break;
+  }
   const RendererStyle palette = Palette(look.dark);
   look.background = Rgb(palette.candidate_style().background_color());
   look.text = Rgb(palette.candidate_style().foreground_color());

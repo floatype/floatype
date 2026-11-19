@@ -86,6 +86,32 @@ TEST(WindowLookTest, ACustomBackgroundFillsTheWholeWindow) {
   EXPECT_EQ(look.border, 0x010203);
 }
 
+TEST(WindowLookTest, ADarkCustomBackgroundBuildsOnTheDarkPalette) {
+  Config::CandidateStyle style = Theme(Config::CandidateStyle::CUSTOM);
+  style.set_background_color(0x202830);
+  const WindowLook look = ResolveWindowLook(style, false);
+  EXPECT_TRUE(look.dark);
+  // Unset ones and the parts without a setting are the dark palette's.
+  const WindowLook dark =
+      ResolveWindowLook(Theme(Config::CandidateStyle::DARK), false);
+  EXPECT_EQ(look.text, dark.text);
+  EXPECT_EQ(look.secondary_text, dark.secondary_text);
+  EXPECT_EQ(look.focused_background, dark.focused_background);
+  const RendererStyle rendered = RendererStyleFor(look);
+  const RendererStyle mozc = RendererStyleHandler::GetRendererStyle(
+      RendererStyleHandler::ColorTheme::kDark);
+  EXPECT_EQ(rendered.description_style().foreground_color().r(),
+            mozc.description_style().foreground_color().r());
+  EXPECT_EQ(rendered.footer_style().foreground_color().g(),
+            mozc.footer_style().foreground_color().g());
+  EXPECT_EQ(rendered.scrollbar_indicator_color().b(),
+            mozc.scrollbar_indicator_color().b());
+
+  // A light one stays on the light palette, whatever the system is.
+  style.set_background_color(0xf4f0e6);
+  EXPECT_FALSE(ResolveWindowLook(style, true).dark);
+}
+
 TEST(WindowLookTest, TheDefaultsAreTodaysLook) {
   const WindowLook look = ResolveWindowLook(Config::CandidateStyle(), false);
   EXPECT_EQ(look.size_percent, 100);

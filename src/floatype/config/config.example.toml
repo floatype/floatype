@@ -163,7 +163,7 @@
 # [candidate_style]
 ##   配色: AUTO（システムのライトとダークに合わせる）、LIGHT、DARK、CUSTOM（下の色を使う）
 # theme = "AUTO"
-##   CUSTOM の色（0xRRGGBB）。書かない色は LIGHT の色。値は LIGHT の色。
+##   CUSTOM の色（0xRRGGBB）。書かない色は LIGHT の色（背景を暗い色にしたときは DARK の色）。値は LIGHT の色。
 ##   候補の文字、窓の背景、選んでいる行の背景と枠、窓の枠
 # text_color = 0x000000
 # background_color = 0xffffff
