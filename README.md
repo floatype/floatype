@@ -25,7 +25,7 @@ Apple Silicon の Mac 用の日本語入力です。Mozc の辞書変換をも�
 4. 終わったらログアウトして、ログインし直します。
 5. システム設定 → キーボード → 入力ソース の「編集…」で「＋」を押し、日本語の「ひらがな (Floatype)」を足します。
 
-設定は、入力メニューの「環境設定…」の Floatype のタブか、`~/.config/floatype/config.txtpb` で変えられます（例は [src/floatype/config/config.example.txtpb](src/floatype/config/config.example.txtpb)）。
+設定は `~/.config/floatype/config.toml` にあります。入力メニューの「環境設定…」の Floatype のタブで変えても、このファイルを手で書き換えてもかまいません。設定画面は変えた行だけを書き換えるので、手で書いたコメントは残ります（例は [src/floatype/config/config.example.toml](src/floatype/config/config.example.toml)）。
 
 ### macOS に止められたとき
 
