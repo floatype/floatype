@@ -233,7 +233,15 @@ ConfigDialog::ConfigDialog()
     useModeIndicator->hide();
   }
 
+  // Reset texts explicitly for translations.
+  configDialogButtonBox->button(QDialogButtonBox::Ok)->setText(tr("  Ok  "));
+  configDialogButtonBox->button(QDialogButtonBox::Cancel)
+      ->setText(tr("Cancel"));
+  configDialogButtonBox->button(QDialogButtonBox::Apply)->setText(tr("Apply"));
+
   // signal/slot
+  QObject::connect(configDialogButtonBox, SIGNAL(clicked(QAbstractButton*)),
+                   this, SLOT(clicked(QAbstractButton*)));
   QObject::connect(clearUserHistoryButton, SIGNAL(clicked()), this,
                    SLOT(ClearUserHistory()));
   QObject::connect(editUserDictionaryButton, SIGNAL(clicked()), this,
@@ -323,28 +331,40 @@ ConfigDialog::ConfigDialog()
   usageStatsCheckBox->setEnabled(false);
 #endif  // CHANNEL_DEV
 
-  // floatype: every change is saved, a moment later so that holding an arrow
-  // on a spin box writes once. Connected after Reload() so loading does not
-  // save.
-  save_timer_.setSingleShot(true);
-  save_timer_.setInterval(300);
-  connect(&save_timer_, &QTimer::timeout, this, [this] { Update(); });
-  const auto schedule_save = [this] {
-    save_timer_.start();
+  // Event handlers to enable 'Apply' button, as Mozc's, made after Reload()
+  // so that loading leaves it off. floatype listens to the value signals, so
+  // that every change counts, and redraws the 外観 preview, which reads the
+  // controls.
+  const auto changed = [this] {
+    EnableApplyButton();
     RefreshLook();
   };
+  for (QPushButton* button : findChildren<QPushButton*>()) {
+    // Not OK / Cancel / Apply, nor the preview's switches, which are
+    // checkable, nor "Finder で表示": they change no setting.
+    if (button->parentWidget() != configDialogButtonBox &&
+        !button->isCheckable() &&
+        !button->property("changes_nothing").toBool()) {
+      connect(button, &QPushButton::clicked, this,
+              &ConfigDialog::EnableApplyButton);
+    }
+  }
   for (QCheckBox* box : findChildren<QCheckBox*>()) {
-    connect(box, &QCheckBox::toggled, this, schedule_save);
+    connect(box, &QCheckBox::toggled, this, changed);
   }
   for (QSpinBox* box : findChildren<QSpinBox*>()) {
-    connect(box, &QSpinBox::valueChanged, this, schedule_save);
+    connect(box, &QSpinBox::valueChanged, this, changed);
   }
   for (QComboBox* box : findChildren<QComboBox*>()) {
-    connect(box, &QComboBox::currentIndexChanged, this, schedule_save);
+    connect(box, &QComboBox::currentIndexChanged, this, changed);
   }
   for (QSlider* slider : findChildren<QSlider*>()) {
-    connect(slider, &QSlider::valueChanged, this, schedule_save);
+    connect(slider, &QSlider::valueChanged, this, changed);
   }
+  connect(characterFormEditor, &QTableWidget::itemChanged, this,
+          &ConfigDialog::EnableApplyButton);
+  // 'Apply' button is disabled on launching.
+  configDialogButtonBox->button(QDialogButtonBox::Apply)->setEnabled(false);
   // In scroll areas, a wheel turned over a control scrolls the page unless
   // the control has the focus: otherwise scrolling would change settings.
   for (QWidget* widget : findChildren<QWidget*>()) {
@@ -355,24 +375,9 @@ ConfigDialog::ConfigDialog()
       widget->installEventFilter(this);
     }
   }
-  connect(characterFormEditor, &QTableWidget::itemChanged, this, schedule_save);
-  // Without OK, Return would press whichever button Qt picks as the default.
-  for (QPushButton* button : findChildren<QPushButton*>()) {
-    button->setAutoDefault(false);
-    button->setDefault(false);
-  }
   // As wide as the widest page, and short enough for a 13" screen; the
   // pages scroll.
   resize(minimumSizeHint().width(), 680);
-}
-
-void ConfigDialog::done(int result) {
-  // Closing saves a change still waiting for the timer.
-  if (save_timer_.isActive()) {
-    save_timer_.stop();
-    Update();
-  }
-  QDialog::done(result);
 }
 
 bool ConfigDialog::SetConfig(const config::Config& config) {
@@ -794,16 +799,16 @@ void ConfigDialog::SetUpFloatypeSettings() {
   }
 }
 
-// Bottom of the window: what the badge means, where the settings go, and
-// Mozc's reset. Changes are saved as they are made, so no OK / Cancel / Apply.
+// A row over Mozc's buttons: what the badge means, and where the settings
+// are saved.
 void ConfigDialog::SetUpFooter() {
-  configDialogButtonBox->hide();
-  footerLayout->removeWidget(resetToDefaultsButton);
-  footerLayout->insertWidget(0, NewBadge());
-  footerLayout->insertWidget(1, new QLabel(Text("Floatype で足した項目")));
-  footerLayout->addWidget(new QLabel(
-      Text("保存先 ~/.config/floatype/config.toml（変えるとすぐ保存）")));
+  QHBoxLayout* legend = new QHBoxLayout();
+  legend->addWidget(NewBadge());
+  legend->addWidget(new QLabel(Text("Floatype で足した項目")));
+  legend->addStretch();
+  legend->addWidget(new QLabel(Text("保存先 ~/.config/floatype/config.toml")));
   QPushButton* reveal = new QPushButton(Text("Finder で表示"));
+  reveal->setProperty("changes_nothing", true);
   connect(reveal, &QPushButton::clicked, this, [] {
     const QString path = QDir::homePath() + "/.config/floatype/config.toml";
     if (QFileInfo::exists(path)) {
@@ -813,8 +818,8 @@ void ConfigDialog::SetUpFooter() {
           QUrl::fromLocalFile(QFileInfo(path).absolutePath()));
     }
   });
-  footerLayout->addWidget(reveal);
-  footerLayout->addWidget(resetToDefaultsButton);
+  legend->addWidget(reveal);
+  centralLayout->insertLayout(centralLayout->indexOf(footerLayout), legend);
 }
 
 QPushButton* ConfigDialog::NewColorButton(const char* field, const char* label,
@@ -833,7 +838,6 @@ QPushButton* ConfigDialog::NewColorButton(const char* field, const char* label,
       theme->setCurrentIndex(config::Config::CandidateStyle::CUSTOM);
     }
     RefreshLook();
-    save_timer_.start();
   });
   return button;
 }
@@ -899,8 +903,8 @@ QWidget* ConfigDialog::SetUpLookTab() {
   QWidget* look = new QWidget();
   QVBoxLayout* layout = new QVBoxLayout(look);
 
-  // Which look the preview and the form are for. Push buttons, so that
-  // switching saves nothing.
+  // Which look the preview and the form are for. Checkable push buttons,
+  // which leave Apply as it is: switching changes no setting.
   QHBoxLayout* targets = new QHBoxLayout();
   targets->setSpacing(0);
   QButtonGroup* target_group = new QButtonGroup(look);
@@ -1415,6 +1419,28 @@ void ConfigDialog::ConvertToProto(config::Config* config) const {
 #undef GET_COMBOBOX
 #undef GET_CHECKBOX
 
+void ConfigDialog::clicked(QAbstractButton* button) {
+  switch (configDialogButtonBox->buttonRole(button)) {
+    case QDialogButtonBox::AcceptRole:
+      if (Update()) {
+        QWidget::close();
+      }
+      break;
+    case QDialogButtonBox::ApplyRole:
+      // floatype: off again until the next change.
+      if (Update()) {
+        configDialogButtonBox->button(QDialogButtonBox::Apply)
+            ->setEnabled(false);
+      }
+      break;
+    case QDialogButtonBox::RejectRole:
+      QWidget::close();
+      break;
+    default:
+      break;
+  }
+}
+
 void ConfigDialog::ClearUserHistory() {
   if (QMessageBox::Ok !=
       QMessageBox::question(
@@ -1460,7 +1486,6 @@ void ConfigDialog::EditKeymap() {
     custom_keymap_table_ = output;
     // set keymapSettingComboBox to "Custom keymap"
     keymapSettingComboBox->setCurrentIndex(0);
-    save_timer_.start();
   }
 }
 
@@ -1468,7 +1493,6 @@ void ConfigDialog::EditRomanTable() {
   std::string output;
   if (gui::RomanTableEditorDialog::Show(this, custom_roman_table_, &output)) {
     custom_roman_table_ = output;
-    save_timer_.start();
   }
 }
 
@@ -1512,7 +1536,6 @@ void ConfigDialog::ResetToDefaults() {
     // TODO(taku): remove the dependency to config::ConfigHandler
     // nice to have GET_DEFAULT_CONFIG command
     ConvertFromProto(config::ConfigHandler::DefaultConfig());
-    save_timer_.start();
   }
 }
 
@@ -1520,6 +1543,10 @@ void ConfigDialog::LaunchAdministrationDialog() {
   if constexpr (port::IsWindows()) {
     client_->LaunchTool("administration_dialog", "");
   }
+}
+
+void ConfigDialog::EnableApplyButton() {
+  configDialogButtonBox->button(QDialogButtonBox::Apply)->setEnabled(true);
 }
 
 // Catch MouseButtonRelease event to toggle the CheckBoxes
