@@ -307,7 +307,9 @@ std::string ExportTextConfig(const config::Config& config,
   changed.clear_general_config();
   ClearDefaults(changed, defaults);
   std::string text;
-  TextFormat::PrintToString(changed, &text);
+  if (!TextFormat::PrintToString(changed, &text)) {
+    return "";
+  }
   return text;
 }
 
