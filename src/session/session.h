@@ -35,6 +35,7 @@
 #include <cstddef>
 #include <deque>
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -324,8 +325,15 @@ class Session {
   // were an English word. Returns whether it did.
   bool MaybeConvertAsEnglish(commands::Command* command);
   // Mixed English input: turns each English word inside the composition back
-  // into the letters typed, so it converts, and stays, as typed.
-  void KeepEnglishWords();
+  // into the letters typed, so it converts, and stays, as typed. With
+  // `undoable` (a live conversion), a word ending the composition in loose
+  // letters can be undone by the next key (see english_undo_).
+  void KeepEnglishWords(bool undoable);
+  // The composition as typed, before a live conversion kept a word that ends
+  // it in loose letters: the user may have paused inside a syllable
+  // (きょうは + s reads "has", but may go on to きょうはしる). The next letter
+  // key brings it back; any other key or command drops it.
+  std::optional<composer::Composer> english_undo_;
   // Mixed English input: after a conversion, shows letters typed in a kana mode
   // half width, as typed, where Mozc offers them so.
   void PreferTypedLetters();

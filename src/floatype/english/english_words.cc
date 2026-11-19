@@ -65,6 +65,14 @@ bool IsLetter(absl::string_view text) {
   return letter;
 }
 
+// Whether a character is the second half of the kana before it: a small kana
+// not typed on its own with x or l (きょ, どぉ). The composer still splits
+// their keys between the two (k|yo).
+bool Joined(absl::string_view read, absl::string_view raw) {
+  return absl::StrContains("ぁぃぅぇぉゃゅょゎ", read) && !read.empty() &&
+         !raw.starts_with('x') && !raw.starts_with('l');
+}
+
 }  // namespace
 
 std::vector<EnglishSpan> EnglishSpans(const std::vector<std::string>& raws,
@@ -84,9 +92,13 @@ std::vector<EnglishSpan> EnglishSpans(const std::vector<std::string>& raws,
     letter[i] = IsLetter(query[i]);
     loose[i] = letter[i] && preedit[i] != raws[i];
   }
+  // Plain Japanese, the common case, has no word to find.
+  if (std::none_of(loose.begin(), loose.end(), [](bool b) { return b; })) {
+    return candidates;
+  }
   for (size_t begin = 0; begin < size; ++begin) {
-    if (begin > 0 && letter[begin - 1]) {
-      continue;  // Inside a run of letters.
+    if ((begin > 0 && letter[begin - 1]) || Joined(query[begin], raws[begin])) {
+      continue;  // Inside a run of letters, or of a kana.
     }
     std::string raw, shown;
     std::vector<size_t> ends;  // Where each character's keys end in `raw`.
@@ -98,7 +110,8 @@ std::vector<EnglishSpan> EnglishSpans(const std::vector<std::string>& raws,
         break;
       }
       // Letters after the span would belong to it.
-      if ((end < size && letter[end]) || shown == raw) {
+      if ((end < size && (letter[end] || Joined(query[end], raws[end]))) ||
+          shown == raw) {
         continue;
       }
       for (size_t letters = std::min(raw.size(), kMaxLetters); letters >= 3;

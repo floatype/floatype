@@ -122,6 +122,15 @@ TEST_F(EnglishWordsTest, ALongerWordWins) {
             (Spans_{{1, 5, "slack", ""}}));
 }
 
+TEST_F(EnglishWordsTest, DoesNotCutAKanaInTwo) {
+  const EnglishWords words = EnglishWords("keyboard\n");
+  // keyboard を: dwo made どぉ, its keys split as d|wo.
+  EXPECT_EQ(Spans({{"ke", "け"}, {"y", "ｙ"}, {"bo", "ぼ"}, {"a", "あ"},
+                   {"r", "ｒ"}, {"d", "ど"}, {"wo", "ぉ"}},
+                  words),
+            (Spans_{{0, 7, "keyboard", "wo"}}));
+}
+
 TEST(EnglishWordsDefaultTest, HasSCOWLsWords) {
   EXPECT_GT(EnglishWords::Default().size(), 80000);
   EXPECT_TRUE(EnglishWords::Default().Contains("keyboard"));

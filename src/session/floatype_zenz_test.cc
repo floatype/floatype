@@ -898,6 +898,31 @@ TEST_F(FloatypeZenzTest, MixedEnglishKeepsAWordInsideASentence) {
   EXPECT_EQ(Preedit(SendKeys({"Space"})), "emailを");
 }
 
+TEST_F(FloatypeZenzTest, MixedEnglishUndoesAWordWhenTheSyllableGoesOn) {
+  floatype::EnableSessionFeatures(true);
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_mixed_english(true);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+
+  // A pause inside し: きょうは + s reads "has" until the next key.
+  ASSERT_EQ(Preedit(PollWhileAsked(
+                CallBack(SendKeys({"k", "y", "o", "u", "h", "a", "s"})))),
+            "今日has");
+  EXPECT_EQ(Preedit(SendKeys({"i", "r", "u"})), "きょうはしる");
+  SendKeys({"Escape"});
+  SendKeys({"Escape"});
+
+  // A word ending in a consonant still takes kana after it.
+  ASSERT_EQ(Preedit(PollWhileAsked(CallBack(
+                SendKeys({"k", "e", "y", "b", "o", "a", "r", "d"})))),
+            "keyboard");
+  EXPECT_EQ(Preedit(PollWhileAsked(CallBack(SendKeys({"w", "o"})))),
+            "keyboardを");
+}
+
 TEST_F(FloatypeZenzTest, WithoutMixedEnglishAWordInsideJapaneseIsKana) {
   floatype::EnableSessionFeatures(true);
   config::Config config = config::ConfigHandler::DefaultConfig();

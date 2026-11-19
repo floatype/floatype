@@ -340,6 +340,7 @@ bool Session::SendCommand(commands::Command* command) {
         context_ = std::move(suggestions);
         waiting_for_zenz_ = false;
       }
+      english_undo_.reset();
       zenz_.Cancel();
       StopWaitingForZenz();
       commit_after_zenz_ = false;
@@ -578,6 +579,16 @@ bool Session::TestSendKey(commands::Command* command) {
 }
 
 bool Session::SendKey(commands::Command* command) {
+  // floatype: a letter right after a live conversion that kept a word ending
+  // in loose letters goes on with the keys as typed.
+  if (std::optional<composer::Composer> typed = std::exchange(english_undo_, std::nullopt);
+      typed.has_value() && live_conversion_) {
+    const commands::KeyEvent& key = command->input().key();
+    if (key.has_key_code() && key.modifier_keys_size() == 0 &&
+        absl::ascii_isalpha(static_cast<unsigned char>(key.key_code()))) {
+      *context_->mutable_composer() = *std::move(typed);
+    }
+  }
   // floatype: a key that predicts while a live conversion shows suggestions
   // picks from them, as it did before the pause.
   std::unique_ptr<ImeContext> suggestions = std::move(live_suggestions_);
@@ -2583,7 +2594,7 @@ bool Session::DeleteCandidateFromHistory(commands::Command* command) {
 }
 
 bool Session::Convert(commands::Command* command) {
-  KeepEnglishWords();
+  KeepEnglishWords(false);
   if (MaybeConvertAsEnglish(command)) {
     return true;
   }
@@ -2741,10 +2752,17 @@ namespace {
 // The composition one character at a time, and the English words in it.
 struct EnglishView {
   explicit EnglishView(const composer::Composer& composer) {
+    // Without a letter, kept or loose, there is no English word: the common
+    // case, cut short on every key.
+    const std::string query_text = composer.GetQueryForConversion();
+    if (std::none_of(query_text.begin(), query_text.end(), [](char c) {
+          return absl::ascii_isalpha(static_cast<unsigned char>(c));
+        })) {
+      return;
+    }
     for (size_t i = 0; i < composer.GetLength(); ++i) {
       raws.push_back(composer.GetRawSubString(i, 1));
     }
-    const std::string query_text = composer.GetQueryForConversion();
     for (const absl::string_view c : Utf8AsChars(query_text)) {
       query.emplace_back(c);
     }
@@ -2776,15 +2794,23 @@ struct EnglishView {
 
 }  // namespace
 
-void Session::KeepEnglishWords() {
+void Session::KeepEnglishWords(bool undoable) {
+  english_undo_.reset();
   if (!floatype::SessionFeaturesEnabled() ||
       !context_->GetConfig().mixed_english() ||
       context_->state() != ImeContext::COMPOSITION) {
     return;
   }
   composer::Composer* composer = context_->mutable_composer();
-  const std::vector<floatype::EnglishSpan> spans =
-      EnglishView(*composer).spans;
+  const EnglishView view(*composer);
+  const std::vector<floatype::EnglishSpan>& spans = view.spans;
+  // The query writes a loose letter half width; the preedit, full width.
+  if (undoable && !spans.empty() && spans.back().end == view.raws.size() &&
+      view.query.back().size() == 1 &&
+      absl::ascii_isalpha(static_cast<unsigned char>(view.query.back()[0])) &&
+      view.preedit.back() != view.raws.back()) {
+    english_undo_ = *composer;
+  }
   size_t cursor = composer->GetCursor();
   const transliteration::TransliterationType mode = composer->GetInputMode();
   const transliteration::TransliterationType comeback =
@@ -3123,7 +3149,7 @@ bool Session::LiveConvert(commands::Command* command) {
       context_->GetConfig().live_conversion_waits_for_zenz_millisec();
   const commands::Preedit shown_before =
       wait_millisec > 0 ? ShownPreedit() : commands::Preedit();
-  KeepEnglishWords();
+  KeepEnglishWords(true);
   if (context_->state() == ImeContext::COMPOSITION &&
       MaybeConvertAsEnglish(command)) {
     // Typing on edits the word, as after any live conversion.
