@@ -65,6 +65,19 @@ genrule(
     visibility = ["//data_manager:__subpackages__"],
 )
 
+# floatype: Mozc's common words, which the filter above must never catch by
+# a false positive (empty without the added words).
+genrule(
+    name = "suggestion_filter_safe",
+    srcs = glob(
+        ["suggestion_safe_floatype_ut.txt"],
+        allow_empty = True,
+    ),
+    outs = ["suggestion_filter_safe.txt"],
+    cmd = "cat $(SRCS) /dev/null > $@",
+    visibility = ["//data_manager:__subpackages__"],
+)
+
 exports_files(
     # dictionary00.txt is used in system_dictionary_test.cc.
     srcs = ["dictionary00.txt"],

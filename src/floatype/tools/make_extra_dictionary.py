@@ -79,6 +79,9 @@ NICO_EXTRA_COST = 300
 KNOWN_READING_COST = 1000
 # Letters rank after katakana (ウルフズレイン before WOLF'S RAIN).
 LETTERS_COST = 1000
+# Mozc's words below this cost, about 80,000, are kept from the suggestion
+# filter's false positives (1 in 100,000 over 830,000 added words).
+SAFE_COST = 5000
 # Above most of Mozc's names (5000 to 8000), so a name never pushes an
 # ordinary word aside; it shows when nothing else spells the reading.
 NAME_COST = 9000
@@ -119,21 +122,23 @@ def pos_ids() -> dict[str, int]:
 
 
 def base_entries(ids: dict[str, int]):
-  """(reading, value) pairs Mozc has, its readings, and its surnames and
-  given names."""
-  pairs, readings, surnames, given = set(), set(), set(), set()
+  """(reading, value) pairs Mozc has, its readings, its surnames and given
+  names, and its common written forms."""
+  pairs, readings, surnames, given, common = set(), set(), set(), set(), set()
   for path in sorted(OUT_DIR.glob("dictionary*.txt")):
     if path.name.startswith("dictionary_floatype_ut_"):
       continue
     for line in path.read_text().splitlines():
-      reading, left, _, _, value = line.split("\t")[:5]
+      reading, left, _, cost, value = line.split("\t")[:5]
       pairs.add((reading, value))
+      if int(cost) < SAFE_COST:
+        common.add(value)
       readings.add(reading)
       if int(left) == ids[SURNAME]:
         surnames.add((reading, value))
       elif int(left) == ids[GIVEN]:
         given.add((reading, value))
-  return pairs, readings, surnames, given
+  return pairs, readings, surnames, given, common
 
 
 def composable(reading: str, value: str, surnames, given) -> bool:
@@ -282,9 +287,11 @@ def unsuggested(values, mozc_values, suggested) -> list[str]:
   Mozc's; keeping them all out, 14, the rest coming from the added words
   in Mozc's realtime conversion. Words both encyclopedias have, net words
   people do type (草生える), stay `suggested`. The filter matches the
-  written form, so a form Mozc's dictionary also has stays suggested."""
+  written form without case (ARC is arc), so a form Mozc's dictionary also
+  has, in any case, stays suggested."""
+  mozc_lower = {v.lower() for v in mozc_values}
   return sorted({v for v in values
-                 if v not in mozc_values and v not in suggested})
+                 if v.lower() not in mozc_lower and v not in suggested})
 
 
 def nico_pixiv_values() -> set[str]:
@@ -312,15 +319,15 @@ def self_check() -> None:
   assert adjusted(8000, "あい", "AI", set()) == 9000
   assert plain("らぶすてーじ", "ラブステージ")
   assert not plain("らぶすてーじ", "LOVE STAGE!!") and not plain("ひがし", "東１４")
-  assert unsuggested(["高尾山", "低尾", "東京", "草生える"], {"東京"},
-                     {"草生える"}) == ["低尾", "高尾山"]
+  assert unsuggested(["高尾山", "低尾", "東京", "草生える", "ARC"],
+                     {"東京", "arc"}, {"草生える"}) == ["低尾", "高尾山"]
   assert known_cost(0) == 9500 and known_cost(1) == 8750 and known_cost(30) == 7500
 
 
 def main() -> None:
   self_check()
   ids = pos_ids()
-  pairs, readings, surnames, given = base_entries(ids)
+  pairs, readings, surnames, given, common = base_entries(ids)
   name_readings = ({r for r, _ in surnames}, {r for r, _ in given})
   titles = Titles(bz2.decompress(fetch(*JAWIKI_TITLES)).decode("utf-8"))
   seen = set()
@@ -345,6 +352,9 @@ def main() -> None:
   out = OUT_DIR / "suggestion_filter_floatype_ut.txt"
   out.write_text("".join(f"{value}\n" for value in unknown))
   print(f"{out}: {len(unknown)} words", file=sys.stderr)
+  out = OUT_DIR / "suggestion_safe_floatype_ut.txt"
+  out.write_text("".join(f"{value}\n" for value in sorted(common)))
+  print(f"{out}: {len(common)} words", file=sys.stderr)
 
 
 if __name__ == "__main__":

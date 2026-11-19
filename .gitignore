@@ -79,3 +79,4 @@ MODULE.bazel.lock
 # floatype: dictionaries made from outside data (floatype/tools/make_extra_dictionary.py)
 /src/data/dictionary_oss/dictionary_floatype_ut_*.txt
 /src/data/dictionary_oss/suggestion_filter_floatype_ut.txt
+/src/data/dictionary_oss/suggestion_safe_floatype_ut.txt

@@ -98,6 +98,9 @@ mozc_dataset(
     ),
     sorting_map = "//data/rules:sorting_map.tsv",
     special_pos = "//data/rules:special_pos.def",
+    suggestion_filter_safe_def_srcs = [
+        "//data/dictionary_oss:suggestion_filter_safe",
+    ],
     suggestion_filter_src = (
         "//data/dictionary_oss:suggestion_filter_all"
     ),
