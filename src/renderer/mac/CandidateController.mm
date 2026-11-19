@@ -161,7 +161,8 @@ bool CandidateController::ExecCommand(const RendererCommand &command) {
   }
 
   candidate_window_->SetLook(command_.output().candidate_style(),
-                             command_.output().suggest_style());
+                             command_.output().suggest_style(),
+                             command_.output().candidate_kind_mark());
   cascading_window_->SetLook(command_.output().candidate_style(),
                              command_.output().suggest_style());
   candidate_window_->SetCandidateWindow(command_.output().candidate_window());

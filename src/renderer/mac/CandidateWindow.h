@@ -59,10 +59,13 @@ class CandidateWindow : public RendererBaseWindow {
   void SetCandidateWindow(const commands::CandidateWindow &candidate_window);
   // floatype: the looks for the next candidates: `conversion` for the
   // conversion window, `suggest` for predictions and suggestions.
+  // `kind_mark` draws the footer's dot (candidate_kind_mark).
   void SetLook(const config::Config::CandidateStyle &conversion,
-               const config::Config::CandidateStyle &suggest) {
+               const config::Config::CandidateStyle &suggest,
+               bool kind_mark = false) {
     conversion_style_ = conversion;
     suggest_style_ = suggest;
+    kind_mark_ = kind_mark;
   }
   void Show() override;
   void Hide() override;
@@ -83,6 +86,7 @@ class CandidateWindow : public RendererBaseWindow {
   mozc::client::SendCommandInterface *command_sender_;
   config::Config::CandidateStyle conversion_style_;
   config::Config::CandidateStyle suggest_style_;
+  bool kind_mark_ = false;
   // Draws the look's shadow, larger than the system's window shadow.
   NSPanel *shadow_window_ = nil;
 };

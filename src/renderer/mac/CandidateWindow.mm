@@ -112,6 +112,7 @@ void CandidateWindow::SetCandidateWindow(const commands::CandidateWindow& candid
   const bool suggest = candidate_window.category() == commands::SUGGESTION ||
                        candidate_window.category() == commands::PREDICTION;
   [candidate_view setLookStyle:suggest ? suggest_style_ : conversion_style_];
+  [candidate_view setKindMark:kind_mark_];
   [candidate_view setCandidateWindow:&candidate_window];
   [candidate_view setNeedsDisplay:YES];
   NSSize size = [candidate_view updateLayout];

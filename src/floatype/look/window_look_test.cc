@@ -148,6 +148,13 @@ TEST(WindowLookTest, MeasuresScaleWithTheSize) {
   EXPECT_EQ(rendered.shortcut_style().font_size(), 24);
 }
 
+TEST(WindowLookTest, KindMarkColors) {
+  EXPECT_EQ(KindMarkColor(true, false), 0x6f8fbf);
+  EXPECT_EQ(KindMarkColor(true, true), 0x6f8fbf);
+  EXPECT_EQ(KindMarkColor(false, false), 0xc3c7cf);
+  EXPECT_EQ(KindMarkColor(false, true), 0x5c6068);
+}
+
 TEST(WindowLookTest, ShadowPresets) {
   Config::CandidateStyle style;
   const WindowLook soft = ResolveWindowLook(style, false);

@@ -75,6 +75,10 @@ enum ColumnType {
 // appearance is, and follows the appearance as it changes.
 - (void)setLookStyle:(const mozc::config::Config::CandidateStyle &)style;
 
+// floatype: whether to draw the footer's dot, blue for the prediction list
+// and grey for conversion candidates.
+- (void)setKindMark:(BOOL)kindMark;
+
 // floatype: the look it draws with now.
 - (const mozc::floatype::WindowLook &)look;
 

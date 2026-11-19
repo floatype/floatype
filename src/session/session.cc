@@ -3054,6 +3054,7 @@ void Session::SetCandidateLook(commands::Command* command) const {
   if (config.has_suggest_style()) {
     *output->mutable_suggest_style() = config.suggest_style();
   }
+  output->set_candidate_kind_mark(config.candidate_kind_mark());
 }
 
 void Session::SetIndicator(commands::Command* command) const {

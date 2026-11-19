@@ -948,6 +948,11 @@ QWidget* ConfigDialog::SetUpLookTab() {
   }
   shades->addStretch();
   left->addLayout(shades);
+  kindMarkCheckBox_ =
+      new QCheckBox(Text("予測候補の一覧と変換候補を、帯の左の丸の色で見分ける"));
+  kindMarkCheckBox_->setToolTip(
+      Text("予測候補の一覧は青、変換候補は灰色の丸"));
+  left->addWidget(kindMarkCheckBox_);
   left->addStretch();
   body->addLayout(left);
 
@@ -1047,6 +1052,7 @@ void ConfigDialog::WrapTabsInScrollAreas() {
 }
 
 void ConfigDialog::LoadLookControls(const config::Config& config) {
+  kindMarkCheckBox_->setChecked(config.candidate_kind_mark());
   for (const auto& [controls, style] :
        {std::pair{&candidateControls_, &config.candidate_style()},
         std::pair{&suggestControls_, &config.suggest_style()}}) {
@@ -1085,6 +1091,7 @@ void ConfigDialog::LoadLookControls(const config::Config& config) {
 
 // Into the styles `config` has, keeping the fields without a control.
 void ConfigDialog::SaveLookControls(config::Config* config) const {
+  config->set_candidate_kind_mark(kindMarkCheckBox_->isChecked());
   for (const auto& [controls, style] :
        {std::pair{&candidateControls_, config->mutable_candidate_style()},
         std::pair{&suggestControls_, config->mutable_suggest_style()}}) {
@@ -1165,7 +1172,7 @@ void ConfigDialog::PaintPreview(QPainter& painter, const QRectF& area) const {
       PaintCandidateWindow(
           painter, area,
           floatype::ResolveWindowLook(config.candidate_style(), previewDark_),
-          false);
+          false, config.candidate_kind_mark());
       break;
     case 1:
       PaintCandidateWindow(

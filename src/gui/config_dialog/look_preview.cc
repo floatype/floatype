@@ -105,7 +105,8 @@ void PaintBackdrop(QPainter& painter, const QRectF& area, bool dark) {
 }
 
 void PaintCandidateWindow(QPainter& painter, const QRectF& area,
-                          const floatype::WindowLook& look, bool suggestion) {
+                          const floatype::WindowLook& look, bool suggestion,
+                          bool kind_mark) {
   const RendererStyle style = floatype::RendererStyleFor(look);
   const QString candidates[] = {QString::fromUtf8("今日はいい天気です"),
                                 QString::fromUtf8("今日もいい天気です"),
@@ -210,6 +211,16 @@ void PaintCandidateWindow(QPainter& painter, const QRectF& area,
   p.drawText(footer.adjusted(0, look.footer_top_padding, -look.row_padding,
                              -look.footer_bottom_padding),
              Qt::AlignRight | Qt::AlignTop, footer_text);
+  // The conversion window's dot (candidate_kind_mark), as the renderer draws.
+  if (!suggestion && kind_mark) {
+    const double diameter = 7 * look.size_percent / 100.0;
+    const double middle =
+        footer.top() + look.footer_top_padding + footer_metrics.height() / 2;
+    p.setPen(Qt::NoPen);
+    p.setBrush(Rgb(floatype::KindMarkColor(false, look.dark)));
+    p.drawEllipse(QRectF(footer.left() + look.row_padding,
+                         middle - diameter / 2, diameter, diameter));
+  }
   p.setClipping(false);
   p.setPen(QPen(Rgb(look.border, look.border_alpha), 1));
   p.setBrush(Qt::NoBrush);

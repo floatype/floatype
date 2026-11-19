@@ -36,7 +36,8 @@ void PaintBackdrop(QPainter& painter, const QRectF& area, bool dark);
 // window has the numbers column and "1 / 3" in its footer; the suggestion
 // window neither, and 予測候補 in its footer.
 void PaintCandidateWindow(QPainter& painter, const QRectF& area,
-                          const floatype::WindowLook& look, bool suggestion);
+                          const floatype::WindowLook& look, bool suggestion,
+                          bool kind_mark = false);
 
 // The reading over an underlined live conversion.
 void PaintRuby(QPainter& painter, const QRectF& area,

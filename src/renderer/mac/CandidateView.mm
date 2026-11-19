@@ -103,6 +103,7 @@ using mozc::renderer::mac::MacViewUtil;
   mozc::floatype::WindowLook look_;
   // The settings and appearance look_ is for, to resolve it only on a change.
   std::string lookKey_;
+  BOOL kindMark_;
 }
 
 #pragma mark initialization
@@ -160,6 +161,22 @@ using mozc::renderer::mac::MacViewUtil;
   [self updateLook];
 }
 
+- (void)setKindMark:(BOOL)kindMark {
+  kindMark_ = kindMark;
+}
+
+// floatype: the footer's dot, when there is one: its diameter, and the space
+// it takes with the gap after it.
+- (BOOL)hasKindMark {
+  return kindMark_ && candidate_window_.has_footer() &&
+         (candidate_window_.category() == mozc::commands::PREDICTION ||
+          candidate_window_.category() == mozc::commands::CONVERSION);
+}
+
+- (CGFloat)kindMarkDiameter {
+  return 7 * look_.size_percent / 100.0;
+}
+
 - (const mozc::floatype::WindowLook &)look {
   return look_;
 }
@@ -212,8 +229,9 @@ using mozc::renderer::mac::MacViewUtil;
   // Reserve footer space: floatype's plain line, right-aligned.
   if (candidate_window_.has_footer()) {
     const NSSize textSize = [[self footerText] size];
+    const CGFloat mark = [self hasKindMark] ? [self kindMarkDiameter] + look_.row_padding : 0;
     tableLayout_.EnsureFooterSize(MacViewUtil::ToSize(NSMakeSize(
-        std::ceil(textSize.width + 2 * look_.row_padding),
+        std::ceil(textSize.width + 2 * look_.row_padding + mark),
         std::ceil(textSize.height + look_.footer_top_padding + look_.footer_bottom_padding))));
   }
 
@@ -420,6 +438,19 @@ using mozc::renderer::mac::MacViewUtil;
   const NSAttributedString *text = [self footerText];
   [text drawAtPoint:NSMakePoint(NSMaxX(footerRect) - look_.row_padding - text.size.width,
                                 NSMinY(footerRect) + look_.footer_top_padding)];
+  if ([self hasKindMark]) {
+    const CGFloat diameter = [self kindMarkDiameter];
+    const CGFloat middle = NSMinY(footerRect) + look_.footer_top_padding + text.size.height / 2;
+    const uint32_t color = mozc::floatype::KindMarkColor(
+        candidate_window_.category() == mozc::commands::PREDICTION, look_.dark);
+    [[NSColor colorWithSRGBRed:((color >> 16) & 0xff) / 255.0
+                         green:((color >> 8) & 0xff) / 255.0
+                          blue:(color & 0xff) / 255.0
+                         alpha:1] set];
+    [[NSBezierPath
+        bezierPathWithOvalInRect:NSMakeRect(NSMinX(footerRect) + look_.row_padding,
+                                            middle - diameter / 2, diameter, diameter)] fill];
+  }
 }
 
 // floatype: the space on each side of the scrollbar's thumb.

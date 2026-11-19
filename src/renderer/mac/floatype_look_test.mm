@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <string>
+#include <tuple>
 
 #include "floatype/look/window_look.h"
 #include "protocol/candidate_window.pb.h"
@@ -305,6 +306,25 @@ TEST(FloatypeLookTest, UsageExamplesAreAnOrangeDot) {
              "the dot beside a description");
   ExpectNear(ColorAt(view, third.Right() - 13.5, third.Top() + third.Height() / 2.0), 0xffffff,
              "a gap before the description");
+}
+
+TEST(FloatypeLookTest, TheFooterDotTellsPredictionFromConversion) {
+  for (const auto [category, kind_mark, expected] :
+       {std::tuple{commands::PREDICTION, true, 0x6f8fbfu},
+        std::tuple{commands::CONVERSION, true, 0xc3c7cfu},
+        std::tuple{commands::CONVERSION, false, 0xffffffu}}) {
+    commands::CandidateWindow candidates = Candidates();
+    candidates.set_category(category);
+    CandidateView *view = ViewFor(Style());
+    [view setKindMark:kind_mark];
+    [view setCandidateWindow:&candidates];
+    Draw(view, category == commands::PREDICTION ? "candidates_kind_mark_prediction"
+               : kind_mark                          ? "candidates_kind_mark_conversion"
+                                                    : "candidates_kind_mark_off");
+    const mozc::Rect footer = [view tableLayout]->GetFooterRect();
+    ExpectNear(ColorAt(view, footer.Left() + 9 + 3.5, footer.Top() + footer.Height() / 2.0),
+               expected, "the dot");
+  }
 }
 
 TEST(FloatypeLookTest, RoundedCornersAreSeeThrough) {

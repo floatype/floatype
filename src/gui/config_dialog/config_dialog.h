@@ -128,6 +128,7 @@ class ConfigDialog : public QDialog, private Ui::ConfigDialog {
   std::vector<QCheckBox*> directCommitCheckBoxes_;
   QCheckBox* mixedEnglishCheckBox_;
   QCheckBox* suggestAddedWordsCheckBox_;
+  QCheckBox* kindMarkCheckBox_;
   QCheckBox* displayAmbiguousCheckBox_;
   QCheckBox* showIndicatorCheckBox_;
   QComboBox* indicatorPlacementComboBox_;

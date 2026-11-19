@@ -1473,6 +1473,8 @@ message Output {
   optional mozc.config.Config.CandidateStyle candidate_style = 1003;
   // floatype: the look of the prediction and suggestion window.
   optional mozc.config.Config.CandidateStyle suggest_style = 1006;
+  // floatype: whether to draw the footer's dot (candidate_kind_mark).
+  optional bool candidate_kind_mark = 1007;
   // floatype: the reading to show above a live conversion; unset shows none.
   optional string live_reading = 1004;
   // floatype: how to draw it.

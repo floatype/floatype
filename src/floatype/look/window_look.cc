@@ -233,4 +233,11 @@ void ScaleFonts(RendererStyle& style, uint32_t percent) {
   }
 }
 
+uint32_t KindMarkColor(bool prediction, bool dark) {
+  if (prediction) {
+    return 0x6f8fbf;
+  }
+  return dark ? 0x5c6068 : 0xc3c7cf;
+}
+
 }  // namespace mozc::floatype
