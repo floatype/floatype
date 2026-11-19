@@ -66,7 +66,8 @@ ABSL_FLAG(int, wait_for_zenz, 0,
           "live mode: live_conversion_waits_for_zenz_millisec");
 ABSL_FLAG(bool, suggest, false,
           "type each reading key by key and print the suggestions shown "
-          "after the last key, separated by |");
+          "after the last key, separated by |; with --live, after the pause "
+          "that follows it");
 ABSL_FLAG(bool, mixed_english, false, "live mode: turn mixed English input on");
 ABSL_FLAG(bool, display_ambiguous, false,
           "live mode: show ambiguous romaji as kana");
@@ -161,6 +162,10 @@ class Replayer {
       input.mutable_key()->set_key_code(key_code);
       output = Eval(std::move(input));
     }
+    if (absl::GetFlag(FLAGS_live)) {
+      int changes = 0;
+      RunCallbacks(output, changes);
+    }
     std::vector<std::string> values;
     for (const commands::CandidateWindow::Candidate& candidate :
          output.candidate_window().candidate()) {
@@ -193,7 +198,7 @@ class Replayer {
       input.mutable_context()->set_preceding_text(left_context);
       commands::Output output = Eval(std::move(input));
       if (pause) {
-        polls += RunCallbacks(std::move(output), changes);
+        polls += RunCallbacks(output, changes);
       }
     }
     commands::Input enter;
@@ -284,8 +289,9 @@ class Replayer {
   }
 
   // Calls back the way the client's timer does until the session stops
-  // asking. Only polls wait: they wait for the scorer.
-  int RunCallbacks(commands::Output output, int& changes) {
+  // asking, leaving the last output in `output`. Only polls wait: they wait
+  // for the scorer.
+  int RunCallbacks(commands::Output& output, int& changes) {
     int polls = 0;
     std::string shown = Preedit(output);
     while (output.has_callback()) {

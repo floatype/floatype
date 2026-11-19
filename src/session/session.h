@@ -342,6 +342,11 @@ class Session {
   // text on screen and shows only what was typed after it as the reading.
   std::string live_reading_;
   std::string live_value_;
+  // The context as it was before the live conversion, showing the suggestions
+  // that stay on screen with it until the next key or command; null if none.
+  std::unique_ptr<ImeContext> live_suggestions_;
+  // Replaces the output's candidate window with those suggestions.
+  void AttachLiveSuggestions(commands::Command* command) const;
   // The text on screen while composing after a live conversion, or "".
   std::string ShownAfterLiveConversion() const;
 

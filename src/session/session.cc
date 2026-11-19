@@ -325,6 +325,20 @@ bool Session::SendCommand(commands::Command* command) {
     case commands::SessionCommand::GET_STATUS:
       break;  // Timer callbacks and queries, not user actions.
     default:
+      // floatype: with a live conversion the window shown holds the
+      // suggestions, so a candidate id from it is theirs.
+      if (std::unique_ptr<ImeContext> suggestions =
+              std::move(live_suggestions_);
+          suggestions != nullptr && live_conversion_ && !commit_after_zenz_ &&
+          (session_command.type() ==
+               commands::SessionCommand::SELECT_CANDIDATE ||
+           session_command.type() ==
+               commands::SessionCommand::SUBMIT_CANDIDATE ||
+           session_command.type() ==
+               commands::SessionCommand::HIGHLIGHT_CANDIDATE)) {
+        context_ = std::move(suggestions);
+        waiting_for_zenz_ = false;
+      }
       zenz_.Cancel();
       StopWaitingForZenz();
       commit_after_zenz_ = false;
@@ -563,6 +577,19 @@ bool Session::TestSendKey(commands::Command* command) {
 }
 
 bool Session::SendKey(commands::Command* command) {
+  // floatype: a key that predicts while a live conversion shows suggestions
+  // picks from them, as it did before the pause.
+  std::unique_ptr<ImeContext> suggestions = std::move(live_suggestions_);
+  if (keymap::CompositionState::Commands key_command;
+      suggestions != nullptr && live_conversion_ && !commit_after_zenz_ &&
+      context_->GetKeyMapManager().GetCommandSuggestion(command->input().key(),
+                                                        &key_command) &&
+      key_command == keymap::CompositionState::PREDICT_AND_CONVERT) {
+    context_ = std::move(suggestions);
+    live_conversion_ = false;
+    waiting_for_zenz_ = false;
+    live_reading_.clear();
+  }
   zenz_.Cancel();
   zenz_scheduled_ = false;
   StopWaitingForZenz();
@@ -647,6 +674,7 @@ bool Session::SendKey(commands::Command* command) {
       key_command == keymap::ConversionState::ZENZ_CORRECT) {
     live_conversion_ = live;
     zenz_indices_ = zenz_indices;
+    live_suggestions_ = std::move(suggestions);
   }
 
   // floatype: Enter commits what is on screen, kept live conversion included.
@@ -2736,6 +2764,9 @@ bool Session::MaybeCommitOnCharacter(commands::Command* command) {
   output->clear_all_candidate_words();
   output->clear_callback();
   CorrectWithZenzNow(command);
+  // A conversion about to commit shows no suggestions.
+  live_suggestions_.reset();
+  output->clear_candidate_window();
   if (context_->state() != ImeContext::CONVERSION) {
     return true;
   }
@@ -2933,6 +2964,21 @@ void Session::OutputLiveConversion(commands::Command* command) {
     *command->mutable_output()->mutable_ruby_style() =
         context_->GetConfig().ruby_style();
   }
+  AttachLiveSuggestions(command);
+}
+
+void Session::AttachLiveSuggestions(commands::Command* command) const {
+  commands::Output* output = command->mutable_output();
+  output->clear_candidate_window();
+  if (live_suggestions_ == nullptr) {
+    return;
+  }
+  commands::Output shown;
+  live_suggestions_->converter().FillOutput(live_suggestions_->composer(),
+                                            &shown);
+  if (shown.has_candidate_window()) {
+    *output->mutable_candidate_window() = shown.candidate_window();
+  }
 }
 
 std::string Session::ShownAfterLiveConversion() const {
@@ -2960,11 +3006,18 @@ bool Session::LiveConvert(commands::Command* command) {
     live_conversion_ = true;
     return true;
   }
+  // Mozc's Suggest needs the composition state, so the suggestions shown now
+  // stay with a copy of the context; the conversion takes the real one.
+  std::unique_ptr<ImeContext> suggestions =
+      context_->converter().CheckState(EngineConverterInterface::SUGGESTION)
+          ? std::make_unique<ImeContext>(*context_)
+          : nullptr;
   if (context_->state() != ImeContext::COMPOSITION ||
       !context_->mutable_converter()->Convert(context_->composer(),
                                               context_->client_context())) {
     return DoNothing(command);
   }
+  live_suggestions_ = std::move(suggestions);
   command->mutable_output()->set_consumed(true);
   SetSessionState(ImeContext::CONVERSION, context_.get());
   live_conversion_ = true;
@@ -2974,7 +3027,7 @@ bool Session::LiveConvert(commands::Command* command) {
     zenz_wait_until_ = Clock::GetAbslTime() + absl::Milliseconds(wait_millisec);
     Output(command);
     *command->mutable_output()->mutable_preedit() = waiting_preedit_;
-    command->mutable_output()->clear_candidate_window();
+    AttachLiveSuggestions(command);
     RequestZenz(command);
     if (zenz_.pending()) {
       return true;
@@ -3098,7 +3151,7 @@ bool Session::PollZenz(commands::Command* command) {
         Clock::GetAbslTime() < zenz_wait_until_) {
       Output(command);
       *command->mutable_output()->mutable_preedit() = waiting_preedit_;
-      command->mutable_output()->clear_candidate_window();
+      AttachLiveSuggestions(command);
       SetCallback(
           command, commands::SessionCommand::POLL_ZENZ,
           absl::ToInt64Milliseconds(floatype::ZenzCorrector::kPollInterval));

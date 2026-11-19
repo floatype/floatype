@@ -572,6 +572,91 @@ TEST_F(FloatypeZenzTest, AKeyWhileWaitingForZenzMeetsWhatIsShown) {
   EXPECT_EQ(Preedit(PollWhileAsked(converted)), "機械");
 }
 
+TEST_F(FloatypeZenzTest, ALiveConversionKeepsTheSuggestionsShown) {
+  floatype::EnableSessionFeatures(true);
+  const commands::Output typed = SendKeys({"k", "i", "k", "a", "i"});
+  const std::vector<std::string> shown = Suggestions(typed);
+  ASSERT_GE(shown.size(), 2);
+  const commands::Output live = CallBack(typed);
+  ASSERT_EQ(Preedit(live), "機会");
+  EXPECT_EQ(live.candidate_window().category(), commands::SUGGESTION);
+  EXPECT_FALSE(live.candidate_window().has_focused_index());
+  EXPECT_EQ(Suggestions(live), shown);
+  // They stay through zenz's correction.
+  const commands::Output corrected = PollWhileAsked(CallBack(live));
+  ASSERT_EQ(Preedit(corrected), "機械");
+  EXPECT_EQ(Suggestions(corrected), shown);
+  // Typing on suggests for the longer reading as usual.
+  EXPECT_EQ(Preedit(SendKeys({"g", "a"})), "機械が");
+}
+
+TEST_F(FloatypeZenzTest, SuggestionsShowWhileALiveConversionWaitsForZenz) {
+  floatype::EnableSessionFeatures(true);
+  SetLiveConversionWait(250);
+  const commands::Output typed = SendKeys({"k", "i", "k", "a", "i"});
+  const commands::Output waiting = CallBack(typed);
+  ASSERT_EQ(Preedit(waiting), "きかい");
+  EXPECT_EQ(Suggestions(waiting), Suggestions(typed));
+  EXPECT_EQ(Suggestions(PollWhileAsked(waiting)), Suggestions(typed));
+}
+
+TEST_F(FloatypeZenzTest, PickingASuggestionAfterTheLiveConversionCommitsIt) {
+  floatype::EnableSessionFeatures(true);
+  const commands::Output live = CallBack(SendKeys({"k", "i", "k", "a", "i"}));
+  // The third suggestion, 機械化, shares its id with the conversion's きかい.
+  ASSERT_GE(live.candidate_window().candidate_size(), 3);
+  const commands::CandidateWindow::Candidate& third =
+      live.candidate_window().candidate(2);
+  ASSERT_EQ(third.value(), "機械化");
+  commands::Input input;
+  input.set_type(commands::Input::SEND_COMMAND);
+  input.mutable_command()->set_type(commands::SessionCommand::SUBMIT_CANDIDATE);
+  input.mutable_command()->set_id(third.id());
+  EXPECT_EQ(Eval(std::move(input)).result().value(), "機械化");
+}
+
+TEST_F(FloatypeZenzTest, ClickingASuggestionAfterTheLiveConversionPicksIt) {
+  floatype::EnableSessionFeatures(true);
+  const commands::Output live = CallBack(SendKeys({"k", "i", "k", "a", "i"}));
+  ASSERT_GE(live.candidate_window().candidate_size(), 3);
+  const commands::CandidateWindow::Candidate& third =
+      live.candidate_window().candidate(2);
+  ASSERT_EQ(third.value(), "機械化");
+  // What the macOS candidate window sends on a click.
+  commands::Input input;
+  input.set_type(commands::Input::SEND_COMMAND);
+  input.mutable_command()->set_type(commands::SessionCommand::SELECT_CANDIDATE);
+  input.mutable_command()->set_id(third.id());
+  EXPECT_EQ(Preedit(Eval(std::move(input))), "機械化");
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(), "機械化");
+}
+
+TEST_F(FloatypeZenzTest, TabAfterTheLiveConversionGoesIntoTheSuggestions) {
+  floatype::EnableSessionFeatures(true);
+  const commands::Output live = CallBack(SendKeys({"k", "i", "k", "a", "i"}));
+  const commands::Output tab = SendKeys({"Tab"});
+  EXPECT_EQ(tab.candidate_window().category(), commands::PREDICTION);
+  EXPECT_EQ(Preedit(tab), live.candidate_window().candidate(0).value());
+  // There the number keys pick, as Mozc's shortcuts do.
+  EXPECT_EQ(Preedit(SendKeys({"2"})),
+            live.candidate_window().candidate(1).value());
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(),
+            live.candidate_window().candidate(1).value());
+  // Down goes there too, rather than to the conversion's candidates.
+  const commands::Output again = CallBack(SendKeys({"k", "i", "k", "a", "i"}));
+  const commands::Output down = SendKeys({"Down"});
+  EXPECT_EQ(down.candidate_window().category(), commands::PREDICTION);
+  EXPECT_EQ(Preedit(down), again.candidate_window().candidate(0).value());
+}
+
+TEST_F(FloatypeZenzTest, SpaceAfterTheLiveConversionStillConverts) {
+  floatype::EnableSessionFeatures(true);
+  CallBack(SendKeys({"k", "i", "k", "a", "i"}));
+  const commands::Output space = SendKeys({"Space"});
+  EXPECT_EQ(space.candidate_window().category(), commands::CONVERSION);
+  EXPECT_TRUE(space.candidate_window().has_focused_index());
+}
+
 TEST_F(FloatypeZenzTest, TheCandidateWindowGetsItsFontScale) {
   floatype::EnableSessionFeatures(true);
   EXPECT_FALSE(
