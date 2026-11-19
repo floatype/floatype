@@ -74,8 +74,9 @@ def render(char, xscale, framed):
         pad = h * 0.05
         d.rounded_rectangle((pad, pad, w - pad, h - pad), radius=h * 0.24,
                             outline=255, width=int(h * 0.075))
-    draw_f(d, w * 0.13, h * 0.17, h * 0.66, weight=0.9)
-    draw_char(img, char, w * 0.69, h * 0.6, h * 0.5, xscale)
+    # Smaller than the frame allows, for room inside it.
+    draw_f(d, w * 0.17, h * 0.23, h * 0.54, weight=0.95)
+    draw_char(img, char, w * 0.67, h * 0.58, h * 0.42, xscale)
     return img
 
 
