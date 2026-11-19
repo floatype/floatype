@@ -109,9 +109,9 @@ void PaintCandidateWindow(QPainter& painter, const QRectF& area,
   const RendererStyle style = floatype::RendererStyleFor(look);
   const QString candidates[] = {QString::fromUtf8("今日はいい天気です"),
                                 QString::fromUtf8("今日もいい天気です"),
-                                QString::fromUtf8("今日は良い天気")};
+                                QString::fromUtf8("キョウハイイテンキ")};
   const QString descriptions[] = {QString(), QString(),
-                                  QString::fromUtf8("丁寧")};
+                                  QString::fromUtf8("カタカナ")};
   const QFont candidate_font = Font(style.candidate_style());
   const QFont number_font = Font(style.shortcut_style());
   const QFont description_font = Font(style.description_style());
@@ -143,7 +143,7 @@ void PaintCandidateWindow(QPainter& painter, const QRectF& area,
       description_metrics.horizontalAdvance(descriptions[2]) + look.row_padding;
   const double row_width = number_width + gap + text_width + description_width;
   const QString footer_text =
-      suggestion ? QString::fromUtf8("予測候補") : QStringLiteral("1 / 3");
+      suggestion ? QString::fromUtf8("Tabキーで選択") : QStringLiteral("1 / 3");
   const double footer_height = footer_metrics.height() +
                                look.footer_top_padding +
                                look.footer_bottom_padding;

@@ -501,8 +501,8 @@ commands::CandidateWindow SheetCandidates(bool suggestion) {
   window.set_size(3);
   window.set_focused_index(0);
   window.set_position(0);
-  const char *values[] = {"今日はいい天気です", "今日もいい天気です", "今日は良い天気"};
-  const char *descriptions[] = {"", "", "丁寧"};
+  const char *values[] = {"今日はいい天気です", "今日もいい天気です", "キョウハイイテンキ"};
+  const char *descriptions[] = {"", "", "カタカナ"};
   for (int i = 0; i < 3; ++i) {
     commands::CandidateWindow::Candidate *candidate = window.add_candidate();
     candidate->set_index(i);
@@ -513,7 +513,8 @@ commands::CandidateWindow SheetCandidates(bool suggestion) {
     candidate->mutable_annotation()->set_description(descriptions[i]);
   }
   if (suggestion) {
-    window.mutable_footer()->set_label("予測候補");
+    // What Mozc shows under suggestions (engine/engine_output.cc).
+    window.mutable_footer()->set_label("Tabキーで選択");
   } else {
     window.mutable_footer()->set_index_visible(true);
   }
