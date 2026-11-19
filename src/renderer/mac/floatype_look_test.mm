@@ -251,9 +251,9 @@ TEST(FloatypeLookTest, TheLightLook) {
   // No column behind the numbers.
   const mozc::Rect number = [view tableLayout]->GetCellRect(1, renderer::kColumnShortcut);
   ExpectNear(ColorAt(view, number.Left() + 2, number.Top() + 2), 0xffffff, "no number column");
-  // Rows of 28pt inside 6pt of padding.
-  EXPECT_EQ([view tableLayout]->GetRowRect(0).Height(), 28);
-  EXPECT_EQ([view tableLayout]->GetRowRect(0).Top(), 6);
+  // Rows of 24pt inside 5pt of padding.
+  EXPECT_EQ([view tableLayout]->GetRowRect(0).Height(), 24);
+  EXPECT_EQ([view tableLayout]->GetRowRect(0).Top(), 5);
   // The focused row's corners are round: its corner shows the background.
   const mozc::Rect row = [view tableLayout]->GetRowRect(0);
   ExpectNear(ColorAt(view, row.Left() + 0.5, row.Top() + 0.5), 0xffffff, "rounded focus");
