@@ -271,8 +271,40 @@ TEST(FloatypeLookTest, TheScrollbarIsAThumbWithoutATrack) {
   const mozc::Rect thumb = layout->GetVScrollIndicatorRect(0, 2, 9);
   ExpectNear(ColorAt(view, thumb.Left() + thumb.Width() / 2.0, thumb.Top() + thumb.Height() / 2.0),
              0x989ca5, "the thumb");
+  // Room on both sides: the thumb is 4pt in the middle of a 10pt column.
+  EXPECT_EQ(bar.Width(), 10);
+  const double middle = thumb.Top() + thumb.Height() / 2.0;
+  ExpectNear(ColorAt(view, bar.Left() + 1.5, middle), 0xffffff, "a gap off the rows");
+  ExpectNear(ColorAt(view, bar.Right() - 1.5, middle), 0xffffff, "a gap off the edge");
   ExpectNear(ColorAt(view, bar.Left() + bar.Width() / 2.0, bar.Bottom() - 3), 0xffffff,
              "no track below it");
+}
+
+TEST(FloatypeLookTest, UsageExamplesAreAnOrangeDot) {
+  commands::CandidateWindow candidates = Candidates();
+  candidates.set_size(9);
+  candidates.mutable_candidate(0)->set_information_id(1);
+  candidates.mutable_candidate(1)->set_information_id(2);
+  candidates.mutable_candidate(2)->set_information_id(3);  // With a description.
+  CandidateView *view = ViewFor(Style());
+  [view setCandidateWindow:&candidates];
+  Draw(view, "candidates_usage_dot");
+  for (int row = 0; row < 2; ++row) {
+    const mozc::Rect rect = [view tableLayout]->GetRowRect(row);
+    const uint32_t background = row == 0 ? 0xc4d0e1 : 0xffffff;
+    const double middle = rect.Top() + rect.Height() / 2.0;
+    // A row padding in from the row's end, on the focused row too.
+    ExpectNear(ColorAt(view, rect.Right() - 9, middle), 0xe8914a, "the dot");
+    ExpectNear(ColorAt(view, rect.Right() - 4, middle), background, "room on its right");
+    // No bar above it, where Mozc's was.
+    ExpectNear(ColorAt(view, rect.Right() - 9, rect.Top() + 3), background, "no bar");
+  }
+  // The description moves left, clear of the dot.
+  const mozc::Rect third = [view tableLayout]->GetRowRect(2);
+  ExpectNear(ColorAt(view, third.Right() - 9, third.Top() + third.Height() / 2.0), 0xe8914a,
+             "the dot beside a description");
+  ExpectNear(ColorAt(view, third.Right() - 13.5, third.Top() + third.Height() / 2.0), 0xffffff,
+             "a gap before the description");
 }
 
 TEST(FloatypeLookTest, RoundedCornersAreSeeThrough) {

@@ -219,7 +219,8 @@ using mozc::renderer::mac::MacViewUtil;
 
   tableLayout_.SetRowRectPadding(style_.row_rect_padding());
   if (candidate_window_.candidate_size() < candidate_window_.size()) {
-    tableLayout_.SetVScrollBar(style_.scrollbar_width());
+    // floatype: room on both sides of the thumb, off the rows and the edge.
+    tableLayout_.SetVScrollBar(style_.scrollbar_width() + 2 * [self scrollbarGap]);
   }
 
   const NSAttributedString *gap1 =
@@ -262,8 +263,12 @@ using mozc::renderer::mac::MacViewUtil;
       tableLayout_.EnsureCellSize(kColumnCandidate, MacViewUtil::ToSize(valueSize));
     }
     if ([description length] > 0) {
-      const NSSize descriptionSize =
+      NSSize descriptionSize =
           MacViewUtil::applyTheme([description size], style_.description_style());
+      // floatype: room for the usage dot, which pushes the description left.
+      if (candidate.has_information_id()) {
+        descriptionSize.width += look_.row_padding;
+      }
       tableLayout_.EnsureCellSize(kColumnDescription, MacViewUtil::ToSize(descriptionSize));
     }
 
@@ -362,6 +367,10 @@ using mozc::renderer::mac::MacViewUtil;
     // floatype: descriptions at the row's right end.
     if (type == kColumnDescription) {
       position.x = NSMaxX(cellRect) - text_style.right_padding() - [text size].width;
+      // Clear of the usage dot.
+      if (candidate_window_.candidate(row).has_information_id()) {
+        position.x -= look_.row_padding;
+      }
     }
     position.y += (cellRect.size.height - [text size].height) / 2;
     [text drawAtPoint:position];
@@ -372,14 +381,16 @@ using mozc::renderer::mac::MacViewUtil;
   drawText(kColumnCandidate, style_.candidate_style());
   drawText(kColumnDescription, style_.description_style());
 
+  // floatype: a row with usage examples gets a small orange dot at its
+  // right end, rather than Mozc's bar, which looked like the scrollbar.
   if (candidate_window_.candidate(row).has_information_id()) {
-    NSRect rect = MacViewUtil::ToNSRect(tableLayout_.GetRowRect(row));
-    [MacViewUtil::ToNSColor(style_.scrollbar_indicator_color()) set];
-    rect.origin.x += rect.size.width - 6.0;
-    rect.size.width = 4.0;
-    rect.origin.y += 2.0;
-    rect.size.height -= 4.0;
-    [NSBezierPath fillRect:rect];
+    const NSRect rect = MacViewUtil::ToNSRect(tableLayout_.GetRowRect(row));
+    const CGFloat diameter = 5 * look_.size_percent / 100.0;
+    const NSRect dot = NSMakeRect(NSMaxX(rect) - look_.row_padding - diameter / 2,
+                                  NSMidY(rect) - diameter / 2, diameter, diameter);
+    // #E8914A, a muted orange.
+    [[NSColor colorWithSRGBRed:0xe8 / 255.0 green:0x91 / 255.0 blue:0x4a / 255.0 alpha:1] set];
+    [[NSBezierPath bezierPathWithOvalInRect:dot] fill];
   }
 }
 
@@ -411,6 +422,11 @@ using mozc::renderer::mac::MacViewUtil;
                                 NSMinY(footerRect) + look_.footer_top_padding)];
 }
 
+// floatype: the space on each side of the scrollbar's thumb.
+- (CGFloat)scrollbarGap {
+  return std::round(3 * look_.size_percent / 100.0);
+}
+
 - (void)drawVScrollBar {
   const mozc::Rect vscrollRect = tableLayout_.GetVScrollBarRect();
   if (vscrollRect.IsRectEmpty() || candidate_window_.candidate_size() <= 0) {
@@ -422,8 +438,10 @@ using mozc::renderer::mac::MacViewUtil;
   const int endIndex = candidate_window_.candidate(candidate_window_.candidate_size() - 1).index();
 
   // floatype: a thin rounded thumb, no track.
-  const NSRect thumb = MacViewUtil::ToNSRect(
-      tableLayout_.GetVScrollIndicatorRect(beginIndex, endIndex, candidatesTotal));
+  const NSRect thumb = NSInsetRect(
+      MacViewUtil::ToNSRect(
+          tableLayout_.GetVScrollIndicatorRect(beginIndex, endIndex, candidatesTotal)),
+      [self scrollbarGap], 0);
   const CGFloat radius = NSWidth(thumb) / 2;
   [MacViewUtil::ToNSColor(style_.scrollbar_indicator_color()) set];
   [[NSBezierPath bezierPathWithRoundedRect:thumb xRadius:radius yRadius:radius] fill];
