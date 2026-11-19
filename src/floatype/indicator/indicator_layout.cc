@@ -125,4 +125,10 @@ IndicatorRect LayoutIndicator(const Style& style, double label_width,
   return rect;
 }
 
+bool ChoosingCandidates(const commands::CandidateWindow& window) {
+  return window.candidate_size() > 0 &&
+         (window.category() != commands::SUGGESTION ||
+          window.has_focused_index());
+}
+
 }  // namespace mozc::floatype

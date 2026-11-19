@@ -23,6 +23,11 @@ struct IndicatorRect {
 std::string IndicatorLabel(commands::Output::Indicator::State state,
                            config::Config::IndicatorStyle::Label label);
 
+// Whether `window` is a candidate list being chosen from (after Space, or
+// Tab or Down into the suggestions), which hides the indicator and the ruby,
+// as Mozkey does. Suggestions shown while typing are not.
+bool ChoosingCandidates(const commands::CandidateWindow& window);
+
 // The fill color, 0xRRGGBB, for `state`.
 uint32_t IndicatorColor(commands::Output::Indicator::State state,
                         const config::Config::IndicatorStyle& style);

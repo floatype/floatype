@@ -10,6 +10,21 @@ namespace {
 using Indicator = commands::Output::Indicator;
 using Style = config::Config::IndicatorStyle;
 
+TEST(IndicatorLayoutTest, ChoosingCandidatesHidesTheIndicator) {
+  commands::CandidateWindow window;
+  EXPECT_FALSE(ChoosingCandidates(window)) << "no candidates";
+  window.add_candidate()->set_value("機械");
+  window.set_category(commands::SUGGESTION);
+  EXPECT_FALSE(ChoosingCandidates(window)) << "suggestions while typing";
+  window.set_focused_index(0);
+  EXPECT_TRUE(ChoosingCandidates(window)) << "Tab or Down into them";
+  window.clear_focused_index();
+  window.set_category(commands::PREDICTION);
+  EXPECT_TRUE(ChoosingCandidates(window));
+  window.set_category(commands::CONVERSION);
+  EXPECT_TRUE(ChoosingCandidates(window)) << "after Space";
+}
+
 TEST(IndicatorLayoutTest, LabelsFollowTheStyle) {
   EXPECT_EQ(IndicatorLabel(Indicator::READING, Style::FULL_LABEL), "入力中");
   EXPECT_EQ(IndicatorLabel(Indicator::ZENZ_PENDING, Style::FULL_LABEL),

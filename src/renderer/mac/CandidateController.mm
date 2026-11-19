@@ -30,6 +30,7 @@
 #import "renderer/mac/CandidateView.h"
 
 #include "base/coordinates.h"
+#include "floatype/indicator/indicator_layout.h"
 #include "protocol/commands.pb.h"
 #include "renderer/mac/CandidateController.h"
 #include "renderer/mac/CandidateWindow.h"
@@ -142,7 +143,14 @@ bool CandidateController::ExecCommand(const RendererCommand &command) {
     return false;
   }
   command_.CopyFrom(command);
-  indicator_window_->Update(command_, GetBaseScreenHeight());
+  // floatype: a candidate list being chosen from hides the indicator, as in
+  // Mozkey; suggestions shown while typing keep it.
+  if (command_.visible() &&
+      floatype::ChoosingCandidates(command_.output().candidate_window())) {
+    indicator_window_->Hide();
+  } else {
+    indicator_window_->Update(command_, GetBaseScreenHeight());
+  }
 
   // floatype: the client also sends commands to show the indicator alone.
   if (!command_.visible() || command_.output().candidate_window().candidate_size() == 0) {
