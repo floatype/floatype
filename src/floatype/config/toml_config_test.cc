@@ -469,6 +469,36 @@ TEST(ExampleTest, ListsEveryFloatypeFieldWithItsDefault) {
   ExpectDefaults(example->ruby_style(), defaults.ruby_style());
 }
 
+TEST(TomlConfigTest, TheDigitDefaultIsNotWrittenAndTheOldOneRoundTrips) {
+  const Config defaults = config::ConfigHandler::DefaultConfig();
+  const absl::StatusOr<std::string> same = UpdateTomlConfig("", defaults, defaults);
+  ASSERT_TRUE(same.ok()) << same.status();
+  EXPECT_FALSE(absl::StrContains(*same, "character_form_rules"))
+      << "a file that keeps the default lets a new default reach it";
+
+  // Mozc's old default for digits: the whole table is written, and reads back.
+  Config old = defaults;
+  for (Config::CharacterFormRule& rule : *old.mutable_character_form_rules()) {
+    if (rule.group() == "0") {
+      rule.set_preedit_character_form(Config::FULL_WIDTH);
+      rule.set_conversion_character_form(Config::LAST_FORM);
+    }
+  }
+  const absl::StatusOr<std::string> text = UpdateTomlConfig("", old, defaults);
+  ASSERT_TRUE(text.ok()) << text.status();
+  EXPECT_TRUE(absl::StrContains(*text, "[[character_form_rules]]"));
+  const absl::StatusOr<Config> read = ParseTomlConfig(*text);
+  ASSERT_TRUE(read.ok()) << read.status();
+  ASSERT_EQ(read->character_form_rules_size(),
+            defaults.character_form_rules_size());
+  for (const Config::CharacterFormRule& rule : read->character_form_rules()) {
+    if (rule.group() == "0") {
+      EXPECT_EQ(rule.preedit_character_form(), Config::FULL_WIDTH);
+      EXPECT_EQ(rule.conversion_character_form(), Config::LAST_FORM);
+    }
+  }
+}
+
 }  // namespace
 
 TEST(TomlConfigTest, BlackIsAChosenColor) {

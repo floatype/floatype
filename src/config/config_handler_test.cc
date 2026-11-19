@@ -277,7 +277,8 @@ TEST_F(ConfigHandlerTest, GetDefaultConfig) {
       // "ア"
       {"ア", Config::FULL_WIDTH, Config::FULL_WIDTH},
       {"A", Config::FULL_WIDTH, Config::LAST_FORM},
-      {"0", Config::FULL_WIDTH, Config::LAST_FORM},
+      // floatype: digits are half width.
+      {"0", Config::HALF_WIDTH, Config::HALF_WIDTH},
       {"(){}[]", Config::FULL_WIDTH, Config::LAST_FORM},
       {".,", Config::FULL_WIDTH, Config::LAST_FORM},
       // "。、",

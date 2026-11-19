@@ -90,7 +90,8 @@ Config CreateDefaultConfig() {
   // "ア"
   AddCharacterFormRule("ア", kFullWidth, kFullWidth, &config);
   AddCharacterFormRule("A", kFullWidth, kLastForm, &config);
-  AddCharacterFormRule("0", kFullWidth, kLastForm, &config);
+  // floatype: digits are half width, typed and converted (the user's choice).
+  AddCharacterFormRule("0", Config::HALF_WIDTH, Config::HALF_WIDTH, &config);
   AddCharacterFormRule("(){}[]", kFullWidth, kLastForm, &config);
   AddCharacterFormRule(".,", kFullWidth, kLastForm, &config);
   // "。、",

@@ -43,6 +43,7 @@
 #include "base/container/tuple.h"
 #include "base/number_util.h"
 #include "config/character_form_manager.h"
+#include "config/config_handler.h"
 #include "converter/attribute.h"
 #include "converter/candidate.h"
 #include "converter/inner_segment.h"
@@ -134,6 +135,24 @@ class NumberRewriterTest : public testing::TestWithTempUserProfile {
 
   void TearDown() override {
     config::CharacterFormManager::GetCharacterFormManager()->ClearHistory();
+    config::CharacterFormManager::GetCharacterFormManager()->ReloadConfig(
+        config::ConfigHandler::DefaultConfig());
+  }
+
+  // floatype makes digits half width by default; these tests are about Mozc's
+  // "remember the last form" rule, so they set it.
+  static ConversionRequest RememberNumberForm() {
+    config::Config config = config::ConfigHandler::DefaultConfig();
+    for (config::Config::CharacterFormRule& rule :
+         *config.mutable_character_form_rules()) {
+      if (rule.group() == "0") {
+        rule.set_preedit_character_form(config::Config::FULL_WIDTH);
+        rule.set_conversion_character_form(config::Config::LAST_FORM);
+      }
+    }
+    config::CharacterFormManager::GetCharacterFormManager()->ReloadConfig(
+        config);
+    return ConversionRequestBuilder().SetConfig(config).Build();
   }
 
   std::unique_ptr<NumberRewriter> CreateNumberRewriter() {
@@ -1581,6 +1600,7 @@ TEST_F(NumberRewriterTest, RememberNumberStyleForCompoundAndKanjiNumbers) {
   std::unique_ptr<NumberRewriter> rewriter(CreateNumberRewriter());
   auto* manager = config::CharacterFormManager::GetCharacterFormManager();
   manager->ClearHistory();
+  const ConversionRequest request = RememberNumberForm();
 
   Segments segments;
   Segment* seg = segments.push_back_segment();
@@ -1596,7 +1616,7 @@ TEST_F(NumberRewriterTest, RememberNumberStyleForCompoundAndKanjiNumbers) {
   cand->rid = pos_matcher_.GetNumberId();
   cand->style = NumberUtil::NumberString::DEFAULT_STYLE;
 
-  rewriter->Finish(default_request_, segments);
+  rewriter->Finish(request, segments);
   {
     const auto stored = manager->GetLastNumberStyle();
     ASSERT_TRUE(stored.has_value());
@@ -1611,7 +1631,7 @@ TEST_F(NumberRewriterTest, RememberNumberStyleForCompoundAndKanjiNumbers) {
   cand->content_key = "2か";
   cand->value = "2日";
   cand->content_value = "2日";
-  rewriter->Finish(default_request_, segments);
+  rewriter->Finish(request, segments);
   {
     const auto stored = manager->GetLastNumberStyle();
     ASSERT_TRUE(stored.has_value());
@@ -1625,7 +1645,7 @@ TEST_F(NumberRewriterTest, RememberNumberStyleForCompoundAndKanjiNumbers) {
   cand->content_key = "に";
   cand->value = "二";
   cand->content_value = "二";
-  rewriter->Finish(default_request_, segments);
+  rewriter->Finish(request, segments);
   {
     const auto stored = manager->GetLastNumberStyle();
     ASSERT_TRUE(stored.has_value());
@@ -1641,7 +1661,7 @@ TEST_F(NumberRewriterTest, RememberNumberStyleForCompoundAndKanjiNumbers) {
   cand->value = "二";
   cand->content_value = "二";
   cand->style = NumberUtil::NumberString::NUMBER_KANJI;
-  rewriter->Finish(default_request_, segments);
+  rewriter->Finish(request, segments);
   {
     const auto stored = manager->GetLastNumberStyle();
     ASSERT_TRUE(stored.has_value());
@@ -1657,7 +1677,7 @@ TEST_F(NumberRewriterTest, RememberNumberStyleForCompoundAndKanjiNumbers) {
   cand->value = "1万";
   cand->content_value = "1万";
   cand->style = NumberUtil::NumberString::NUMBER_ARABIC_AND_KANJI_HALFWIDTH;
-  rewriter->Finish(default_request_, segments);
+  rewriter->Finish(request, segments);
   {
     const auto stored = manager->GetLastNumberStyle();
     ASSERT_TRUE(stored.has_value());
@@ -1681,14 +1701,39 @@ TEST_F(NumberRewriterTest, RememberNumberStyleForCompoundAndKanjiNumbers) {
   suffix_cand->content_value = "123";
   suffix_cand->lid = pos_matcher_.GetNumberId();
   suffix_cand->rid = pos_matcher_.GetNumberId();
-  EXPECT_TRUE(rewriter->Rewrite(default_request_, &suffix_segments));
+  EXPECT_TRUE(rewriter->Rewrite(request, &suffix_segments));
   EXPECT_EQ(suffix_seg->candidate(0).value, "１２３から");
+}
+
+TEST_F(NumberRewriterTest, HalfWidthDigitsKeepTheRememberedStyle) {
+  // floatype's default: digits are half width, and a remembered style (here
+  // arabic with kanji, as in "１万") still wins, in half width.
+  std::unique_ptr<NumberRewriter> rewriter(CreateNumberRewriter());
+  {
+    Segments segments;
+    Segment* seg = segments.push_back_segment();
+    seg->set_key("10000");
+    seg->set_segment_type(Segment::FIXED_VALUE);
+    converter::Candidate* cand = seg->add_candidate();
+    cand->key = "10000";
+    cand->content_key = "10000";
+    cand->value = "１万";
+    cand->content_value = "１万";
+    cand->lid = pos_matcher_.GetNumberId();
+    cand->rid = pos_matcher_.GetNumberId();
+    cand->style = NumberUtil::NumberString::NUMBER_ARABIC_AND_KANJI_FULLWIDTH;
+    rewriter->Finish(default_request_, segments);
+  }
+  Segments segments = PrepareNumberSegments("20000", "20000", 0, pos_matcher_);
+  EXPECT_TRUE(rewriter->Rewrite(default_request_, &segments));
+  EXPECT_EQ(segments.conversion_segment(0).candidate(0).value, "2万");
 }
 
 TEST_F(NumberRewriterTest, RerankShortNumbersAfterSeparatedOrArabicKanjiStyle) {
   std::unique_ptr<NumberRewriter> rewriter(CreateNumberRewriter());
   auto* manager = config::CharacterFormManager::GetCharacterFormManager();
   manager->ClearHistory();
+  const ConversionRequest request = RememberNumberForm();
 
   // Commit "１，２３４" (NUMBER_SEPARATED_ARABIC_FULLWIDTH).
   {
@@ -1704,14 +1749,14 @@ TEST_F(NumberRewriterTest, RerankShortNumbersAfterSeparatedOrArabicKanjiStyle) {
     cand->lid = pos_matcher_.GetNumberId();
     cand->rid = pos_matcher_.GetNumberId();
     cand->style = NumberUtil::NumberString::NUMBER_SEPARATED_ARABIC_FULLWIDTH;
-    rewriter->Finish(default_request_, segments);
+    rewriter->Finish(request, segments);
   }
 
   // Next 3-digit number ("123") has no comma-separated candidate; it should
   // fall back to full-width DEFAULT_STYLE ("１２３").
   {
     Segments segments = PrepareNumberSegments("123", "123", 0, pos_matcher_);
-    EXPECT_TRUE(rewriter->Rewrite(default_request_, &segments));
+    EXPECT_TRUE(rewriter->Rewrite(request, &segments));
     EXPECT_EQ(segments.conversion_segment(0).candidate(0).value, "１２３");
   }
 
@@ -1729,14 +1774,14 @@ TEST_F(NumberRewriterTest, RerankShortNumbersAfterSeparatedOrArabicKanjiStyle) {
     cand->lid = pos_matcher_.GetNumberId();
     cand->rid = pos_matcher_.GetNumberId();
     cand->style = NumberUtil::NumberString::NUMBER_SEPARATED_ARABIC_HALFWIDTH;
-    rewriter->Finish(default_request_, segments);
+    rewriter->Finish(request, segments);
   }
 
   // Next 3-digit number ("123") should fall back to half-width DEFAULT_STYLE
   // ("123").
   {
     Segments segments = PrepareNumberSegments("123", "123", 0, pos_matcher_);
-    EXPECT_TRUE(rewriter->Rewrite(default_request_, &segments));
+    EXPECT_TRUE(rewriter->Rewrite(request, &segments));
     EXPECT_EQ(segments.conversion_segment(0).candidate(0).value, "123");
   }
 
@@ -1754,14 +1799,14 @@ TEST_F(NumberRewriterTest, RerankShortNumbersAfterSeparatedOrArabicKanjiStyle) {
     cand->lid = pos_matcher_.GetNumberId();
     cand->rid = pos_matcher_.GetNumberId();
     cand->style = NumberUtil::NumberString::NUMBER_ARABIC_AND_KANJI_FULLWIDTH;
-    rewriter->Finish(default_request_, segments);
+    rewriter->Finish(request, segments);
   }
 
   // Next 3-digit number ("123") should fall back to full-width DEFAULT_STYLE
   // ("１２３").
   {
     Segments segments = PrepareNumberSegments("123", "123", 0, pos_matcher_);
-    EXPECT_TRUE(rewriter->Rewrite(default_request_, &segments));
+    EXPECT_TRUE(rewriter->Rewrite(request, &segments));
     EXPECT_EQ(segments.conversion_segment(0).candidate(0).value, "１２３");
   }
 
@@ -1779,14 +1824,14 @@ TEST_F(NumberRewriterTest, RerankShortNumbersAfterSeparatedOrArabicKanjiStyle) {
     cand->lid = pos_matcher_.GetNumberId();
     cand->rid = pos_matcher_.GetNumberId();
     cand->style = NumberUtil::NumberString::NUMBER_ARABIC_AND_KANJI_HALFWIDTH;
-    rewriter->Finish(default_request_, segments);
+    rewriter->Finish(request, segments);
   }
 
   // Next 3-digit number ("123") should fall back to half-width DEFAULT_STYLE
   // ("123").
   {
     Segments segments = PrepareNumberSegments("123", "123", 0, pos_matcher_);
-    EXPECT_TRUE(rewriter->Rewrite(default_request_, &segments));
+    EXPECT_TRUE(rewriter->Rewrite(request, &segments));
     EXPECT_EQ(segments.conversion_segment(0).candidate(0).value, "123");
   }
 
@@ -1804,7 +1849,7 @@ TEST_F(NumberRewriterTest, RerankShortNumbersAfterSeparatedOrArabicKanjiStyle) {
     cand->lid = pos_matcher_.GetNumberId();
     cand->rid = pos_matcher_.GetNumberId();
     cand->style = NumberUtil::NumberString::NUMBER_CIRCLED;
-    rewriter->Finish(default_request_, segments);
+    rewriter->Finish(request, segments);
   }
 
   // Next 3-digit number ("100") has no circled candidate; RerankCandidates
@@ -1812,7 +1857,7 @@ TEST_F(NumberRewriterTest, RerankShortNumbersAfterSeparatedOrArabicKanjiStyle) {
   // VariantsRewriter can normalize its character form.
   {
     Segments segments = PrepareNumberSegments("100", "100", 0, pos_matcher_);
-    EXPECT_TRUE(rewriter->Rewrite(default_request_, &segments));
+    EXPECT_TRUE(rewriter->Rewrite(request, &segments));
     EXPECT_FALSE(segments.conversion_segment(0).candidate(0).attributes &
                  converter::Attribute::NO_VARIANTS_EXPANSION);
   }
