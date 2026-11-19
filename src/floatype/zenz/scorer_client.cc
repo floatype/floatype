@@ -1,6 +1,7 @@
 #include "floatype/zenz/scorer_client.h"
 
 #include <fcntl.h>
+#include <pthread/spawn.h>
 #include <signal.h>
 #include <spawn.h>
 #include <sys/socket.h>
@@ -49,6 +50,10 @@ pid_t Spawn(const std::vector<std::string>& command, int child_fd) {
   posix_spawnattr_setflags(&attributes, POSIX_SPAWN_CLOEXEC_DEFAULT |
                                             POSIX_SPAWN_SETSIGDEF |
                                             POSIX_SPAWN_SETSIGMASK);
+  // Every thread of the scorer, llama.cpp's included, runs at utility QoS:
+  // under load the converter and the renderer, which are interactive, come
+  // first, and a correction waits instead of the keys.
+  posix_spawnattr_set_qos_class_np(&attributes, QOS_CLASS_UTILITY);
 
   std::vector<char*> argv;
   argv.reserve(command.size() + 1);
