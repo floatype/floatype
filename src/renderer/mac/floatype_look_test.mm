@@ -544,10 +544,8 @@ commands::CandidateWindow SheetCandidates(bool suggestion) {
     }
     candidate->mutable_annotation()->set_description(descriptions[i]);
   }
-  if (suggestion) {
-    // What Mozc shows under suggestions (engine/engine_output.cc).
-    window.mutable_footer()->set_label("Tabキーで選択");
-  } else {
+  // Suggestions have no footer (engine/engine_output.cc).
+  if (!suggestion) {
     window.mutable_footer()->set_index_visible(true);
   }
   return window;

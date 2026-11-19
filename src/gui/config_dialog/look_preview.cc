@@ -142,11 +142,12 @@ void PaintCandidateWindow(QPainter& painter, const QRectF& area,
   const double description_width =
       description_metrics.horizontalAdvance(descriptions[2]) + look.row_padding;
   const double row_width = number_width + gap + text_width + description_width;
-  const QString footer_text =
-      suggestion ? QString::fromUtf8("Tabキーで選択") : QStringLiteral("1 / 3");
-  const double footer_height = footer_metrics.height() +
-                               look.footer_top_padding +
-                               look.footer_bottom_padding;
+  // Suggestions have no footer (engine/engine_output.cc).
+  const QString footer_text = suggestion ? QString() : QStringLiteral("1 / 3");
+  const double footer_height =
+      suggestion ? 0
+                 : footer_metrics.height() + look.footer_top_padding +
+                       look.footer_bottom_padding;
   const double width = padding * 2 + row_width;
   const double height = padding * 2 + row_height * 3 + footer_height;
   const QRectF window(area.center().x() - width / 2,

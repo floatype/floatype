@@ -365,14 +365,15 @@ bool FillFooter(const commands::Category category,
     return false;
   }
 
+  // floatype: suggestions have no footer, so that the window stays small and
+  // fits below the text more often (Mozkey draws none either). README says
+  // that Tab and Down pick from them.
+  if (category == commands::SUGGESTION) {
+    return true;
+  }
   bool show_build_number = true;
   commands::Footer* footer = candidate_window->mutable_footer();
-  if (category == commands::SUGGESTION) {
-    // TODO(komatsu): Enable to localized the message.
-    constexpr absl::string_view kLabel = "Tabキーで選択";
-    // TODO(komatsu): Need to check if Tab is not changed to other key binding.
-    footer->set_label(kLabel);
-  } else {
+  {
     // category is commands::PREDICTION or commands::CONVERSION.
     footer->set_index_visible(true);
     footer->set_logo_visible(true);

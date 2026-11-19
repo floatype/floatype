@@ -720,21 +720,8 @@ TEST(EngineOutputTest, FillShortcuts) {
 TEST(EngineOutputTest, FillFooter) {
   commands::CandidateWindow candidate_window;
   EXPECT_TRUE(output::FillFooter(commands::SUGGESTION, &candidate_window));
-  EXPECT_TRUE(candidate_window.has_footer());
-
-#if defined(CHANNEL_DEV) && defined(GOOGLE_JAPANESE_INPUT_BUILD)
-  EXPECT_FALSE(candidate_window.footer().has_label());
-  EXPECT_TRUE(candidate_window.footer().has_sub_label());
-  EXPECT_EQ(candidate_window.footer().sub_label().find("build "), 0);
-#else   // CHANNEL_DEV && GOOGLE_JAPANESE_INPUT_BUILD
-  EXPECT_TRUE(candidate_window.footer().has_label());
-  EXPECT_FALSE(candidate_window.footer().has_sub_label());
-  constexpr char kLabel[] = "Tabキーで選択";
-  EXPECT_EQ(candidate_window.footer().label(), kLabel);
-#endif  // CHANNEL_DEV && GOOGLE_JAPANESE_INPUT_BUILD
-
-  EXPECT_FALSE(candidate_window.footer().index_visible());
-  EXPECT_FALSE(candidate_window.footer().logo_visible());
+  // floatype: suggestions have no footer.
+  EXPECT_FALSE(candidate_window.has_footer());
 
   candidate_window.Clear();
   EXPECT_TRUE(output::FillFooter(commands::PREDICTION, &candidate_window));
