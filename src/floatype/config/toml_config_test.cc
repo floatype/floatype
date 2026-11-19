@@ -470,4 +470,27 @@ TEST(ExampleTest, ListsEveryFloatypeFieldWithItsDefault) {
 }
 
 }  // namespace
+
+TEST(TomlConfigTest, BlackIsAChosenColor) {
+  // CandidateStyle's colors have no default: unset is not black.
+  const config::Config defaults = config::ConfigHandler::DefaultConfig();
+  config::Config config = defaults;
+  config.mutable_candidate_style()->set_theme(
+      config::Config::CandidateStyle::CUSTOM);
+  config.mutable_candidate_style()->set_background_color(0x000000);
+  const absl::StatusOr<std::string> text = UpdateTomlConfig("", config, defaults);
+  ASSERT_TRUE(text.ok()) << text.status();
+  EXPECT_NE(text->find("background_color = 0x000000"), std::string::npos)
+      << *text;
+  const absl::StatusOr<config::Config> parsed = ParseTomlConfig(*text);
+  ASSERT_TRUE(parsed.ok()) << parsed.status();
+  EXPECT_TRUE(parsed->candidate_style().has_background_color());
+  // And taking the color back out removes the line.
+  config.mutable_candidate_style()->clear_background_color();
+  const absl::StatusOr<std::string> cleared =
+      UpdateTomlConfig(*text, config, defaults);
+  ASSERT_TRUE(cleared.ok()) << cleared.status();
+  EXPECT_EQ(cleared->find("background_color"), std::string::npos) << *cleared;
+}
+
 }  // namespace mozc::floatype

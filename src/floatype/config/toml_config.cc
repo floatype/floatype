@@ -285,6 +285,13 @@ bool SameField(const Message& a, const Message& b,
     return SameMessage(a.GetReflection()->GetMessage(a, &field),
                        b.GetReflection()->GetMessage(b, &field));
   }
+  // A color without a default stays unset until chosen, so black, its zero,
+  // is a choice and differs from unset.
+  if (!field.has_default_value() && absl::EndsWith(field.name(), "_color") &&
+      a.GetReflection()->HasField(a, &field) !=
+          b.GetReflection()->HasField(b, &field)) {
+    return false;
+  }
   return Print(a, field, -1) == Print(b, field, -1);
 }
 
