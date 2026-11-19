@@ -43,6 +43,15 @@ SUDACHIDICT = (
     "1b9555338cc36606a5f497a2f57a0f9b948fa02d8c13d18ee9cfb5c99fb9d86e",
 )
 
+# Niccori250k/dic-nico-intersection-pixiv: words in both the Nico Nico and
+# the pixiv encyclopedias (code MIT; no copyright claimed on the list).
+NICO_PIXIV = (
+    "https://raw.githubusercontent.com/Niccori250k/dic-nico-intersection-pixiv/"
+    "4d0d8d219d0b9abf34745016e398e762182fce61/public/"
+    "dic-nico-intersection-pixiv-google.txt",
+    "e16990b24d75fccac9cf2b0b4382e59988e735bc9fa634626078dc500e0b8bc4",
+)
+
 # Japanese Wikipedia's article titles (CC BY-SA), only to tell how well
 # known a word is; no title becomes an entry.
 JAWIKI_TITLES = (
@@ -57,6 +66,9 @@ SURNAME = "名詞,固有名詞,人名,姓,*,*,*"
 GIVEN = "名詞,固有名詞,人名,名,*,*,*"
 PLACE = "名詞,固有名詞,地域,一般,*,*,*"
 NOUN = "名詞,一般,*,*,*,*,*"
+PROPER = "名詞,固有名詞,一般,*,*,*,*"
+# Net words and titles rank after dictionary words of the same fame.
+NICO_EXTRA_COST = 300
 # Above most of Mozc's names (5000 to 8000), so a name never pushes an
 # ordinary word aside; it shows when nothing else spells the reading.
 NAME_COST = 9000
@@ -186,6 +198,27 @@ def sudachi_cost(titles: Titles, surnames, given, reading: str, value: str):
   return known_cost(hits)
 
 
+def nico_pixiv(titles, ids, pairs, seen, surnames, given) -> list[str]:
+  rows = []
+  for line in fetch(*NICO_PIXIV).decode("utf-8").splitlines():
+    if not line or line.startswith("#"):
+      continue
+    reading, value = line.split("\t")[:2]
+    if ((reading, value) in pairs or (reading, value) in seen
+        or value == reading or not plain(reading, value)
+        # Titles that are sentences (…どこですか?) and symbols stay out.
+        or not re.fullmatch(f"[{KANA}{KANJI}A-Za-z0-9・]+", value)
+        or composable(reading, value, surnames, given)):
+      continue
+    hits = titles.hits(value)
+    if hits == 0 and value.isascii():
+      continue
+    seen.add((reading, value))
+    cost = known_cost(hits) + NICO_EXTRA_COST
+    rows.append(f"{reading}\t{ids[PROPER]}\t{ids[PROPER]}\t{cost}\t{value}")
+  return sorted(rows)
+
+
 def self_check() -> None:
   assert keeps_name("かとうまき", "加藤麻希")
   assert not keeps_name("やっちゃん", "やっちゃん"), "no kanji"
@@ -213,6 +246,7 @@ def main() -> None:
           lambda r, v: known_cost(titles.hits(v)) if plain(r, v) else None),
       "sudachi": ut_rows(SUDACHIDICT, ids, pairs, seen, NOUN,
                          lambda r, v: sudachi_cost(titles, surnames, given, r, v)),
+      "nico_pixiv": nico_pixiv(titles, ids, pairs, seen, surnames, given),
   }
   for name, rows in outputs.items():
     out = OUT_DIR / f"dictionary_floatype_ut_{name}.txt"
