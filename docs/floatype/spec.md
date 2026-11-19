@@ -3,6 +3,7 @@
 Apple Silicon の macOS 用の日本語入力です。Mozc の辞書変換を先に出し、小型のニューラルモデル（zenz）が後から補正します。実行時に端末の外へは何も送りません。
 
 - 状態：草案（2026-11-18）。数値の多くは計測で確定させる。
+- 実際の動き（打鍵から確定までの時間の流れ、インジケータ、予測候補、zenz の採点プロセス）は [behavior.md](behavior.md) にまとめる。
 - 土台：Mozc 本体のフォーク（floatype/floatype）。Mozkey はコードを持ち込まず、参考にする。
 - 数値の出典：[sources.md](sources.md)
 
