@@ -251,9 +251,6 @@ def main() -> None:
   parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
   parser.add_argument("--engine", choices=["mozc", "zenz", "replay", "live"], default="mozc")
   parser.add_argument(
-      "--refresh_live", action="store_true",
-      help="live: convert the whole reading afresh each time (live_conversion_keeps_shown_text off)")
-  parser.add_argument(
       "--pause_every", type=int, default=0,
       help="live: also pause after every this many kana")
   parser.add_argument(
@@ -282,7 +279,6 @@ def main() -> None:
     binary = args.binary or Path("bazel-bin/floatype/eval/replay_main")
     done = subprocess.run(
         [str(binary), f"--data_file={args.data_file}", "--data_type=oss", "--live",
-         f"--keep_shown={'false' if args.refresh_live else 'true'}",
          f"--pause_every={args.pause_every}",
          f"--wait_for_zenz={args.wait_for_zenz}"],
         input="".join(
@@ -299,8 +295,7 @@ def main() -> None:
          "changes": 0 if line == "SKIP" else int(line.split("\t")[3])}
         for line in lines
     ]
-    report.update(context=not args.no_context, keeps_shown_text=not args.refresh_live,
-                  pause_every=args.pause_every, wait_for_zenz=args.wait_for_zenz)
+    report.update(context=not args.no_context, pause_every=args.pause_every, wait_for_zenz=args.wait_for_zenz)
     report["skipped"] = sum(e["skipped"] for e in extras)
     report["screen_changes"] = sum(e["changes"] for e in extras)
   elif args.engine == "replay":

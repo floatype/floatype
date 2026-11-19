@@ -554,7 +554,6 @@ void ConfigDialog::SetUpFloatypeTab() {
   form->addRow(text("変換を始める文字数"), liveConversionMinCharsSpinBox_);
   zenzDelaySpinBox_ = spin(0, 5000, 10, " ms");
   form->addRow(text("zenz に頼むまでの待ち時間"), zenzDelaySpinBox_);
-  keepShownTextCheckBox_ = check("打ち続けても、前に出た変換を残す");
   liveConversionRubyCheckBox_ = check("変換の上に読みを小さく出す");
   directCommitLineEdit_ = new QLineEdit(tab);
   directCommitLineEdit_->setPlaceholderText(
@@ -604,7 +603,7 @@ void ConfigDialog::SetUpFloatypeTab() {
   }
   for (QWidget* widget : std::initializer_list<QWidget*>{
            liveConversionDelaySpinBox_, liveConversionMinCharsSpinBox_,
-           keepShownTextCheckBox_, liveConversionRubyCheckBox_,
+           liveConversionRubyCheckBox_,
            liveConversionWaitSpinBox_}) {
     connect(liveConversionCheckBox_, &QCheckBox::toggled, widget,
             &QWidget::setEnabled);
@@ -697,7 +696,6 @@ void ConfigDialog::ConvertFromProto(const config::Config& config) {
       config.live_conversion_delay_millisec());
   liveConversionMinCharsSpinBox_->setValue(config.live_conversion_min_chars());
   zenzDelaySpinBox_->setValue(config.zenz_delay_millisec());
-  SET_CHECKBOX(keepShownTextCheckBox_, live_conversion_keeps_shown_text);
   SET_CHECKBOX(liveConversionRubyCheckBox_, live_conversion_ruby);
   liveConversionWaitSpinBox_->setValue(
       config.live_conversion_waits_for_zenz_millisec());
@@ -816,7 +814,6 @@ void ConfigDialog::ConvertToProto(config::Config* config) const {
   config->set_live_conversion_min_chars(
       liveConversionMinCharsSpinBox_->value());
   config->set_zenz_delay_millisec(zenzDelaySpinBox_->value());
-  GET_CHECKBOX(keepShownTextCheckBox_, live_conversion_keeps_shown_text);
   GET_CHECKBOX(liveConversionRubyCheckBox_, live_conversion_ruby);
   config->set_live_conversion_waits_for_zenz_millisec(
       liveConversionWaitSpinBox_->value());

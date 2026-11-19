@@ -2943,12 +2943,6 @@ bool Session::LiveConvert(commands::Command* command) {
       context_->GetConfig().live_conversion_waits_for_zenz_millisec();
   const commands::Preedit shown_before =
       wait_millisec > 0 ? ShownPreedit() : commands::Preedit();
-  // What the last live conversion showed stays; only zenz may change it.
-  const std::string kept =
-      ShownAfterLiveConversion().empty() ||
-              !context_->GetConfig().live_conversion_keeps_shown_text()
-          ? ""
-          : live_value_;
   if (context_->state() == ImeContext::COMPOSITION &&
       MaybeConvertAsEnglish(command)) {
     // Typing on edits the word, as after any live conversion.
@@ -2963,17 +2957,6 @@ bool Session::LiveConvert(commands::Command* command) {
   command->mutable_output()->set_consumed(true);
   SetSessionState(ImeContext::CONVERSION, context_.get());
   live_conversion_ = true;
-  if (const std::optional<std::vector<int>> indices =
-          floatype::MapPrefixToCandidates(context_->converter().GetSegments(),
-                                          kept);
-      !kept.empty() && indices.has_value()) {
-    context_->mutable_converter()->PromoteCandidates(
-        *indices,
-        context_->GetConfig().zenz_suggestion_learning()
-            ? converter::Attribute::NO_HISTORY_LEARNING
-            : converter::Attribute::NO_LEARNING,
-        0);
-  }
   if (wait_millisec > 0) {
     waiting_preedit_ = shown_before;
     waiting_for_zenz_ = true;

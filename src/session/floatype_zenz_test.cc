@@ -345,30 +345,18 @@ TEST_F(FloatypeZenzTest, TypingAfterALiveConversionEditsTheReading) {
   EXPECT_EQ(Preedit(SendKeys({"Backspace"})), "きか");
 }
 
-TEST_F(FloatypeZenzTest, ZenzsCorrectionStaysWhileTypingOn) {
+TEST_F(FloatypeZenzTest, ALiveConversionConvertsAfreshAsMozkeyDoes) {
   floatype::EnableSessionFeatures(true);
+  ASSERT_OK(FileUtil::SetContents(answers_, "キカイ\t機械\nキカイガ\t機械が\n"));
   const commands::Output live = CallBack(SendKeys({"k", "i", "k", "a", "i"}));
   ASSERT_EQ(Preedit(PollWhileAsked(CallBack(live))), "機械");
+  // While typing on, what was shown stays in front of the new kana.
   const commands::Output typed = SendKeys({"g", "a"});
   EXPECT_EQ(Preedit(typed), "機械が");
-  // The next live conversion keeps it rather than going back to Mozc's 機会.
-  EXPECT_EQ(Preedit(CallBack(typed)), "機械が");
-}
-
-TEST_F(FloatypeZenzTest, ALiveConversionCanConvertAfreshAsMozkeyDoes) {
-  floatype::EnableSessionFeatures(true);
-  config::Config config = config::ConfigHandler::DefaultConfig();
-  config.set_live_conversion_keeps_shown_text(false);
-  commands::Input input;
-  input.set_type(commands::Input::SET_CONFIG);
-  *input.mutable_config() = config;
-  Eval(std::move(input));
-
-  const commands::Output live = CallBack(SendKeys({"k", "i", "k", "a", "i"}));
-  ASSERT_EQ(Preedit(PollWhileAsked(CallBack(live))), "機械");
-  const commands::Output typed = SendKeys({"g", "a"});
-  EXPECT_EQ(Preedit(typed), "機械が");
-  EXPECT_EQ(Preedit(CallBack(typed)), "機会が");
+  // The pause converts the whole reading afresh; zenz then corrects it again.
+  const commands::Output converted = CallBack(typed);
+  EXPECT_EQ(Preedit(converted), "機会が");
+  EXPECT_EQ(Preedit(PollWhileAsked(CallBack(converted))), "機械が");
 }
 
 TEST_F(FloatypeZenzTest, ALiveConversionNeedsTwoCharactersAndCanBeOff) {

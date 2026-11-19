@@ -44,15 +44,10 @@ bool KeepsTopCandidate(const Segment& segment) {
 // Searches segment by segment for candidates that spell `text` from `pos` on.
 // `values[i][j]` is candidate j of conversion segment i, or empty when it must
 // not be used. `dead_ends` remembers (segment, position) pairs that fail.
-// With `prefix`, the candidates only have to start with `text`; the segment
-// where `text` ends may go on, and the segments after it stay as they are.
 bool Search(const std::vector<std::vector<std::string>>& values,
-            absl::string_view text, bool prefix, size_t segment, size_t pos,
+            absl::string_view text, size_t segment, size_t pos,
             std::vector<int>& chosen,
             absl::flat_hash_set<std::pair<size_t, size_t>>& dead_ends) {
-  if (prefix && pos == text.size()) {
-    return true;
-  }
   if (segment == values.size()) {
     return pos == text.size();
   }
@@ -64,15 +59,11 @@ bool Search(const std::vector<std::vector<std::string>>& values,
     if (value.empty()) {
       continue;
     }
-    if (prefix && absl::StartsWith(value, text.substr(pos))) {
-      chosen[segment] = i;
-      return true;
-    }
     if (!absl::StartsWith(text.substr(pos), value)) {
       continue;
     }
     chosen[segment] = i;
-    if (Search(values, text, prefix, segment + 1, pos + value.size(), chosen,
+    if (Search(values, text, segment + 1, pos + value.size(), chosen,
                dead_ends)) {
       return true;
     }
@@ -107,7 +98,7 @@ std::string Fingerprint(const Segments& segments) {
 namespace {
 
 std::optional<std::vector<int>> Map(const Segments& segments,
-                                    absl::string_view text, bool prefix) {
+                                    absl::string_view text) {
   // Full-width and half-width ASCII compare equal, so that among candidates
   // differing only in width, the one Mozc ranks higher wins: symbols, digits
   // and letters keep Mozc's width (spec section 4).
@@ -129,8 +120,8 @@ std::optional<std::vector<int>> Map(const Segments& segments,
   std::vector<int> chosen(values.size(), 0);
   absl::flat_hash_set<std::pair<size_t, size_t>> dead_ends;
   if (values.empty() ||
-      !Search(values, japanese::FullWidthAsciiToHalfWidthAscii(text), prefix, 0,
-              0, chosen, dead_ends)) {
+      !Search(values, japanese::FullWidthAsciiToHalfWidthAscii(text), 0, 0,
+              chosen, dead_ends)) {
     return std::nullopt;
   }
   return chosen;
@@ -144,12 +135,7 @@ std::string ConversionReading(const Segments& segments) {
 
 std::optional<std::vector<int>> MapToCandidates(const Segments& segments,
                                                 absl::string_view text) {
-  return Map(segments, text, /*prefix=*/false);
-}
-
-std::optional<std::vector<int>> MapPrefixToCandidates(const Segments& segments,
-                                                      absl::string_view text) {
-  return Map(segments, text, /*prefix=*/true);
+  return Map(segments, text);
 }
 
 bool ZenzCorrector::Request(const Segments& segments,

@@ -66,8 +66,6 @@ ABSL_FLAG(int, wait_for_zenz, 0,
 ABSL_FLAG(bool, mixed_english, false, "live mode: turn mixed English input on");
 ABSL_FLAG(bool, display_ambiguous, false,
           "live mode: show ambiguous romaji as kana");
-ABSL_FLAG(bool, keep_shown, true,
-          "live mode: keep what a live conversion showed while typing on");
 
 namespace mozc {
 namespace {
@@ -183,11 +181,10 @@ class Replayer {
            std::to_string(polls) + '\t' + std::to_string(changes);
   }
 
-  void SetLiveConfig(bool keep_shown, int wait_for_zenz) {
+  void SetLiveConfig(int wait_for_zenz) {
     commands::Input input;
     input.set_type(commands::Input::SET_CONFIG);
     *input.mutable_config() = config::ConfigHandler::DefaultConfig();
-    input.mutable_config()->set_live_conversion_keeps_shown_text(keep_shown);
     input.mutable_config()->set_live_conversion_waits_for_zenz_millisec(
         wait_for_zenz);
     input.mutable_config()->set_mixed_english(
@@ -318,8 +315,7 @@ int main(int argc, char** argv) {
   mozc::floatype::EnableSessionFeatures(live);
   mozc::Replayer replayer(*std::move(engine));
   if (live) {
-    replayer.SetLiveConfig(absl::GetFlag(FLAGS_keep_shown),
-                           absl::GetFlag(FLAGS_wait_for_zenz));
+    replayer.SetLiveConfig(absl::GetFlag(FLAGS_wait_for_zenz));
   }
 
   // The first conversion starts the scorer and loads the model.

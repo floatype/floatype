@@ -87,16 +87,6 @@ TEST(MapToCandidatesTest, KeepsMozcsWidthOfSymbols) {
   EXPECT_THAT(MapToCandidates(half, "１").value(), ElementsAre(0));
 }
 
-TEST(MapPrefixToCandidatesTest, KeepsWhatWasShownAndLeavesTheRest) {
-  const Segments segments = KyouHaIshaNiIku();
-  EXPECT_THAT(MapPrefixToCandidates(segments, "強は").value(),
-              ElementsAre(1, 0, 0));
-  // The text may end inside a segment.
-  EXPECT_THAT(MapPrefixToCandidates(segments, "強は慰").value(),
-              ElementsAre(1, 1, 0));
-  EXPECT_EQ(MapPrefixToCandidates(segments, "京は"), std::nullopt);
-}
-
 TEST(MapToCandidatesTest, KeepsATopCandidateLearnedFromTheUser) {
   Segments segments = KyouHaIshaNiIku();
   segments.mutable_conversion_segment(0)->mutable_candidate(0)->attributes |=
