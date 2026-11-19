@@ -1,4 +1,4 @@
-# floatype
+# Floatype
 
 Apple Silicon の Mac 用の日本語入力です。Mozc の辞書変換をもとに、打つのを止めたところで小さな言語モデル zenz（zenz-v3.2-small）が変換を見直します。変換も zenz もすべて Mac の中で動き、ネットワークには触れません。
 
@@ -23,9 +23,9 @@ Apple Silicon の Mac 用の日本語入力です。Mozc の辞書変換をも�
    `floatype-<版>.pkg: OK` と出れば、Releases に置いたものと同じです。`FAILED` と出たら開かずに消してください。
 3. pkg をダブルクリックして、インストーラの案内に従います。開けなかったときは、次の「macOS に止められたとき」を見てください。
 4. 終わったらログアウトして、ログインし直します。
-5. システム設定 → キーボード → 入力ソース の「編集…」で「＋」を押し、日本語の「ひらがな (floatype)」を足します。
+5. システム設定 → キーボード → 入力ソース の「編集…」で「＋」を押し、日本語の「ひらがな (Floatype)」を足します。
 
-設定は、入力メニューの「環境設定…」の floatype のタブか、`~/.config/floatype/config.txtpb` で変えられます（例は [src/floatype/config/config.example.txtpb](src/floatype/config/config.example.txtpb)）。
+設定は、入力メニューの「環境設定…」の Floatype のタブか、`~/.config/floatype/config.txtpb` で変えられます（例は [src/floatype/config/config.example.txtpb](src/floatype/config/config.example.txtpb)）。
 
 ### macOS に止められたとき
 

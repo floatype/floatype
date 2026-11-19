@@ -1,6 +1,6 @@
 # floatype の動き
 
-floatype が打鍵から確定までに何をするかを、時間の順に書く。仕様（何を作るか、なぜ）は [spec.md](spec.md) にある。ここに書く数字は既定値で、どれも設定ファイル（`~/.config/floatype/config.txtpb`）か設定画面の floatype のタブで変えられる。括弧の中は設定の名前。
+floatype が打鍵から確定までに何をするかを、時間の順に書く。仕様（何を作るか、なぜ）は [spec.md](spec.md) にある。ここに書く数字は既定値で、どれも設定ファイル（`~/.config/floatype/config.txtpb`）か設定画面の Floatype のタブで変えられる。括弧の中は設定の名前。
 
 ## 1. 打ってから確定するまで
 
