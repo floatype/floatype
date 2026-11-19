@@ -6,7 +6,7 @@ OK:	きごころのしれたなかなので	気心のしれた中なので	Conve
 OK:	かいごはほんとうにたいへんです	介護は本当に大変です	Conversion Not Match	改悟.*	2.26.4423
 OK:	かいごはほんとうにたいへんです	介護は本当に大変です	Conversion Not Match	.*タイ.*	2.26.4423
 OK:	でこめをおくったら	デコメを送ったら	Conversion Not Match	凸.*	2.26.4423
-OK:	さとるくんにたのみましょう	悟くんに頼みましょう	Conversion Not Match	読.*	2.28.5050
+OK:	さとるくんにたのみましょう	さとるくんに頼みましょう	Conversion Not Match	読.*	3.35.6354
 OK:	そのことからもわかるように	そのことからもわかるように	Conversion Not Match	その子と.*	2.26.4423
 OK:	にほんちーむのえんぎはこのあとすぐです	日本チームの演技はこのあと直ぐです	Conversion Not Match	.*演技派.*	2.30.5520
 OK:	ぼーりんぐじょうのちかくです	ボーリング場の近くです	Conversion Match	ボーリング場.*	2.30.5618
@@ -23,7 +23,7 @@ OK:	ぶいぶいいわしている	ブイブイいわしている	Conversion Not
 OK:	せっかくのおさそいをむげにはできない	せっかくのお誘いを無下にはできない	Conversion Not Match	.*無碍.*	2.28.5050
 OK:	こんなときこそおちつかないと	こんなときこそ落ち着かないと	Conversion Not Match	婚.*	2.30.5432
 OK:	そういうわけだったのか	そういうわけだったのか	Conversion Not Match	そう言う.*	2.30.5432
-OK:	じろっとにらみつけた	自ロット睨みつけた	Conversion Not Match	ジロット.*	3.35.6354
+FAILED:	じろっとにらみつけた	ジロット睨みつけた	Conversion Not Match	ジロット.*	3.35.6354
 OK:	このひぼくらはきんじょにいった	この日僕らは近所に行った	Conversion Not Match	.*被.*	2.30.5432
 OK:	こっちにこい	こっちに来い	Conversion Not Match	.*濃い	2.30.5544
 OK:	かみわざとしかいいようがない	神業としか言いようがない	Conversion Not Match	.*歯科.*	2.26.4423
@@ -139,7 +139,7 @@ OK:	ちょうれいのあとはかいぎだ	朝礼のあとは会議だ	Conversi
 OK:	さんねんはんの	３年半の	Conversion Match	.*年半の	2.29.5268
 OK:	ごねんはんの	５年半の	Conversion Match	.*年半の	2.29.5268
 OK:	かってにぐちって	勝手に愚痴って	Conversion Not Match	支ってに.*	2.26.4520
-FAILED:	さりぎわがかっこいい	さり際がかっこいい	Conversion Match	去り際が.*	2.30.5520
+OK:	さりぎわがかっこいい	去り際がかっこいい	Conversion Match	去り際が.*	3.35.6354
 OK:	しはいよくがおおきいひとだ	支配欲が大きい人だ	Conversion Expected	支配欲が大きい人だ	2.26.4520
 OK:	よくよくかんがえたら	よくよく考えたら	Conversion Expected	よくよく考えたら	2.26.4520
 FAILED:	ごきぶりをたいじした	ゴキブリを対峙した	Conversion Expected	ゴキブリを退治した	2.31.5851
@@ -153,7 +153,7 @@ OK:	このみによるとしかいいようがない	好みによるとしか言
 OK:	みにゅうりょくのもじを	未入力の文字を	Conversion Expected	未入力の文字を	2.26.4520
 FAILED:	このしょうひんをかいたい	この商品を解体	Conversion Expected	この商品を買いたい	2.30.5432
 OK:	ひとのひょうかをきにするな	人の評価を気にするな	Conversion Expected	人の評価を気にするな	2.26.4520
-FAILED:	よくえいぎょうびはっそうに	よく営業日発送に	Conversion Expected	翌営業日発送に	3.33.6133
+OK:	よくえいぎょうびはっそうに	翌営業日発送に	Conversion Expected	翌営業日発送に	3.35.6354
 OK:	おおもとのじしょでは	大本の辞書では	Conversion Expected	大本の辞書では	2.30.5544
 OK:	さいりようしてください	再利用してください	Conversion Expected	再利用してください	2.26.4520
 OK:	さいちぇっくしてください	再チェックしてください	Conversion Expected	再チェックしてください	2.26.4520
@@ -187,7 +187,7 @@ OK:	みにおぼえのない	身に覚えのない	Conversion Expected	身に覚
 OK:	まめまめしい	まめまめしい	Conversion Expected 2	忠実忠実しい	2.26.4596
 OK:	さかもとりゅういち	坂本龍一	Conversion Expected	坂本龍一	2.30.5490
 OK:	あさごはん	朝ごはん	Conversion Expected 2	朝ごはん	2.26.4610
-OK:	ひるごはん	昼ご飯	Conversion Expected 2	昼ごはん	2.30.5432
+FAILED:	ひるごはん	昼御飯	Conversion Expected 2	昼ごはん	3.35.6354
 OK:	とっけつ	突厥	Conversion Expected	突厥	2.26.4596
 OK:	とっくつ	突厥	Conversion Expected	突厥	2.26.4596
 OK:	かいかい	開会	Conversion Expected 9	回回	2.26.4596
@@ -212,13 +212,13 @@ OK:	なぞめいてて	謎めいてて	Conversion Expected	謎めいてて	2.29.
 OK:	しょくじをしたにもかかわらず	食事をしたにもかかわらず	Conversion Match	食事をした.*	2.31.5851
 FAILED:	さんぜんえん	産前円	Conversion Expected 2	三千円	2.28.5050
 FAILED:	さんぜんえん	産前円	Conversion Expected 99	3千円	2.32.5981
-FAILED:	さんぜんえん	産前円	Conversion Expected 99	3000円	2.32.5981
+OK:	さんぜんえん	産前円	Conversion Expected 99	3000円	3.35.6354
 OK:	はっせんえん	ハッ千円	Conversion Expected 2	八千円	2.30.5618
 OK:	はっせんえん	ハッ千円	Conversion Expected 99	8千円	2.32.5981
 FAILED:	はっせんえん	ハッ千円	Conversion Expected 99	8000円	2.32.5981
 FAILED:	きゅうせんえん	旧千円	Conversion Expected 2	九千円	2.28.4880
 FAILED:	きゅうせんえん	旧千円	Conversion Expected 99	9千円	2.32.5981
-FAILED:	きゅうせんえん	旧千円	Conversion Expected 99	9000円	2.32.5981
+OK:	きゅうせんえん	旧千円	Conversion Expected 99	9000円	3.35.6354
 OK:	ひらぶんでおくる	平文で送る	Conversion Expected	平文で送る	2.28.4880
 FAILED:	ごかんそう	ご乾燥	Conversion Expected	ご感想	2.28.4830
 OK:	うっぷんばらし	鬱憤晴らし	Conversion Expected 2	鬱憤晴らし	2.28.4880
@@ -243,13 +243,13 @@ OK:	うぜん	羽前	Conversion Expected 9	羽前	2.30.5520
 FAILED:	おきのくに	沖の区に	Conversion Expected	隠岐国	2.30.5618
 OK:	ごきはちどう	五畿八道	Conversion Expected	五畿八道	2.30.5520
 OK:	びんごのくに	備後国	Conversion Expected	備後国	2.30.5520
-OK:	りくおう	陸王	Conversion Expected 9	陸奥	2.30.5618
+FAILED:	りくおう	陸王	Conversion Expected 9	陸奥	3.35.6354
 OK:	すげかえれば	すげ替えれば	Conversion Expected 2	挿げ替えれば	2.29.5268
 OK:	こうじょ	控除	Conversion Expected 19	扣除	2.28.5000
 OK:	りゅうこうごたいしょう	流行語大賞	Conversion Expected	流行語大賞	2.28.5000
 OK:	たんろくでんち	単６電池	Conversion Expected 2	単6電池	2.29.5268
 OK:	もうご	もう五	Conversion Expected 9	妄語	2.28.5029
-FAILED:	おんじゅ	オンジュ	Conversion Expected 9	飲酒	2.29.5268
+OK:	おんじゅ	オンジュ	Conversion Expected 9	飲酒	3.35.6354
 OK:	ふもうご	不妄語	Conversion Expected 9	不妄語	2.28.5000
 FAILED:	ふおんじゅ	不穏樹	Conversion Expected 9	不飲酒	2.30.5618
 OK:	ぜんざいさん	全財産	Conversion Expected	全財産	2.28.5000
@@ -263,7 +263,7 @@ OK:	ばうんしゃ	馬運車	Conversion Expected	馬運車	2.28.5000
 OK:	しんしょかいふうざい	信書開封罪	Conversion Expected	信書開封罪	2.28.5000
 OK:	あいしんかくら	愛新覚羅	Conversion Expected	愛新覚羅	2.28.5000
 OK:	らのべ	ラノベ	Conversion Expected	ラノベ	2.28.5000
-OK:	なごやとばし	名古屋飛ばし	Conversion Expected	名古屋飛ばし	3.35.6354
+FAILED:	なごやとばし	名古屋とばし	Conversion Expected	名古屋飛ばし	3.35.6354
 OK:	こんせ	今世	Conversion Expected 9	今世	2.28.5000
 OK:	こんぜ	今世	Conversion Expected 9	今世	2.28.5000
 OK:	こんせい	混成	Conversion Expected 9	今世	2.30.5490
@@ -272,17 +272,17 @@ OK:	ぎろんになんしょくをしめす	議論に難色を示す	Conversion 
 OK:	おんどをおどる	音頭を踊る	Conversion Match	音頭を.*	2.32.5981
 FAILED:	かいぜんしとうぞんじます	改善死闘存じます	Conversion Match	改善しとう.*	3.35.6354
 FAILED:	ふくじょし	服女子	Conversion Expected 2	副助詞	2.30.5618
-FAILED:	らっぷ	ラップ	Conversion Expected 9	乱舞	2.28.4990
+OK:	らっぷ	ラップ	Conversion Expected 9	乱舞	3.35.6354
 OK:	こきゅう	呼吸	Conversion Expected 9	枯朽	2.28.5000
 OK:	こうばいりょくへいか	購買力平価	Conversion Expected	購買力平価	2.28.5000
 FAILED:	ろーまじぶんをかく	ローマ字分を書く	Conversion Expected	ローマ字文を書く	2.32.5981
-FAILED:	かんじかなまじりぶん	感じかな混じり分	Conversion Match	.*文	2.32.5981
-FAILED:	にせんえんさつ	にせん円札	Conversion Expected 2	二千円札	2.32.5981
-FAILED:	ごせんえんさつ	互選円札	Conversion Expected 2	五千円札	2.32.5981
-FAILED:	ごひゃくえんさつ	御百円札	Conversion Expected 2	五百円札	2.32.5981
-FAILED:	にせんえんさつ	にせん円札	Conversion Expected 9	2千円札	2.32.5981
-FAILED:	ごせんえんさつ	互選円札	Conversion Expected 9	5千円札	2.32.5981
-FAILED:	ごひゃくえんさつ	御百円札	Conversion Expected 9	5百円札	2.32.5981
+OK:	かんじかなまじりぶん	感じ仮名交じり文	Conversion Match	.*文	3.35.6354
+OK:	にせんえんさつ	二千円札	Conversion Expected 2	二千円札	3.35.6354
+OK:	ごせんえんさつ	五千円札	Conversion Expected 2	五千円札	3.35.6354
+FAILED:	ごひゃくえんさつ	五百円紙幣	Conversion Expected 2	五百円札	3.35.6354
+FAILED:	にせんえんさつ	二千円札	Conversion Expected 9	2千円札	3.35.6354
+FAILED:	ごせんえんさつ	五千円札	Conversion Expected 9	5千円札	3.35.6354
+FAILED:	ごひゃくえんさつ	五百円紙幣	Conversion Expected 9	5百円札	3.35.6354
 FAILED:	たいをなす	タイをなす	Conversion Match	体を.*	2.32.5981
 OK:	じゅうまん	充満	Conversion Expected 9	十万	2.32.5981
 FAILED:	じゅうまん	充満	Conversion Expected 9	10万	2.32.5981
@@ -392,7 +392,7 @@ FAILED:	みるめ	見る目	Conversion Expected 9	敏馬	2.30.5520
 OK:	みるめじんじゃ	敏馬神社	Conversion Expected 9	敏馬神社	2.30.5520
 OK:	けつりょう	結了	Conversion Expected 9	結了	2.30.5520
 FAILED:	にかんじ	二感じ	Conversion Expected 99	二簡字	2.30.5520
-FAILED:	ころんびあ	コロンビア	Conversion Expected 5	Colombia	2.30.5544
+OK:	ころんびあ	コロンビア	Conversion Expected 5	Colombia	3.35.6354
 OK:	はくしかてい	博士課程	Conversion Expected	博士課程	2.30.5544
 OK:	いねこき	稲核	Conversion Expected 9	稲㧡	2.30.5544
 OK:	かぜをひく	風邪をひく	Conversion Match	風邪.*	2.30.5544
@@ -474,16 +474,16 @@ OK:	ひとこない	人来ない	Conversion Expected	人来ない	2.30.5618
 FAILED:	いいごえん	良い五円	Conversion Expected	いいご縁	2.30.5618
 OK:	まいとしこうれい	毎年恒例	Conversion Expected	毎年恒例	2.30.5618
 OK:	まんがよんだり	漫画読んだり	Conversion Expected	漫画読んだり	3.35.6354
-FAILED:	じんこうにかいしゃする	人口にかいしゃする	Conversion Expected	人口に膾炙する	3.33.6133
+OK:	じんこうにかいしゃする	人口に膾炙する	Conversion Expected	人口に膾炙する	3.35.6354
 FAILED:	いいごえんがあれば	いい御縁があれば	Conversion Expected	いいご縁があれば	2.30.5618
-FAILED:	にせんえんさつ	にせん円札	Conversion Expected	二千円札	2.30.5618
-FAILED:	ごせんえんさつ	互選円札	Conversion Expected	五千円札	2.30.5618
-FAILED:	いちまんえんさつ	糸満円札	Conversion Expected	一万円札	2.30.5618
+OK:	にせんえんさつ	二千円札	Conversion Expected	二千円札	3.35.6354
+OK:	ごせんえんさつ	五千円札	Conversion Expected	五千円札	3.35.6354
+OK:	いちまんえんさつ	一万円札	Conversion Expected	一万円札	3.35.6354
 OK:	いちまん	一万	Conversion Expected	一万	2.31.5851
 OK:	ていせいぶん	訂正文	Conversion Expected 9	訂正分	2.31.5851
 OK:	ていせいぶん	訂正文	Conversion Expected 9	訂正文	2.31.5851
 FAILED:	もどりちのかた	戻り値の方	Conversion Expected	戻り値の型	2.31.5712
-FAILED:	あちらがわ	あちらがわ	Conversion Expected	あちら側	3.33.6089
+FAILED:	あちらがわ	彼方側	Conversion Expected	あちら側	3.35.6354
 FAILED:	こちらがわ	こちらがわ	Conversion Expected	こちら側	3.33.6089
 FAILED:	さんじゅっぷん	３０分	Conversion Expected	三十分	3.35.6354
 OK:	ぷらちなでびっと	プラチナデビット	Conversion Expected	プラチナデビット	2.31.5712
@@ -533,7 +533,7 @@ OK:	すき	好き	Conversion Expected 12	隙	2.28.5050
 FAILED:	おおすにいく	大洲に行く	Conversion Expected	大須に行く	2.28.5085
 OK:	たいじんかんけい	対人関係	Conversion Expected	対人関係	2.30.5520
 OK:	たいじんすきる	対人スキル	Conversion Expected	対人スキル	2.30.5520
-FAILED:	ねおちつうわ	値落ち通話	Conversion Expected	寝落ち通話	2.30.5544
+FAILED:	ねおちつうわ	寝落ち電話	Conversion Expected	寝落ち通話	3.35.6354
 OK:	おきてねがおみてた	起きて寝顔見てた	Conversion Expected	起きて寝顔見てた	3.35.6354
 OK:	ほかのようじもできた	他の用事もできた	Conversion Expected	他の用事もできた	3.33.6089
 FAILED:	きょうきゅうりょうび！	供給量日！	Conversion Expected	今日給料日！	3.33.6089
@@ -566,17 +566,17 @@ OK:	きいてください	聞いてください	Conversion Expected 9	聞いて�
 FAILED:	おきにめしたなら	起きに召したなら	Conversion Expected	お気に召したなら	3.33.6089
 FAILED:	ことここにいたる	ことここに至る	Conversion Expected	事ここに至る	3.33.6089
 OK:	みもふたもない	身も蓋もない	Conversion Expected	身も蓋もない	3.33.6089
-FAILED:	にのくがつげない	二の句が告げない	Conversion Expected	二の句が継げない	3.33.6089
+OK:	にのくがつげない	二の句が継げない	Conversion Expected	二の句が継げない	3.35.6354
 OK:	けがのこうみょう	怪我の功名	Conversion Expected	怪我の功名	3.33.6089
-OK:	たなからぼたもち	店からぼたもち	Conversion Expected 2	棚からぼたもち	3.33.6089
-OK:	たなからぼたもち	店からぼたもち	Conversion Expected 2	棚からぼた餅	3.33.6089
+OK:	たなからぼたもち	棚からぼたもち	Conversion Expected 2	棚からぼたもち	3.35.6354
+FAILED:	たなからぼたもち	棚からぼたもち	Conversion Expected 2	棚からぼた餅	3.35.6354
 OK:	ふこうちゅうのさいわい	不幸中の幸い	Conversion Expected	不幸中の幸い	3.33.6089
 OK:	まったなし	待ったなし	Conversion Expected	待ったなし	3.33.6089
-FAILED:	こうかふこうか	効果ふこうか	Conversion Expected	幸か不幸か	3.35.6354
+FAILED:	こうかふこうか	こうかふこうか	Conversion Expected	幸か不幸か	3.35.6354
 FAILED:	こともなげに	こともなげに	Conversion Expected	事もなげに	3.33.6089
-FAILED:	やぶからぼうに	ヤブから棒に	Conversion Expected	藪から棒に	3.33.6089
+OK:	やぶからぼうに	藪から棒に	Conversion Expected	藪から棒に	3.35.6354
 FAILED:	にっちもさっちも	にっちもさっちも	Conversion Expected 2	二進も三進も	3.33.6089
-FAILED:	のるかそるか	乗る過疎るか	Conversion Expected	のるかそるか	3.33.6089
+FAILED:	のるかそるか	ノルカソルカ	Conversion Expected	のるかそるか	3.35.6354
 OK:	おしもおされもせぬ	押しも押されもせぬ	Conversion Expected	押しも押されもせぬ	3.33.6133
 OK:	おしもおされぬ	押しも押されぬ	Conversion Expected	押しも押されぬ	3.33.6089
 OK:	ぬきさしならぬ	抜き差しならぬ	Conversion Expected	抜き差しならぬ	3.33.6089
@@ -623,7 +623,7 @@ OK:	ぺーじやぶれた	ページ敗れた	Prediction Expected 2	ページ破�
 OK:	みずこぼれた	水こぼれた	Prediction Expected 2	水こぼれた	3.34.6239
 OK:	ゆかよごれた	床汚れた	Prediction Expected 2	床汚れた	3.34.6239
 OK:	むししんだ	無視死んだ	Prediction Expected 2	虫死んだ	3.35.6354
-OK:	くさはえる	草映える	Prediction Expected 2	草生える	3.35.6354
+OK:	くさはえる	草生える	Prediction Expected 2	草生える	3.35.6354
 OK:	めしできる	飯できる	Prediction Expected 2	飯できる	3.34.6239
 OK:	しごとおわる	仕事終わる	Prediction Expected 2	仕事終わる	3.34.6239
 OK:	いらすとかく	イラスト書く	Prediction Expected 2	イラスト描く	3.35.6354
@@ -665,7 +665,7 @@ OK:	しゃしんとる	写真取る	Prediction Expected 2	写真撮る	3.34.6239
 OK:	しごといく	仕事行く	Prediction Expected 2	仕事行く	3.34.6239
 OK:	いすすわる	椅子座る	Prediction Expected 2	椅子座る	3.34.6239
 OK:	おなかすいた	お腹空いた	Prediction Expected 2	お腹すいた	3.35.6354
-OK:	あめふる	雨降る	Prediction Expected 2	雨降る	3.35.6354
+OK:	あめふる	あめふるコール	Prediction Expected 2	雨降る	3.35.6354
 OK:	はみがく	は磨く	Prediction Expected 2	歯磨く	3.35.6354
 OK:	かおあらう	顔洗う	Prediction Expected 2	顔洗う	3.34.6239
 OK:	みずのむ	水飲む	Prediction Expected 2	水飲む	3.34.6239
