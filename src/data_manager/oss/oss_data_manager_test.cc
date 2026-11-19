@@ -53,8 +53,9 @@ class OssDataManagerTest : public DataManagerTestBase {
                 {"data", "dictionary_oss"},
                 {"aux_dictionary.txt", "dictionary.txt"}
                 ),
+            // floatype: the filter holds the added words too.
             mozc::testing::GetSourceFilesInDirOrDie(
-                {"data", "dictionary_oss"}, {"suggestion_filter.txt"})) {
+                {"data", "dictionary_oss"}, {"suggestion_filter_all.txt"})) {
   }
 };
 

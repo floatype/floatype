@@ -146,7 +146,7 @@ mozc_cc_test(
     data = [
         "//data/dictionary_oss:connection_single_column.txt",
         "//data/dictionary_oss:dictionary_data",
-        "//data/dictionary_oss:suggestion_filter.txt",
+        "//data/dictionary_oss:suggestion_filter_all",
     ],
     deps = [
         ":oss_data_manager",
