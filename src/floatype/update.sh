@@ -50,7 +50,15 @@ else
   for agent in Converter Renderer; do
     label="io.github.floatype.inputmethod.Japanese.$agent"
     launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
-    launchctl bootstrap "gui/$(id -u)" "/Library/LaunchAgents/$label.plist"
+    # bootout returns before launchd lets go of the agent; bootstrapping too
+    # soon fails with "5: Input/output error".
+    for try in 1 2 3 4 5 6 7 8 9 10; do
+      launchctl bootstrap "gui/$(id -u)" "/Library/LaunchAgents/$label.plist" 2>/dev/null && break
+      if [ "$try" = 10 ]; then
+        echo "floatype: $agent を登録し直せませんでした。ログアウトしてログインし直してください。"
+      fi
+      sleep 0.5
+    done
   done
   killall floatype 2>/dev/null || true
   echo "floatype: 更新しました。ログアウトは不要です（入力中の文字があれば確定してから使ってください）。"
