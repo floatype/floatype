@@ -237,15 +237,6 @@ class Replayer {
   static std::optional<std::vector<std::pair<char, bool>>> Keys(
       absl::string_view reading) {
     std::vector<std::pair<char, bool>> keys;
-    // A reading of lower-case letters is typed as it is: an English word.
-    if (!reading.empty() &&
-        std::all_of(reading.begin(), reading.end(), [](char c) {
-          return absl::ascii_islower(static_cast<unsigned char>(c));
-        })) {
-      for (const char c : reading) keys.emplace_back(c, false);
-      keys.back().second = true;
-      return keys;
-    }
     std::string kana;
     int typed = 0;
     auto flush = [&]() -> bool {
@@ -271,6 +262,12 @@ class Replayer {
       return true;
     };
     for (const char32_t c : Utf8AsChars32(reading)) {
+      // Lower-case letters are typed as they are: an English word.
+      if (c >= U'a' && c <= U'z') {
+        if (!flush()) return std::nullopt;
+        keys.emplace_back(static_cast<char>(c), false);
+        continue;
+      }
       // 、 and 。 end a phrase, where the user pauses; ー is its own key.
       const char key = c == U'、'   ? ','
                        : c == U'。' ? '.'
