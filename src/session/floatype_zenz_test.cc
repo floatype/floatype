@@ -390,9 +390,17 @@ TEST_F(FloatypeZenzTest, ALiveConversionNeedsTwoCharactersAndCanBeOff) {
 
 TEST_F(FloatypeZenzTest, TheIndicatorTellsWhoseResultIsShown) {
   floatype::EnableSessionFeatures(true);
-  const commands::Output typed = SendKeys({"k", "i", "k", "a", "i"});
-  EXPECT_EQ(Indicator(typed), commands::Output::Indicator::READING);
+  // Reading until live conversion takes the composition (two characters).
+  EXPECT_EQ(Indicator(SendKeys({"k", "i"})),
+            commands::Output::Indicator::READING);
+  const commands::Output typed = SendKeys({"k", "a", "i"});
+  EXPECT_EQ(Indicator(typed), commands::Output::Indicator::MOZC);
   EXPECT_EQ(typed.indicator().style().mozc_color(), 0x586b85u);
+  // The live conversion books zenz: zenz's from then on, through the delay.
+  EXPECT_EQ(Indicator(CallBack(typed)),
+            commands::Output::Indicator::ZENZ_PENDING);
+  SendKeys({"Escape", "Escape"});
+  SendKeys({"k", "i", "k", "a", "i"});
 
   commands::Output converted = SendKeys({"Space"});
   EXPECT_EQ(Preedit(converted), "機会");

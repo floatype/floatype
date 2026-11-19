@@ -564,6 +564,7 @@ bool Session::TestSendKey(commands::Command* command) {
 
 bool Session::SendKey(commands::Command* command) {
   zenz_.Cancel();
+  zenz_scheduled_ = false;
   StopWaitingForZenz();
   // floatype: a key before zenz answered a direct commit commits what is on
   // screen; Enter does only that, other keys go on as typed after it.
@@ -2879,10 +2880,18 @@ void Session::SetIndicator(commands::Command* command) const {
   }
   commands::Output::Indicator::State state;
   if (context_->state() == ImeContext::COMPOSITION) {
-    state = commands::Output::Indicator::READING;
+    // As Mozkey: Mozc's once live conversion takes the composition, before
+    // the pause too.
+    state = config.use_live_conversion() &&
+                    Util::CharsLen(
+                        context_->composer().GetQueryForConversion()) >=
+                        config.live_conversion_min_chars()
+                ? commands::Output::Indicator::MOZC
+                : commands::Output::Indicator::READING;
   } else if (context_->state() != ImeContext::CONVERSION) {
     return;
-  } else if (zenz_.pending()) {
+  } else if (zenz_.pending() || zenz_scheduled_) {
+    // As Mozkey: zenz's from the moment it is booked, through the delay.
     state = commands::Output::Indicator::ZENZ_PENDING;
   } else if (!zenz_indices_.empty()) {
     state = commands::Output::Indicator::ZENZ;
@@ -2979,10 +2988,12 @@ bool Session::LiveConvert(commands::Command* command) {
   const uint32_t zenz_delay = config.zenz_delay_millisec();
   SetCallback(command, commands::SessionCommand::REQUEST_ZENZ,
               zenz_delay > live_delay ? zenz_delay - live_delay : 0);
+  zenz_scheduled_ = config.use_zenz() && zenz_.available();
   return true;
 }
 
 bool Session::RequestZenzAfterLiveConversion(commands::Command* command) {
+  zenz_scheduled_ = false;
   if (!live_conversion_ || context_->state() != ImeContext::CONVERSION) {
     return DoNothing(command);
   }

@@ -287,6 +287,9 @@ class Session {
   // After a typed character: starts the scorer if it ended after idling, so
   // it has the model loaded when the user pauses.
   void WarmZenz();
+  // A live conversion booked zenz for after the delay; the indicator says
+  // zenz's from then on, as Mozkey's does.
+  bool zenz_scheduled_ = false;
   // Handles the callback: shows zenz's correction or asks to be called again.
   bool PollZenz(commands::Command* command);
   // floatype live conversion: true while the conversion on screen is a live

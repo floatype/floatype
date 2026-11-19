@@ -22,19 +22,42 @@ NSColor *ColorFromRGB(uint32_t rgb, CGFloat alpha) {
 @property(nonatomic) NSColor *fillColor;
 @property(nonatomic, copy) NSAttributedString *label;
 @property(nonatomic) CGFloat cornerRadius;
+// A dot left of the label, as Mozkey draws it, for labels of words.
+@property(nonatomic) BOOL showsDot;
 @end
+
+namespace {
+// The dot and the room it takes left of the label, as in Mozkey.
+constexpr CGFloat kDotSize = 5;
+constexpr CGFloat kDotLeft = 9;
+constexpr CGFloat kDotRoom = 12;
+}  // namespace
 
 @implementation FloatypeIndicatorView
 - (void)drawRect:(NSRect)dirtyRect {
   [[NSColor clearColor] set];
   NSRectFill(self.bounds);
-  [self.fillColor set];
-  [[NSBezierPath bezierPathWithRoundedRect:self.bounds
-                                   xRadius:self.cornerRadius
-                                   yRadius:self.cornerRadius] fill];
+  // Lighter at the top, as Mozkey's.
+  NSColor *top = [self.fillColor blendedColorWithFraction:0.11 ofColor:NSColor.whiteColor];
+  NSGradient *gradient = [[NSGradient alloc] initWithStartingColor:top
+                                                       endingColor:self.fillColor];
+  [gradient drawInBezierPath:[NSBezierPath bezierPathWithRoundedRect:self.bounds
+                                                             xRadius:self.cornerRadius
+                                                             yRadius:self.cornerRadius]
+                       angle:270];
   if (self.label.length > 0) {
     const NSSize size = self.label.size;
-    [self.label drawAtPoint:NSMakePoint((NSWidth(self.bounds) - size.width) / 2,
+    const CGFloat room = self.showsDot ? kDotRoom : 0;
+    if (self.showsDot) {
+      NSColor *text = [self.label attribute:NSForegroundColorAttributeName
+                                    atIndex:0
+                             effectiveRange:nullptr];
+      [[text colorWithAlphaComponent:0.85] set];
+      [[NSBezierPath
+          bezierPathWithOvalInRect:NSMakeRect(kDotLeft, (NSHeight(self.bounds) - kDotSize) / 2,
+                                              kDotSize, kDotSize)] fill];
+    }
+    [self.label drawAtPoint:NSMakePoint(room + (NSWidth(self.bounds) - room - size.width) / 2,
                                         (NSHeight(self.bounds) - size.height) / 2)];
   }
 }
@@ -155,12 +178,15 @@ bool IndicatorWindow::UpdateIndicator(const commands::RendererCommand &command,
   if (indicator.has_english() && !label.empty()) {
     label += indicator.english() ? " A" : " あ";
   }
-  NSFont *font = [NSFont systemFontOfSize:style.font_size() weight:NSFontWeightSemibold];
+  NSFont *font = [NSFont systemFontOfSize:style.font_size() weight:NSFontWeightMedium];
   NSDictionary *attributes = @{
     NSFontAttributeName : font,
     NSForegroundColorAttributeName : ColorFromRGB(style.text_color(), 1.0),
   };
   view_.label = [[NSAttributedString alloc] initWithString:@(label.c_str()) attributes:attributes];
+  view_.showsDot = style.label() == Config::IndicatorStyle::FULL_LABEL &&
+                   style.shape() != Config::IndicatorStyle::CIRCLE && view_.label.length > 1;
+  const double label_width = view_.label.size.width + (view_.showsDot ? kDotRoom : 0);
   view_.fillColor = ColorFromRGB(floatype::IndicatorColor(indicator.state(), style),
                                  style.opacity_percent() / 100.0);
 
@@ -185,14 +211,14 @@ bool IndicatorWindow::UpdateIndicator(const commands::RendererCommand &command,
   floatype::IndicatorRect rect;
   if (!has_caret) {
     rect = floatype::LayoutIndicatorWithoutCaret(
-        style, view_.label.size.width,
+        style, label_width,
         {NSMinX(visible), NSMinY(visible), NSWidth(visible), NSHeight(visible)});
   } else if (line_height < line_width) {
-    rect = floatype::LayoutIndicatorVertical(style, view_.label.size.width, origin.x,
+    rect = floatype::LayoutIndicatorVertical(style, label_width, origin.x,
                                              origin.x + line_width, origin.y + line_height,
                                              NSMaxX(visible));
   } else {
-    rect = floatype::LayoutIndicator(style, view_.label.size.width, origin.x, origin.y,
+    rect = floatype::LayoutIndicator(style, label_width, origin.x, origin.y,
                                      line_height, NSMaxY(visible));
   }
   view_.cornerRadius = style.shape() == Config::IndicatorStyle::ROUNDED_RECT
