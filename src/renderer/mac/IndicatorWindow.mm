@@ -24,6 +24,9 @@ NSColor *ColorFromRGB(uint32_t rgb, CGFloat alpha) {
 @property(nonatomic) CGFloat cornerRadius;
 // A dot left of the label, as Mozkey draws it, for labels of words.
 @property(nonatomic) BOOL showsDot;
+// Mixed English input: あ or A at the right end, after a thin divider; nil
+// for none.
+@property(nonatomic, copy) NSAttributedString *mode;
 @end
 
 namespace {
@@ -31,6 +34,15 @@ namespace {
 constexpr CGFloat kDotSize = 5;
 constexpr CGFloat kDotLeft = 9;
 constexpr CGFloat kDotRoom = 12;
+// Space on each side of the divider before the mixed English mode, and the
+// padding the layout leaves at each end (floatype/indicator/indicator_layout).
+constexpr CGFloat kDividerGap = 6;
+constexpr CGFloat kEndPadding = 8;
+
+// The width the mixed English mode takes at the right end, divider included.
+CGFloat ModeRoom(NSAttributedString *mode) {
+  return mode.length > 0 ? kDividerGap * 2 + 1 + mode.size.width : 0;
+}
 }  // namespace
 
 @implementation FloatypeIndicatorView
@@ -45,6 +57,8 @@ constexpr CGFloat kDotRoom = 12;
                                                              xRadius:self.cornerRadius
                                                              yRadius:self.cornerRadius]
                        angle:270];
+  const CGFloat mode_room = ModeRoom(self.mode);
+  const CGFloat label_right = NSWidth(self.bounds) - mode_room;
   if (self.label.length > 0) {
     const NSSize size = self.label.size;
     const CGFloat room = self.showsDot ? kDotRoom : 0;
@@ -57,8 +71,19 @@ constexpr CGFloat kDotRoom = 12;
           bezierPathWithOvalInRect:NSMakeRect(kDotLeft, (NSHeight(self.bounds) - kDotSize) / 2,
                                               kDotSize, kDotSize)] fill];
     }
-    [self.label drawAtPoint:NSMakePoint(room + (NSWidth(self.bounds) - room - size.width) / 2,
+    [self.label drawAtPoint:NSMakePoint(room + (label_right - room - size.width) / 2,
                                         (NSHeight(self.bounds) - size.height) / 2)];
+  }
+  if (mode_room > 0) {
+    NSColor *text = [self.mode attribute:NSForegroundColorAttributeName
+                                 atIndex:0
+                          effectiveRange:nullptr];
+    [[text colorWithAlphaComponent:0.45] set];
+    const CGFloat height = NSHeight(self.bounds);
+    const NSSize size = self.mode.size;
+    const CGFloat mode_left = NSWidth(self.bounds) - kEndPadding - size.width;
+    NSRectFill(NSMakeRect(mode_left - kDividerGap - 1, height * 0.22, 1, height * 0.56));
+    [self.mode drawAtPoint:NSMakePoint(mode_left, (height - size.height) / 2)];
   }
 }
 @end
@@ -174,19 +199,21 @@ bool IndicatorWindow::UpdateIndicator(const commands::RendererCommand &command,
   }
   const Config::IndicatorStyle &style = indicator.style();
   std::string label = floatype::IndicatorLabel(indicator.state(), style.label());
-  // Mixed English input: the word before the caret, Japanese or English.
-  if (indicator.has_english() && !label.empty()) {
-    label += indicator.english() ? " A" : " あ";
-  }
   NSFont *font = [NSFont systemFontOfSize:style.font_size() weight:NSFontWeightMedium];
   NSDictionary *attributes = @{
     NSFontAttributeName : font,
     NSForegroundColorAttributeName : ColorFromRGB(style.text_color(), 1.0),
   };
   view_.label = [[NSAttributedString alloc] initWithString:@(label.c_str()) attributes:attributes];
+  // Mixed English input: the word before the caret, Japanese or English.
+  view_.mode = indicator.has_english() && !label.empty()
+                   ? [[NSAttributedString alloc] initWithString:indicator.english() ? @"A" : @"あ"
+                                                     attributes:attributes]
+                   : nil;
   view_.showsDot = style.label() == Config::IndicatorStyle::FULL_LABEL &&
                    style.shape() != Config::IndicatorStyle::CIRCLE && view_.label.length > 1;
-  const double label_width = view_.label.size.width + (view_.showsDot ? kDotRoom : 0);
+  const double label_width =
+      view_.label.size.width + (view_.showsDot ? kDotRoom : 0) + ModeRoom(view_.mode);
   view_.fillColor = ColorFromRGB(floatype::IndicatorColor(indicator.state(), style),
                                  style.opacity_percent() / 100.0);
 
