@@ -11,22 +11,33 @@ cd "$src"
 app="/Library/Input Methods/floatype.app"
 plist="$app/Contents/Info.plist"
 
-nix develop .. --command bash -c '
+log="$HOME/Library/Logs/floatype-update.log"
+echo "floatype: ビルドしています（変更が無ければ数秒、初回は数分。記録は ${log}）"
+# Only errors are worth reading here; the full output goes to the log.
+if ! nix develop .. --command bash -c '
   set -euo pipefail
-  cmake -S floatype/scorer -B floatype/scorer/build -DCMAKE_BUILD_TYPE=Release >/dev/null
-  cmake --build floatype/scorer/build -j --target floatype_scorer >/dev/null
-  # The dictionaries made from outside data: downloaded once, then cached.
+  cmake -S floatype/scorer -B floatype/scorer/build -DCMAKE_BUILD_TYPE=Release
+  cmake --build floatype/scorer/build -j --target floatype_scorer
+  # The dictionaries made from outside data: downloaded once, then cached, and
+  # made again only when their inputs change.
   python3 floatype/tools/make_extra_dictionary.py
-  # Here Bazel does not notice edited headers (protocol buffers, keymaps and
-  # hand-written .h files alike) until a clean build, and mixing old and new
-  # objects crashes the converter. A clean build takes a few minutes.
-  bazelisk clean
-  bazelisk build --config release_build --define=floatype_zenz=bundle package
-'
+  # Warnings come from upstream Mozc and Xcode; errors still show.
+  bazelisk build --config release_build --define=floatype_zenz=bundle \
+    --output_filter=DONT_MATCH_ANYTHING package
+' >"$log" 2>&1; then
+  errors="$(rg -N "error:|ERROR:|Error|Traceback" "$log" | tail -20 || true)"
+  echo "${errors:-$(tail -30 "$log")}"
+  echo "floatype: ビルドに失敗しました。全体は ${log} にあります。"
+  exit 1
+fi
 
 before="$(shasum "$plist" 2>/dev/null || true)"
 # The package always asks for a logout; whether one is needed is decided below.
-sudo installer -pkg bazel-bin/mac/Mozc.pkg -target / | grep -v "requires logging out" || true
+echo "floatype: インストールしています"
+if ! out="$(sudo installer -pkg bazel-bin/mac/Mozc.pkg -target / 2>&1)"; then
+  echo "$out"
+  exit 1
+fi
 after="$(shasum "$plist" 2>/dev/null || true)"
 
 if [ -z "$before" ] || [ "${before%% *}" != "${after%% *}" ]; then

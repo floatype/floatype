@@ -324,7 +324,29 @@ def self_check() -> None:
   assert known_cost(0) == 9500 and known_cost(1) == 8750 and known_cost(30) == 7500
 
 
+OUTPUTS = [OUT_DIR / f"dictionary_floatype_ut_{name}.txt"
+           for name in ("names", "places", "sudachi", "nico_pixiv")] + [
+               OUT_DIR / "suggestion_filter_floatype_ut.txt",
+               OUT_DIR / "suggestion_safe_floatype_ut.txt"]
+STAMP = OUT_DIR / ".floatype_ut.stamp"
+
+
+def inputs_hash() -> str:
+  """What the outputs depend on: this script (which pins the downloads) and
+  Mozc's own dictionary files."""
+  digest = hashlib.sha256(Path(__file__).read_bytes())
+  for path in [OUT_DIR / "id.def", *sorted(OUT_DIR.glob("dictionary*.txt"))]:
+    if not path.name.startswith("dictionary_floatype_ut_"):
+      digest.update(path.name.encode() + path.read_bytes())
+  return digest.hexdigest()
+
+
 def main() -> None:
+  stamp = inputs_hash()
+  if (all(out.exists() for out in OUTPUTS) and STAMP.exists() and
+      STAMP.read_text() == stamp):
+    print("floatype: the extra dictionaries are up to date", file=sys.stderr)
+    return
   self_check()
   ids = pos_ids()
   pairs, readings, surnames, given, common = base_entries(ids)
@@ -355,6 +377,7 @@ def main() -> None:
   out = OUT_DIR / "suggestion_safe_floatype_ut.txt"
   out.write_text("".join(f"{value}\n" for value in sorted(common)))
   print(f"{out}: {len(common)} words", file=sys.stderr)
+  STAMP.write_text(stamp)
 
 
 if __name__ == "__main__":
