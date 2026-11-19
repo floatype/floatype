@@ -23,8 +23,10 @@
 
 | 内容 | 出典 |
 | --- | --- |
-| AJIMEE-Bench（200 問） | [azooKey/AJIMEE-Bench](https://github.com/azooKey/AJIMEE-Bench) |
-| 個人による拡張版（628 問）。上流には取り込まれていない | [nyanko3141592/AJIMEE-Bench](https://github.com/nyanko3141592/AJIMEE-Bench) |
+| AJIMEE-Bench（200 問）。LICENSE ファイルは無く、README が元データ（日本語 Wikipedia 入力誤りデータセット v2）に従って CC BY-SA 3.0 と書く。`ajimee.py` は 401666cd の `JWTD_v2/v1/evaluation_items.json` を使う | [azooKey/AJIMEE-Bench](https://github.com/azooKey/AJIMEE-Bench) |
+| 個人による拡張版（628 問）。上流には取り込まれていない。LICENSE ファイルは無く、README が Wikipedia 由来の問は CC BY-SA 3.0、新しく作った文（口語、ビジネス、技術、実運用の誤りから作った 146 問）は CC0 1.0 と書く。`ajimee.py --set extended` は c0783bba の `JWTD_v2/v2/evaluation_items.json` を使う。作者は `test.json` の問を調整に使わないよう勧めている | [nyanko3141592/AJIMEE-Bench](https://github.com/nyanko3141592/AJIMEE-Bench) |
+| Anthy のコーパス（1,745 文）。ファイルの先頭に「copying: public domain」とある（リポジトリ全体は LGPLv3 以降、辞書は GPLv2）。`ajimee.py --set anthy` は 70c573d6 の `corpus/corpus.1.txt` を使う | [netsphere-labs/anthy](https://github.com/netsphere-labs/anthy/tree/master/corpus) |
+| Anthy のコーパスで、AzooKeyKanaKanjiConverter 1,065、Google CGI API 1,104、zenz-v1 1,179 文が正解（2024-05） | [Zenzai の記事](https://zenn.dev/azookey/articles/ea15bacf81521e) |
 
 ## やらないことの理由
 

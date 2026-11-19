@@ -1,4 +1,4 @@
-"""Tests for the AJIMEE-Bench scoring helpers. Run: python3 -m unittest floatype/eval/ajimee_test.py"""
+"""Tests for the AJIMEE-Bench scoring helpers. Run from this directory: python3 -m unittest ajimee_test"""
 
 import unittest
 
@@ -12,6 +12,27 @@ class AjimeeTest(unittest.TestCase):
         ajimee.katakana_to_hiragana("セイネンシ、ヴァーチャル（ABC）"),
         "せいねんし、ゔぁーちゃる（ABC）",
     )
+
+  def test_hiragana_to_katakana_round_trips(self):
+    reading = "ゔぁーじょん、wikipediaの０ばん"
+    self.assertEqual(ajimee.hiragana_to_katakana(reading), "ヴァージョン、wikipediaノ０バン")
+    self.assertEqual(ajimee.katakana_to_hiragana(ajimee.hiragana_to_katakana(reading)), reading)
+
+  def test_parse_anthy_corpus_joins_differently_segmented_sides(self):
+    text = (
+        "#\n# copying: public domain\n"
+        "|おんせんで|つめを|といで|きました| |温泉で|爪を|研いできました|\n"
+        "|。|０なんて| |.|0なんて|\n"
+    )
+    self.assertEqual(ajimee.parse_anthy_corpus(text), [
+        {"index": "3", "context_text": "", "input": "オンセンデツメヲトイデキマシタ",
+         "expected_output": ["温泉で爪を研いできました"]},
+        {"index": "4", "context_text": "", "input": "。０ナンテ", "expected_output": [".0なんて"]},
+    ])
+
+  def test_parse_anthy_corpus_rejects_other_lines(self):
+    with self.assertRaises(SystemExit):
+      ajimee.parse_anthy_corpus("|よみ|\n")
 
   def test_levenshtein(self):
     self.assertEqual(ajimee.levenshtein("", ""), 0)

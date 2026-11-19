@@ -1,4 +1,8 @@
-"""Measure kana-kanji conversion accuracy on AJIMEE-Bench v1.
+"""Measure kana-kanji conversion accuracy on AJIMEE-Bench v1 and other sets.
+
+Sets (--set): v1 is AJIMEE-Bench v1 (200 items), extended is its 628-item
+extension from a personal fork, anthy is Anthy's corpus.1.txt (1745 sentences,
+no left context, one answer each).
 
 Engines:
   mozc  converts every reading with //converter:quality_regression_main.
@@ -47,6 +51,22 @@ AJIMEE_URL = (
 )
 AJIMEE_SHA256 = "e9eb668fd6aa14b1e26436f429b5550108af0a1dfd443b8cea0bcb3ab3028fca"
 
+# The 628-item extension (v2), a personal fork not merged upstream.
+AJIMEE_EXTENDED_COMMIT = "c0783bba1ec6b9a9e06d07fa52ce3e23d0a7dfe1"
+AJIMEE_EXTENDED_URL = (
+    "https://raw.githubusercontent.com/nyanko3141592/AJIMEE-Bench/"
+    f"{AJIMEE_EXTENDED_COMMIT}/JWTD_v2/v2/evaluation_items.json"
+)
+AJIMEE_EXTENDED_SHA256 = "69a0dde4c1f67b3d06268c761ee3a7b7d38680a4f1c81360cc2d4f0f120e731f"
+
+# Anthy's corpus.1.txt (1745 sentences, "copying: public domain" in its header).
+ANTHY_COMMIT = "70c573d68f3e93168695ebb75e967e53e9b8d66d"
+ANTHY_URL = (
+    "https://raw.githubusercontent.com/netsphere-labs/anthy/"
+    f"{ANTHY_COMMIT}/corpus/corpus.1.txt"
+)
+ANTHY_SHA256 = "a0207e0c2abf0c5042615288212e37a3d70a708055a18faf90553451c0facc9f"
+
 ZENZ_REVISION = "ef3e66e3665fe6a19598e6578e9b88a994b647fd"
 ZENZ_URL = (
     "https://huggingface.co/Miwa-Keita/zenz-v3.2-small-gguf/resolve/"
@@ -60,6 +80,50 @@ def katakana_to_hiragana(text: str) -> str:
   return "".join(
       chr(ord(c) - 0x60) if "ァ" <= c <= "ヶ" else c for c in text
   )
+
+
+def hiragana_to_katakana(text: str) -> str:
+  """Converts hiragana (U+3041..U+3096) to katakana and leaves the rest."""
+  return "".join(
+      chr(ord(c) + 0x60) if "ぁ" <= c <= "ゖ" else c for c in text
+  )
+
+
+def parse_anthy_corpus(text: str) -> list[dict]:
+  """Reads Anthy's corpus format into AJIMEE-style items.
+
+  Each line is "|reading|segments| |answer|segments|": the reading's segments,
+  one space, the answer's segments (the two sides may be segmented
+  differently). Lines starting with # are comments. The index is the line number.
+  """
+  items = []
+  for number, line in enumerate(text.splitlines(), 1):
+    if not line or line.startswith("#"):
+      continue
+    reading, separator, answer = line.partition("| |")
+    if not separator or not reading.startswith("|") or not answer.endswith("|"):
+      raise SystemExit(f"line {number}: not a corpus line: {line!r}")
+    items.append({
+        "index": str(number),
+        "context_text": "",
+        "input": hiragana_to_katakana(reading.replace("|", "")),
+        "expected_output": [answer.replace("|", "")],
+    })
+  return items
+
+
+def load_items(name: str) -> list[dict]:
+  if name == "v1":
+    return json.loads(fetch(AJIMEE_URL, f"ajimee-v1-{AJIMEE_COMMIT[:12]}.json", AJIMEE_SHA256).read_bytes())
+  if name == "extended":
+    return json.loads(fetch(
+        AJIMEE_EXTENDED_URL, f"ajimee-extended-{AJIMEE_EXTENDED_COMMIT[:12]}.json",
+        AJIMEE_EXTENDED_SHA256).read_bytes())
+  items = parse_anthy_corpus(
+      fetch(ANTHY_URL, f"anthy-corpus.1-{ANTHY_COMMIT[:12]}.txt", ANTHY_SHA256).read_text(encoding="utf-8"))
+  if len(items) != 1745:
+    raise SystemExit(f"expected 1745 Anthy items, got {len(items)}")
+  return items
 
 
 def line_field(text: str) -> str:
@@ -268,10 +332,13 @@ def main() -> None:
   parser.add_argument("--threads", type=int, default=4, help="zenz: inference threads")
   parser.add_argument("--zenz_model", type=Path, help="replay: the zenz model (default: replay_main's)")
   parser.add_argument("--out", type=Path, help="write per-item results as JSON lines")
+  parser.add_argument(
+      "--set", choices=["v1", "extended", "anthy"], default="v1",
+      help="AJIMEE-Bench v1 (200), its 628-item extension, or Anthy's corpus.1.txt (1745)")
   args = parser.parse_args()
 
-  items = json.loads(fetch(AJIMEE_URL, f"ajimee-v1-{AJIMEE_COMMIT[:12]}.json", AJIMEE_SHA256).read_bytes())
-  report = {"engine": args.engine}
+  items = load_items(args.set)
+  report = {"set": args.set, "engine": args.engine}
   extras: list[dict] = [{} for _ in items]
   if args.engine == "mozc":
     binary = args.binary or Path("bazel-bin/converter/quality_regression_main")
