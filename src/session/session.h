@@ -323,6 +323,12 @@ class Session {
   // Mixed English input: converts the composition to its letters when they
   // were an English word. Returns whether it did.
   bool MaybeConvertAsEnglish(commands::Command* command);
+  // Mixed English input: turns each English word inside the composition back
+  // into the letters typed, so it converts, and stays, as typed.
+  void KeepEnglishWords();
+  // Mixed English input: after a conversion, shows letters typed in a kana mode
+  // half width, as typed, where Mozc offers them so.
+  void PreferTypedLetters();
   // Shows the correction the user committed before for this conversion's
   // reading, if any. Returns whether it did.
   bool ApplyAcceptedCorrection();

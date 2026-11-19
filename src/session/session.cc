@@ -41,6 +41,7 @@
 
 #include "absl/log/check.h"
 #include "absl/log/log.h"
+#include "absl/strings/ascii.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
@@ -2582,6 +2583,7 @@ bool Session::DeleteCandidateFromHistory(commands::Command* command) {
 }
 
 bool Session::Convert(commands::Command* command) {
+  KeepEnglishWords();
   if (MaybeConvertAsEnglish(command)) {
     return true;
   }
@@ -2632,6 +2634,7 @@ bool Session::Convert(commands::Command* command) {
   }
 
   SetSessionState(ImeContext::CONVERSION, context_.get());
+  PreferTypedLetters();
   Output(command);
   RequestZenz(command);
   return true;
@@ -2731,6 +2734,127 @@ bool Session::MaybeConvertAsEnglish(commands::Command* command) {
     return false;
   }
   return ConvertToHalfASCII(command);
+}
+
+namespace {
+
+// The composition one character at a time, and the English words in it.
+struct EnglishView {
+  explicit EnglishView(const composer::Composer& composer) {
+    for (size_t i = 0; i < composer.GetLength(); ++i) {
+      raws.push_back(composer.GetRawSubString(i, 1));
+    }
+    const std::string query_text = composer.GetQueryForConversion();
+    for (const absl::string_view c : Utf8AsChars(query_text)) {
+      query.emplace_back(c);
+    }
+    const std::string preedit_text = composer.GetStringForPreedit();
+    for (const absl::string_view c : Utf8AsChars(preedit_text)) {
+      preedit.emplace_back(c);
+    }
+    spans = floatype::EnglishSpans(raws, query, preedit,
+                                   floatype::EnglishWords::Default());
+  }
+  // Whether the word before `position` is English: one found, or letters kept
+  // as typed.
+  bool EnglishBefore(size_t position) const {
+    if (position == 0 || position > preedit.size()) {
+      return false;
+    }
+    const std::string& last = preedit[position - 1];
+    return std::any_of(spans.begin(), spans.end(),
+                       [&](const floatype::EnglishSpan& span) {
+                         return span.end == position && span.retyped.empty();
+                       }) ||
+           (last.size() == 1 &&
+            absl::ascii_isalpha(static_cast<unsigned char>(last[0])) &&
+            raws[position - 1] == last);
+  }
+  std::vector<std::string> raws, query, preedit;
+  std::vector<floatype::EnglishSpan> spans;
+};
+
+}  // namespace
+
+void Session::KeepEnglishWords() {
+  if (!floatype::SessionFeaturesEnabled() ||
+      !context_->GetConfig().mixed_english() ||
+      context_->state() != ImeContext::COMPOSITION) {
+    return;
+  }
+  composer::Composer* composer = context_->mutable_composer();
+  const std::vector<floatype::EnglishSpan> spans =
+      EnglishView(*composer).spans;
+  size_t cursor = composer->GetCursor();
+  const transliteration::TransliterationType mode = composer->GetInputMode();
+  const transliteration::TransliterationType comeback =
+      composer->GetComebackInputMode();
+  // From the end, so the positions before stay where they are.
+  for (auto span = spans.rbegin(); span != spans.rend(); ++span) {
+    const size_t removed = span->end - span->begin;
+    composer->DeleteRange(span->begin, removed);
+    composer->MoveCursorTo(span->begin);
+    composer->SetTemporaryInputMode(transliteration::HALF_ASCII);
+    for (const char c : span->word) {
+      composer->InsertCharacter(std::string(1, c));
+    }
+    composer->SetInputMode(comeback);
+    if (mode != comeback) {
+      composer->SetTemporaryInputMode(mode);
+    }
+    for (const char c : span->retyped) {
+      composer->InsertCharacter(std::string(1, c));
+    }
+    const size_t added = composer->GetCursor() - span->begin;
+    if (cursor >= span->end) {
+      cursor = cursor - removed + added;
+    } else if (cursor > span->begin) {
+      cursor = span->begin + added;
+    }
+  }
+  composer->MoveCursorTo(cursor);
+  // Moving the cursor made the mode follow the letters; typing goes on in
+  // the mode it was in.
+  if (!spans.empty()) {
+    composer->SetInputMode(comeback);
+    if (mode != comeback) {
+      composer->SetTemporaryInputMode(mode);
+    }
+  }
+}
+
+void Session::PreferTypedLetters() {
+  if (!floatype::SessionFeaturesEnabled() ||
+      !context_->GetConfig().mixed_english() ||
+      context_->state() != ImeContext::CONVERSION) {
+    return;
+  }
+  std::vector<int> indices;
+  bool promotes = false;
+  for (const Segment& segment :
+       context_->converter().GetSegments().conversion_segments()) {
+    int& index = indices.emplace_back(0);
+    if (segment.candidates_size() == 0 ||
+        std::none_of(segment.key().begin(), segment.key().end(),
+                     [](char c) {
+                       return absl::ascii_isalpha(static_cast<unsigned char>(c));
+                     })) {
+      continue;
+    }
+    const std::string want =
+        japanese::FullWidthAsciiToHalfWidthAscii(segment.candidate(0).value);
+    for (int i = 1; i < segment.candidates_size() && index == 0 &&
+                    want != segment.candidate(0).value;
+         ++i) {
+      if (segment.candidate(i).value == want) {
+        index = i;
+      }
+    }
+    promotes = promotes || index > 0;
+  }
+  if (promotes) {
+    context_->mutable_converter()->PromoteCandidates(indices, 0, 0);
+  }
 }
 
 bool Session::MaybeCommitOnCharacter(commands::Command* command) {
@@ -2933,7 +3057,7 @@ void Session::SetIndicator(commands::Command* command) const {
   *output->mutable_indicator()->mutable_style() = config.indicator_style();
   if (config.mixed_english()) {
     const composer::Composer& composer = context_->composer();
-    // In a conversion, what is shown decides: the typed letters or not.
+    // The word before the caret; in a conversion, the end of what is shown.
     std::string shown;
     for (const commands::Preedit::Segment& segment :
          output->preedit().segment()) {
@@ -2941,10 +3065,9 @@ void Session::SetIndicator(commands::Command* command) const {
     }
     output->mutable_indicator()->set_english(
         context_->state() == ImeContext::CONVERSION
-            ? shown == composer.GetRawString()
-            : floatype::LooksEnglish(composer.GetRawString(),
-                                     composer.GetQueryForConversion(),
-                                     floatype::EnglishWords::Default()));
+            ? !shown.empty() &&
+                  absl::ascii_isalpha(static_cast<unsigned char>(shown.back()))
+            : EnglishView(composer).EnglishBefore(composer.GetCursor()));
   }
 }
 
@@ -3000,6 +3123,7 @@ bool Session::LiveConvert(commands::Command* command) {
       context_->GetConfig().live_conversion_waits_for_zenz_millisec();
   const commands::Preedit shown_before =
       wait_millisec > 0 ? ShownPreedit() : commands::Preedit();
+  KeepEnglishWords();
   if (context_->state() == ImeContext::COMPOSITION &&
       MaybeConvertAsEnglish(command)) {
     // Typing on edits the word, as after any live conversion.
@@ -3020,6 +3144,7 @@ bool Session::LiveConvert(commands::Command* command) {
   live_suggestions_ = std::move(suggestions);
   command->mutable_output()->set_consumed(true);
   SetSessionState(ImeContext::CONVERSION, context_.get());
+  PreferTypedLetters();
   live_conversion_ = true;
   if (wait_millisec > 0) {
     waiting_preedit_ = shown_before;

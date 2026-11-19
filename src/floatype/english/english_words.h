@@ -5,6 +5,7 @@
 #define MOZC_FLOATYPE_ENGLISH_ENGLISH_WORDS_H_
 
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/strings/string_view.h"
@@ -34,6 +35,30 @@ class EnglishWords {
 // letters, is in `words`.
 bool LooksEnglish(absl::string_view raw, absl::string_view preedit,
                   const EnglishWords& words);
+
+// An English word inside a composition: characters [begin, end), typed as
+// `word` and then `retyped`, keys the romaji joined to the kana after the
+// word (test + する shows てsつる; email + を shows えまいlwお). The
+// characters become the word's letters, and `retyped` is typed again.
+struct EnglishSpan {
+  size_t begin;
+  size_t end;
+  std::string word;
+  std::string retyped;
+  bool operator==(const EnglishSpan&) const = default;
+};
+
+// The English words inside a composition whose i-th character was typed as
+// `raws[i]`, reads `query[i]` (as in LooksEnglish) and shows `preedit[i]`. A
+// word, at least three letters and in `words`, must hold a letter the romaji
+// left over, and leave none after it within its span; longer words win, so
+// "has" does not take the s of "slack". A span already shown as typed is left
+// out. Keys retyped start with a consonant, and are not letters still loose at
+// the end, which may yet make a longer word.
+std::vector<EnglishSpan> EnglishSpans(const std::vector<std::string>& raws,
+                                      const std::vector<std::string>& query,
+                                      const std::vector<std::string>& preedit,
+                                      const EnglishWords& words);
 
 }  // namespace mozc::floatype
 

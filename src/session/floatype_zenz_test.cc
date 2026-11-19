@@ -848,6 +848,68 @@ TEST_F(FloatypeZenzTest, MixedEnglishKeepsAnEnglishWordInLetters) {
   EXPECT_EQ(Preedit(SendKeys({"Space"})), "機会");
 }
 
+TEST_F(FloatypeZenzTest, MixedEnglishKeepsAWordWhenTypingOn) {
+  floatype::EnableSessionFeatures(true);
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_mixed_english(true);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+
+  ASSERT_EQ(Preedit(PollWhileAsked(CallBack(
+                SendKeys({"u", "p", "d", "a", "t", "e"})))),
+            "update");
+  // Typing on stays in kana, after the word.
+  const commands::Output typed = SendKeys({"w", "o"});
+  EXPECT_EQ(Preedit(typed), "updateを");
+  EXPECT_FALSE(typed.indicator().english()) << "the caret follows を";
+  EXPECT_EQ(Preedit(PollWhileAsked(CallBack(typed))), "updateを");
+  // Backspace edits the letters as typed.
+  SendKeys({"Escape"});
+  const commands::Output back = SendKeys({"Backspace"});
+  EXPECT_EQ(Preedit(back), "update");
+  EXPECT_TRUE(back.indicator().english());
+  EXPECT_EQ(Preedit(SendKeys({"Backspace"})), "updat");
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(), "updat");
+}
+
+TEST_F(FloatypeZenzTest, MixedEnglishKeepsAWordInsideASentence) {
+  floatype::EnableSessionFeatures(true);
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_mixed_english(true);
+  config.set_use_live_conversion(false);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+
+  const commands::Output word =
+      SendKeys({"k", "y", "o", "u", "h", "a", "u", "p", "d", "a", "t", "e"});
+  EXPECT_TRUE(word.indicator().english()) << "update is before the caret";
+  const commands::Output typed = SendKeys({"s", "u", "r", "u"});
+  EXPECT_FALSE(typed.indicator().english());
+  // Half width, as typed, though Mozc writes letters full width by default.
+  EXPECT_EQ(Preedit(SendKeys({"Space"})), "今日はupdateする");
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(), "今日はupdateする");
+
+  // email + を shows えまいlwお: the romaji held l and w together.
+  SendKeys({"e", "m", "a", "i", "l", "w", "o"});
+  EXPECT_EQ(Preedit(SendKeys({"Space"})), "emailを");
+}
+
+TEST_F(FloatypeZenzTest, WithoutMixedEnglishAWordInsideJapaneseIsKana) {
+  floatype::EnableSessionFeatures(true);
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_use_live_conversion(false);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+  SendKeys({"u", "p", "d", "a", "t", "e", "w", "o"});
+  EXPECT_EQ(Preedit(SendKeys({"Space"})).find("update"), std::string::npos);
+}
+
 TEST_F(FloatypeZenzTest, MixedEnglishLeavesATrailingNJapanese) {
   floatype::EnableSessionFeatures(true);
   config::Config config = config::ConfigHandler::DefaultConfig();
