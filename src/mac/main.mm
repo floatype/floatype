@@ -43,7 +43,7 @@
 #include "base/init_mozc.h"
 #include "base/run_level.h"
 #include "config/config_handler.h"
-#include "floatype/config/text_config.h"
+#include "floatype/config/settings_file.h"
 #include "client/client.h"
 
 ABSL_FLAG(bool, register_input_source, false,
@@ -107,9 +107,9 @@ int main(int argc, char *argv[]) {
   }
 
   // floatype: keys that the settings file sets for direct input apply here
-  // too; the converter reports the file's errors.
-  mozc::floatype::SetTextConfigPath(mozc::floatype::DefaultTextConfigPath(),
-                                    /*report_errors=*/false);
+  // too; the converter writes the file and reports its errors.
+  mozc::floatype::SetSettingsPath(mozc::floatype::DefaultSettingsPath(),
+                                  /*report_errors=*/false, /*writable=*/false);
   mozc::config::ConfigHandler::Reload();
 
   // Initialize imkServer

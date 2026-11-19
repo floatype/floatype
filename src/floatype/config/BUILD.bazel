@@ -2,24 +2,49 @@ load("//:build_defs.bzl", "mozc_cc_library", "mozc_cc_test")
 
 package(default_visibility = ["//visibility:private"])
 
-exports_files(["config.example.txtpb"])
+exports_files(["config.example.toml"])
 
 mozc_cc_library(
     name = "text_config",
     srcs = ["text_config.cc"],
     hdrs = ["text_config.h"],
+    deps = [
+        "//base/protobuf:descriptor",
+        "//base/protobuf:text_format",
+        "//protocol:config_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
+mozc_cc_test(
+    name = "text_config_test",
+    srcs = ["text_config_test.cc"],
+    deps = [
+        ":text_config",
+        "//protocol:config_cc_proto",
+        "//testing:gunit_main",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+mozc_cc_library(
+    name = "settings_file",
+    srcs = ["settings_file.cc"],
+    hdrs = ["settings_file.h"],
     visibility = [
         "//config:__pkg__",
-        "//gui/config_dialog:__pkg__",
         "//mac:__pkg__",
         "//server:__pkg__",
         "//session:__pkg__",
     ],
     deps = [
+        ":text_config",
+        ":toml_config",
         "//base:clock",
         "//base:file_util",
-        "//base/protobuf:descriptor",
-        "//base/protobuf:text_format",
         "//protocol:config_cc_proto",
         "@com_google_absl//absl/base:no_destructor",
         "@com_google_absl//absl/log",
@@ -28,40 +53,25 @@ mozc_cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
-        "@com_google_absl//absl/types:span",
     ],
 )
 
 mozc_cc_test(
-    name = "text_config_test",
-    srcs = ["text_config_test.cc"],
-    data = ["config.example.txtpb"],
+    name = "settings_file_test",
+    srcs = ["settings_file_test.cc"],
     deps = [
-        ":text_config",
+        ":settings_file",
         "//base:clock",
         "//base:clock_mock",
-        "//base:file_util",
-        "//base:system_util",
-        "//base/protobuf:text_format",
-        "//protocol:config_cc_proto",
-        "//testing:gunit_main",
-        "//testing:mozctest",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/time",
-    ],
-)
-
-mozc_cc_test(
-    name = "config_handler_overlay_test",
-    srcs = ["config_handler_overlay_test.cc"],
-    deps = [
-        ":text_config",
+        "//base:config_file_stream",
         "//base:file_util",
         "//base:system_util",
         "//config:config_handler",
         "//protocol:config_cc_proto",
         "//testing:gunit_main",
         "//testing:mozctest",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/time",
     ],
 )
 
@@ -93,13 +103,18 @@ mozc_cc_library(
 mozc_cc_test(
     name = "toml_config_test",
     srcs = ["toml_config_test.cc"],
+    data = ["config.example.toml"],
     deps = [
         ":text_config",
         ":toml_config",
+        "//base:file_util",
+        "//base/protobuf:descriptor",
+        "//base/protobuf:message",
         "//base/protobuf:text_format",
         "//config:config_handler",
         "//protocol:config_cc_proto",
         "//testing:gunit_main",
+        "//testing:mozctest",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
     ],

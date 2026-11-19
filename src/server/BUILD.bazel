@@ -104,7 +104,7 @@ mozc_cc_library(
         "//base:system_util",
         "//base:vlog",
         "//config:config_handler",
-        "//floatype/config:text_config",
+        "//floatype/config:settings_file",
         "//floatype/zenz:zenz_corrector",
         "//session:session_server",
         "@com_google_absl//absl/base:config",

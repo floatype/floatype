@@ -1,13 +1,17 @@
 ## floatype の設定ファイルの例
 ##
-## 置き場所: ~/.config/floatype/config.txtpb
-## 書式: protobuf のテキスト形式（定義は src/protocol/config.proto の Config）
+## 置き場所: ~/.config/floatype/config.toml
+## 書式: TOML。キーは src/protocol/config.proto の Config の項目名です。
+##       選ぶ値（PILL など）は文字列で、色は 0xRRGGBB で書きます。
 ##
-## - 書いた項目だけが効きます。書かない項目は設定画面の値のままです。
-## - 書いた項目は設定画面より優先されます。設定画面で変えても、このファイルの値に戻ります。
-## - floatype はこのファイルを書き換えません。dotfiles としてコード管理できます。
-## - 保存すると 1 秒ほどで反映されます。
+## - floatype の設定はすべてこのファイルにあります。書かない項目は既定値です。
+## - 設定画面で変えると、このファイルの該当する行だけを書き換えます。
+##   コメントと順番はそのまま残るので、dotfiles としてコード管理できます。
+## - 手で書き換えると、保存して 1 秒ほど後の次のキーで反映されます。
 ## - 誤りがあると通知で行番号を知らせ、直前の正しい設定のまま動きます。
+##   誤りを直すまで、設定画面の変更はこのファイルに書き込みません。
+## - 表（[indicator_style] など）は、ほかの項目より後に置きます。
+##   表の見出しより後に書いた項目は、その表の中の項目になります。
 ##
 ## 使うときは、行頭の「# 」を消してください。値は既定値です。
 
@@ -15,173 +19,176 @@
 ## ── floatype の項目 ──────────────────────────────
 
 ## zenz の補正のオン・オフ。オフにすると Mozc の変換だけになります。
-# use_zenz: true
+# use_zenz = true
 
 ## zenz の答えを待つ上限（ミリ秒、50〜5000）。これより遅い答えは捨てます。
-# zenz_timeout_millisec: 300
+# zenz_timeout_millisec = 300
 
 ## 打っていない間は zenz を止める。1 分間使わないと止まり、次に打った 1 文字目で
 ## 起き直す（起きるまで約 65ms、手を止めるまでに間に合う）。待機中の floatype 全体の
 ## メモリが約 145MB から約 51MB になる（M4 Pro での値）。
 ## false にすると floatype が動いている間ずっと動く。
-# zenz_stop_when_idle: true
+# zenz_stop_when_idle = true
 
 ## zenz を軽くする。モデルを CPU 向けに並べ替えた複製を持たず、動いている間の floatype
 ## 全体のメモリが約 145MB から約 87MB になる。代わりに補正にかかる時間が約 2 倍になる
 ## （M4 Pro で中央値 26ms → 50ms、90% の補正が終わるまで 77ms → 116ms）。
-# zenz_low_memory: false
+# zenz_low_memory = false
 
 ## zenz が直した確定を、予測候補（サジェスト）の履歴に覚えさせるか。
 ## 変換の順位は、オンでも zenz の選択を覚えません。
-# zenz_suggestion_learning: true
+# zenz_suggestion_learning = true
 
 ## zenz の補正の表示中に Ctrl+Delete で止めた補正を覚え、同じ読みでは二度としない。
 ## 設定画面の「ユーザー履歴を消去」で忘れます。
-# zenz_learning: true
+# zenz_learning = true
 
 ## ライブ変換のオン・オフ。手が止まったら Space を押さなくても変換します。
-# use_live_conversion: true
+# use_live_conversion = true
 
 ## ライブ変換を始めるまでの待ち時間（ミリ秒、0〜2000）。最後のキーから数えます。
-# live_conversion_delay_millisec: 228
+# live_conversion_delay_millisec = 228
 
 ## ライブ変換を始める最小の文字数（1〜10）。
-# live_conversion_min_chars: 2
+# live_conversion_min_chars = 2
 
 ## ライブ変換の後に zenz を始めるまでの待ち時間（ミリ秒、0〜5000）。最後のキーから数えます。
-# zenz_delay_millisec: 500
+# zenz_delay_millisec = 500
 
 ## ライブ変換で、zenz の答えを最大どれだけ待ってから表示するか（ミリ秒、0〜1000）。
 ## 待つと、Mozc の変換が出てから zenz の変換に変わる、という 2 度の変化が 1 度になる。
 ## 0 は待たずに Mozc の変換を先に出す。待っている間に打ったキーは、打った文字のままの入力に効く。
-# live_conversion_waits_for_zenz_millisec: 0
+# live_conversion_waits_for_zenz_millisec = 0
 
 ## 句読点の単打確定: オンのとき、ここに書いた文字を打つと、入力中の文を変換して
 ## zenz の答えを待ち（zenz_timeout_millisec まで）、そのまま確定する。待っている間に
 ## Enter を押すとその場で確定、ほかのキーは見えているものを確定してから効く。
 ## 文字の既定は Mozkey と同じ。設定画面では 。、？！（）「」・ から選べる。
-# use_direct_commit: false
-# direct_commit_characters: "、。？！「」"
+# use_direct_commit = false
+# direct_commit_characters = "、。？！「」"
 
 ## 日英混在入力: かなの入力中に英単語を打つと（ローマ字がかなにならずに残り、
 ## 英単語一覧 SCOWL にある語）、変換で英字のままにする。インジケータの右端に、
 ## いまの語を日本語（あ）と英字（A）のどちらで扱っているかを出す。
-# mixed_english: false
+# mixed_english = false
 
 ## 足した辞書（人名、地名、SudachiDict、ニコニコ大百科と pixiv 百科事典）の語も予測候補に出す
 ## （Mozkey と同じ）。オフなら、読みを最後まで打って変換したときだけ出る。
-# suggest_added_words: false
+# suggest_added_words = false
 
 ## 曖昧なローマ字の途中表示: 長い規則の途中のローマ字を、いまの時点の かな で見せる
 ## （n は ん、ローマ字テーブルに ms→ます と mst→ました があれば ms は ます）。
 ## 続けて長い規則が成り立てばそれに変わり、成り立たなければ見えていた かな のまま続く。
-# display_ambiguous_romaji: false
+# display_ambiguous_romaji = false
 
 ## ライブ変換の上に読みを小さく出す（ルビ）。縦書きでは列の横に出す。
-# live_conversion_ruby: false
-
-## ルビの見た目。文字の大きさ（6〜72）、文字と背景の色（0xRRGGBB）。
-# ruby_style {
-#   font_size: 11
-#   text_color: 0x404040
-#   background_color: 0xffffff
-# }
+## 見た目は下の [ruby_style] で変えられます。
+# live_conversion_ruby = false
 
 ## 候補の窓の文字の大きさ（Mozc の大きさに対する %、50〜300）。
-# candidate_font_scale_percent: 100
-
-## 候補の窓の色（0xRRGGBB）。書かない色は Mozc の色のまま。値は Mozc の色。
-# candidate_style {
-##   候補の文字、選んでいる行の背景と枠、窓の枠
-#   text_color: 0x000000
-#   focused_background_color: 0xd1eaff
-#   focused_border_color: 0x7facdd
-#   border_color: 0x969696
-# }
+## 色は下の [candidate_style] で変えられます。
+# candidate_font_scale_percent = 100
 
 ## 未確定文字の近くに出す状態インジケータ（入力中 / Mozc / Zenz… / Zenz）。
-# show_indicator: true
-
-## インジケータの見た目。色は 0xRRGGBB です。
-# indicator_style {
-##   形: PILL（角丸の帯）、ROUNDED_RECT（角丸の四角）、CIRCLE（丸）
-#   shape: PILL
-##   文字: FULL_LABEL（入力中 など）、SYMBOL（あ / M / … / Z）、COLOR_ONLY（色だけ）
-#   label: FULL_LABEL
-##   位置: ABOVE（未確定文字の上）、BELOW（下）、SIDE（左横）
-#   placement: ABOVE
-#   reading_color: 0x747d8c
-#   mozc_color: 0x586b85
-#   zenz_pending_color: 0x847438
-#   zenz_color: 0x338d85
-#   text_color: 0xffffff
-##   幅（8〜400）と高さ（8〜200）。幅は文字に合わせて広がります。
-#   width: 56
-#   height: 22
-##   文字の大きさ（6〜72）、角の丸み（0〜100）、不透明度（0〜100）
-#   font_size: 11
-#   corner_radius: 7
-#   opacity_percent: 93
-##   未確定文字との間隔（0〜200）と、位置のずらし（-1000〜1000）
-#   gap: 5
-#   offset_x: 0
-#   offset_y: 0
-# }
+## 見た目は下の [indicator_style] で変えられます。
+# show_indicator = true
 
 
 ## ── Mozc の主な項目 ──────────────────────────────
 ## ほかの項目は src/protocol/config.proto を見てください。
 
 ## キー設定: KOTOERI（macOS の既定）、MSIME、ATOK、CUSTOM（custom_keymap_table を使う）
-# session_keymap: KOTOERI
+# session_keymap = "KOTOERI"
 
 ## ローマ字入力（ROMAN）か かな入力（KANA）か
-# preedit_method: ROMAN
+# preedit_method = "ROMAN"
 
 ## 句読点: TOUTEN_KUTEN（、。）、COMMA_PERIOD（，．）、TOUTEN_PERIOD（、．）、COMMA_KUTEN（，。）
-# punctuation_method: TOUTEN_KUTEN
+# punctuation_method = "TOUTEN_KUTEN"
 
 ## 記号: CORNER_BRACKET_MIDDLE_DOT（「」・）、SQUARE_BRACKET_SLASH（［］／）など
-# symbol_method: CORNER_BRACKET_MIDDLE_DOT
+# symbol_method = "CORNER_BRACKET_MIDDLE_DOT"
 
 ## スペースの幅: FUNDAMENTAL_INPUT_MODE（入力モードに従う）、FUNDAMENTAL_FULL_WIDTH、FUNDAMENTAL_HALF_WIDTH
-# space_character_form: FUNDAMENTAL_INPUT_MODE
+# space_character_form = "FUNDAMENTAL_INPUT_MODE"
 
 ## 候補の選択キー: SHORTCUT_123456789、SHORTCUT_ASDFGHJKL、NO_SHORTCUT
-# selection_shortcut: SHORTCUT_123456789
+# selection_shortcut = "SHORTCUT_123456789"
 
 ## 学習: DEFAULT_HISTORY（する）、READ_ONLY（使うが覚えない）、NO_HISTORY（しない）
-# history_learning_level: DEFAULT_HISTORY
+# history_learning_level = "DEFAULT_HISTORY"
 
 ## シークレットモード（学習しない）
-# incognito_mode: false
+# incognito_mode = false
 
 ## 予測候補: 入力履歴から、辞書から、変換結果から。表示する数（1〜9）
-# use_history_suggest: true
-# use_dictionary_suggest: true
-# use_realtime_conversion: true
-# suggestions_size: 3
+# use_history_suggest = true
+# use_dictionary_suggest = true
+# use_realtime_conversion = true
+# suggestions_size = 3
 
 ## 変換の種類ごとのオン・オフ
-# use_date_conversion: true
-# use_single_kanji_conversion: true
-# use_symbol_conversion: true
-# use_number_conversion: true
-# use_emoticon_conversion: true
-# use_emoji_conversion: false
-# use_calculator: true
-# use_t13n_conversion: true
-# use_zip_code_conversion: true
-# use_spelling_correction: true
+# use_date_conversion = true
+# use_single_kanji_conversion = true
+# use_symbol_conversion = true
+# use_number_conversion = true
+# use_emoticon_conversion = true
+# use_emoji_conversion = true
+# use_calculator = true
+# use_t13n_conversion = true
+# use_zip_code_conversion = true
+# use_spelling_correction = true
 
 ## Shift で英字を打ったとき: ASCII_INPUT_MODE（英数入力に切り替え）、KATAKANA_INPUT_MODE、OFF
-# shift_key_mode_switch: ASCII_INPUT_MODE
+# shift_key_mode_switch = "ASCII_INPUT_MODE"
 
 ## 句読点を打ったら自動で変換する
-# use_auto_conversion: false
+# use_auto_conversion = false
 
 ## テンキーの文字: NUMPAD_HALF_WIDTH、NUMPAD_FULL_WIDTH、NUMPAD_INPUT_MODE、NUMPAD_DIRECT_INPUT
-# numpad_character_form: NUMPAD_HALF_WIDTH
+# numpad_character_form = "NUMPAD_HALF_WIDTH"
 
 ## ¥ キーの文字: YEN_SIGN（¥）、BACKSLASH（\）
-# yen_sign_character: YEN_SIGN
+# yen_sign_character = "YEN_SIGN"
+
+
+## ── 表（ほかの項目より後に置きます） ──────────────────────────────
+
+## ルビの見た目。文字の大きさ（6〜72）、文字と背景の色（0xRRGGBB）。
+# [ruby_style]
+# font_size = 11
+# text_color = 0x404040
+# background_color = 0xffffff
+
+## 候補の窓の色（0xRRGGBB）。書かない色は Mozc の色のまま。値は Mozc の色。
+# [candidate_style]
+##   候補の文字、選んでいる行の背景と枠、窓の枠
+# text_color = 0x000000
+# focused_background_color = 0xd1eaff
+# focused_border_color = 0x7facdd
+# border_color = 0x969696
+
+## インジケータの見た目。色は 0xRRGGBB です。
+# [indicator_style]
+##   形: PILL（角丸の帯）、ROUNDED_RECT（角丸の四角）、CIRCLE（丸）
+# shape = "PILL"
+##   文字: FULL_LABEL（入力中 など）、SYMBOL（あ / M / … / Z）、COLOR_ONLY（色だけ）
+# label = "FULL_LABEL"
+##   位置: ABOVE（未確定文字の上）、BELOW（下）、SIDE（左横）
+# placement = "ABOVE"
+# reading_color = 0x747d8c
+# mozc_color = 0x586b85
+# zenz_pending_color = 0x847438
+# zenz_color = 0x338d85
+# text_color = 0xffffff
+##   幅（8〜400）と高さ（8〜200）。幅は文字に合わせて広がります。
+# width = 56
+# height = 22
+##   文字の大きさ（6〜72）、角の丸み（0〜100）、不透明度（0〜100）
+# font_size = 11
+# corner_radius = 7
+# opacity_percent = 93
+##   未確定文字との間隔（0〜200）と、位置のずらし（-1000〜1000）
+# gap = 5
+# offset_x = 0
+# offset_y = 0

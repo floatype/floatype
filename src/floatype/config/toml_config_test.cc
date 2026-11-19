@@ -1,15 +1,22 @@
 #include "floatype/config/toml_config.h"
 
 #include <string>
+#include <vector>
 
 #include "absl/status/statusor.h"
 #include "absl/strings/match.h"
+#include "absl/strings/str_join.h"
+#include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
+#include "base/file_util.h"
+#include "base/protobuf/descriptor.h"
+#include "base/protobuf/message.h"
 #include "base/protobuf/text_format.h"
 #include "config/config_handler.h"
 #include "floatype/config/text_config.h"
 #include "protocol/config.pb.h"
 #include "testing/gunit.h"
+#include "testing/mozctest.h"
 
 namespace mozc::floatype {
 namespace {
@@ -378,6 +385,66 @@ TEST(UpdateTomlConfigTest, TakesUnsetRuleFieldsForTheirDefaults) {
 TEST(UpdateTomlConfigTest, RefusesAFileThatDoesNotRead) {
   EXPECT_FALSE(UpdateTomlConfig("use_zenz = \n", Config(), Config()).ok());
   EXPECT_FALSE(UpdateTomlConfig("use_zenzz = true\n", Config(), Config()).ok());
+}
+
+// The example with every "# key = value" line turned on.
+std::string ExampleTurnedOn() {
+  const absl::StatusOr<std::string> example =
+      FileUtil::GetContents(testing::GetSourceFileOrDie(
+          {"floatype", "config", "config.example.toml"}));
+  EXPECT_TRUE(example.ok());
+  std::vector<std::string> lines;
+  for (const absl::string_view line : absl::StrSplit(*example, '\n')) {
+    if (absl::StartsWith(line, "# ")) {
+      lines.emplace_back(line.substr(2));
+    }
+  }
+  return absl::StrJoin(lines, "\n");
+}
+
+// Expects every scalar field set in `example` to hold its value in `defaults`.
+void ExpectDefaults(const google::protobuf::Message& example,
+                    const google::protobuf::Message& defaults) {
+  const google::protobuf::Descriptor& descriptor = *example.GetDescriptor();
+  for (int i = 0; i < descriptor.field_count(); ++i) {
+    const google::protobuf::FieldDescriptor* field = descriptor.field(i);
+    if (field->is_repeated() ||
+        field->cpp_type() ==
+            google::protobuf::FieldDescriptor::CPPTYPE_MESSAGE ||
+        !example.GetReflection()->HasField(example, field)) {
+      continue;
+    }
+    std::string written;
+    std::string fallback;
+    google::protobuf::TextFormat::PrintFieldValueToString(example, field, -1,
+                                                          &written);
+    google::protobuf::TextFormat::PrintFieldValueToString(defaults, field, -1,
+                                                          &fallback);
+    EXPECT_EQ(written, fallback) << field->name();
+  }
+}
+
+// Expects every field numbered from `first` on to be set in `example`.
+void ExpectListed(const google::protobuf::Message& example, int first) {
+  const google::protobuf::Descriptor& descriptor = *example.GetDescriptor();
+  for (int i = 0; i < descriptor.field_count(); ++i) {
+    const google::protobuf::FieldDescriptor* field = descriptor.field(i);
+    if (field->number() >= first) {
+      EXPECT_TRUE(example.GetReflection()->HasField(example, field))
+          << field->name() << " is missing from the example";
+    }
+  }
+}
+
+TEST(ExampleTest, ListsEveryFloatypeFieldWithItsDefault) {
+  const absl::StatusOr<Config> example = ParseTomlConfig(ExampleTurnedOn());
+  ASSERT_TRUE(example.ok()) << example.status();
+  ExpectListed(*example, 1001);
+  ExpectListed(example->indicator_style(), 1);
+  const Config& defaults = config::ConfigHandler::DefaultConfig();
+  ExpectDefaults(*example, defaults);
+  ExpectDefaults(example->indicator_style(), defaults.indicator_style());
+  ExpectDefaults(example->ruby_style(), defaults.ruby_style());
 }
 
 }  // namespace

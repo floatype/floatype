@@ -1,30 +1,14 @@
 #include "floatype/config/text_config.h"
 
-#include <sys/stat.h>
-
-#ifdef __APPLE__
-#include <spawn.h>
-#include <sys/wait.h>
-#endif  // __APPLE__
-
 #include <cstdint>
-#include <cstdlib>
 #include <string>
-#include <thread>
-#include <utility>
 #include <vector>
 
-#include "absl/base/no_destructor.h"
-#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
-#include "absl/strings/str_replace.h"
 #include "absl/strings/string_view.h"
-#include "absl/synchronization/mutex.h"
-#include "absl/time/time.h"
-#include "base/clock.h"
-#include "base/file_util.h"
+#include "absl/types/span.h"
 #include "base/protobuf/text_format.h"
 #include "google/protobuf/io/tokenizer.h"
 #include "protocol/config.pb.h"
@@ -144,67 +128,6 @@ absl::Status CheckRanges(const Message& message,
   return absl::OkStatus();
 }
 
-// What tells a changed file apart. Nix and other dotfile managers swap in a
-// new file with the same modification time; its inode differs. All -1 when
-// the file is missing.
-struct Stamp {
-  int64_t mtime_ns = -1;
-  int64_t size = -1;
-  int64_t inode = -1;
-  int64_t device = -1;
-  bool operator==(const Stamp&) const = default;
-};
-
-struct State {
-  absl::Mutex mutex;
-  std::string path;
-  bool report_errors = false;
-  config::Config overlay;
-  // The file as last read.
-  Stamp stamp;
-  absl::Time last_check = absl::InfinitePast();
-  std::string last_error;
-};
-
-State& GetState() {
-  static absl::NoDestructor<State> state;
-  return *state;
-}
-
-Stamp FileStamp(const std::string& path) {
-  struct stat info;
-  if (stat(path.c_str(), &info) != 0) {
-    return Stamp();
-  }
-#ifdef __APPLE__
-  const int64_t mtime_ns =
-      info.st_mtimespec.tv_sec * 1'000'000'000LL + info.st_mtimespec.tv_nsec;
-#else   // __APPLE__
-  const int64_t mtime_ns =
-      info.st_mtim.tv_sec * 1'000'000'000LL + info.st_mtim.tv_nsec;
-#endif  // __APPLE__
-  return {mtime_ns, static_cast<int64_t>(info.st_size),
-          static_cast<int64_t>(info.st_ino), static_cast<int64_t>(info.st_dev)};
-}
-
-void Notify(const std::string& message) {
-#ifdef __APPLE__
-  // AppleScript string literal: quotes and backslashes would end it.
-  const std::string text =
-      absl::StrReplaceAll(message, {{"\\", "＼"}, {"\"", "”"}, {"\n", " "}});
-  const std::string script =
-      absl::StrCat("display notification \"", text,
-                   "\" with title \"floatype の設定ファイルに誤りがあります\"");
-  const char* argv[] = {"/usr/bin/osascript", "-e", script.c_str(), nullptr};
-  pid_t pid;
-  if (posix_spawn(&pid, argv[0], nullptr, nullptr,
-                  const_cast<char* const*>(argv), nullptr) == 0) {
-    // Reaped aside: this runs while the user types.
-    std::thread([pid] { waitpid(pid, nullptr, 0); }).detach();
-  }
-#endif  // __APPLE__
-}
-
 }  // namespace
 
 absl::Status CheckConfigRange(const FieldDescriptor& field, int64_t value,
@@ -218,12 +141,6 @@ absl::Status CheckConfigRange(const FieldDescriptor& field, int64_t value,
     }
   }
   return absl::OkStatus();
-}
-
-std::string DefaultTextConfigPath() {
-  const char* home = std::getenv("HOME");
-  return FileUtil::JoinPath(
-      {home == nullptr ? "" : home, ".config", "floatype", "config.txtpb"});
 }
 
 absl::StatusOr<config::Config> ParseTextConfig(absl::string_view text) {
@@ -262,131 +179,6 @@ void ApplyOverlay(const config::Config& overlay, config::Config& config) {
     }
   }
   config.MergeFrom(overlay);
-}
-
-void RestoreOverlaidFields(const config::Config& overlay,
-                           const config::Config& stored,
-                           config::Config& config) {
-  std::vector<const FieldDescriptor*> fields;
-  overlay.GetReflection()->ListFields(overlay, &fields);
-  config::Config copy = stored;
-  config.GetReflection()->SwapFields(&config, &copy, fields);
-}
-
-namespace {
-
-// Clears the fields of `message` that print the same as in `defaults`.
-void ClearDefaults(Message& message, const Message& defaults) {
-  const Reflection& reflection = *message.GetReflection();
-  std::vector<const FieldDescriptor*> fields;
-  reflection.ListFields(message, &fields);
-  for (const FieldDescriptor* field : fields) {
-    if (field->is_repeated()) {
-      const int size = reflection.FieldSize(message, field);
-      bool same = size == defaults.GetReflection()->FieldSize(defaults, field);
-      for (int i = 0; same && i < size; ++i) {
-        std::string value, default_value;
-        TextFormat::PrintFieldValueToString(message, field, i, &value);
-        TextFormat::PrintFieldValueToString(defaults, field, i,
-                                            &default_value);
-        same = value == default_value;
-      }
-      if (same) {
-        reflection.ClearField(&message, field);
-      }
-    } else if (field->cpp_type() == FieldDescriptor::CPPTYPE_MESSAGE) {
-      Message* nested = reflection.MutableMessage(&message, field);
-      ClearDefaults(*nested,
-                    defaults.GetReflection()->GetMessage(defaults, field));
-      if (nested->ByteSizeLong() == 0) {
-        reflection.ClearField(&message, field);
-      }
-    } else {
-      std::string value, default_value;
-      TextFormat::PrintFieldValueToString(message, field, -1, &value);
-      TextFormat::PrintFieldValueToString(defaults, field, -1,
-                                          &default_value);
-      if (value == default_value) {
-        reflection.ClearField(&message, field);
-      }
-    }
-  }
-}
-
-}  // namespace
-
-std::string ExportTextConfig(const config::Config& config,
-                             const config::Config& defaults) {
-  config::Config changed = config;
-  changed.clear_general_config();
-  ClearDefaults(changed, defaults);
-  std::string text;
-  if (!TextFormat::PrintToString(changed, &text)) {
-    return "";
-  }
-  return text;
-}
-
-void SetTextConfigPath(std::string path, bool report_errors) {
-  State& state = GetState();
-  {
-    absl::MutexLock lock(state.mutex);
-    state.path = std::move(path);
-    state.report_errors = report_errors;
-  }
-  ReloadTextConfig();
-}
-
-void ReloadTextConfig() {
-  State& state = GetState();
-  std::string error;
-  bool report = false;
-  {
-    absl::MutexLock lock(state.mutex);
-    if (state.path.empty()) {
-      return;
-    }
-    state.last_check = Clock::GetAbslTime();
-    state.stamp = FileStamp(state.path);
-    if (state.stamp.size < 0) {
-      state.overlay.Clear();  // No file: the settings screen decides.
-      state.last_error.clear();
-      return;
-    }
-    absl::StatusOr<std::string> text = FileUtil::GetContents(state.path);
-    absl::StatusOr<config::Config> parsed =
-        text.ok() ? ParseTextConfig(*text) : text.status();
-    if (parsed.ok()) {
-      state.overlay = *std::move(parsed);
-      state.last_error.clear();
-      return;
-    }
-    // Keeps the last good settings (none when it was broken from the start).
-    error = std::string(parsed.status().message());
-    report = state.report_errors && error != state.last_error;
-    state.last_error = error;
-  }
-  LOG(ERROR) << "floatype settings file: " << error;
-  if (report) {
-    Notify(error);
-  }
-}
-
-bool TextConfigChanged() {
-  State& state = GetState();
-  absl::MutexLock lock(state.mutex);
-  const absl::Time now = Clock::GetAbslTime();
-  if (state.path.empty() || now - state.last_check < absl::Seconds(1)) {
-    return false;
-  }
-  state.last_check = now;
-  return !(FileStamp(state.path) == state.stamp);
-}
-
-config::Config TextConfigOverlay() {
-  State& state = GetState();
-  absl::MutexLock lock(state.mutex);
-  return state.overlay;
 }
 
 }  // namespace mozc::floatype

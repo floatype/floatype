@@ -56,7 +56,7 @@
 #include "config/character_form_manager.h"
 #include "config/config_handler.h"
 #include "engine/engine_interface.h"
-#include "floatype/config/text_config.h"
+#include "floatype/config/settings_file.h"
 #include "floatype/zenz/zenz_memory.h"
 #include "protocol/commands.pb.h"
 #include "protocol/config.pb.h"
@@ -329,7 +329,7 @@ bool SessionHandler::EvalCommand(commands::Command* command) {
     engine_->ClearOldSupplementalModels();
   }
   // floatype: the settings file was edited.
-  if (floatype::TextConfigChanged()) {
+  if (floatype::SettingsFileChanged()) {
     config::ConfigHandler::Reload();
     UpdateSessions();
   }

@@ -40,6 +40,7 @@
 #include "absl/base/no_destructor.h"
 #include "absl/base/thread_annotations.h"
 #include "absl/log/log.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
@@ -52,7 +53,7 @@
 #include "base/thread.h"
 #include "base/version.h"
 #include "base/vlog.h"
-#include "floatype/config/text_config.h"
+#include "floatype/config/settings_file.h"
 #include "protocol/config.pb.h"
 
 namespace mozc {
@@ -176,10 +177,10 @@ class ConfigHandlerImpl final {
 
  private:
   void SetConfigInternal(std::shared_ptr<Config> config);
+  // floatype: SetConfig as in Mozc, without the settings file.
+  void StoreConfig(Config config);
 
   std::string filename_ ABSL_GUARDED_BY(mutex_);
-  // floatype: config1.db as stored, without the settings file's values.
-  Config stored_ ABSL_GUARDED_BY(mutex_);
   std::atomic<uint64_t> config_hash_ = 0;   // hash of final config.
   std::atomic<uint64_t> content_hash_ = 0;  // hash w/o metadata.
   AtomicSharedPtr<Config> config_;
@@ -208,14 +209,20 @@ void ConfigHandlerImpl::SetConfigInternal(std::shared_ptr<Config> config) {
 }
 
 void ConfigHandlerImpl::SetConfig(Config config) {
-  // floatype: the settings screen sends back what it was shown, the file's
-  // values included; those stay out of config1.db, so removing a line from the
-  // file gives the field back to the settings screen.
-  const Config overlay = floatype::TextConfigOverlay();
-  {
-    absl::ReaderMutexLock lock(mutex_);
-    floatype::RestoreOverlaidFields(overlay, stored_, config);
+  // floatype: the settings go into the settings file first; config1.db keeps
+  // a copy of what the file then gives.
+  if (floatype::SettingsFileEnabled()) {
+    absl::StatusOr<Config> settings =
+        floatype::WriteSettingsFile(config, *default_config_);
+    if (!settings.ok()) {
+      return;  // The file and the settings stay as they were.
+    }
+    config = *std::move(settings);
   }
+  StoreConfig(std::move(config));
+}
+
+void ConfigHandlerImpl::StoreConfig(Config config) {
   const uint64_t config_hash = CityFingerprint(config.SerializeAsString());
 
   // If the wire format of config is identical to the one of the previously
@@ -260,13 +267,7 @@ void ConfigHandlerImpl::SetConfig(Config config) {
   ConfigFileStream::AtomicUpdate(absl::StrCat(filename, ".txt"), debug_content);
 #endif  // DEBUG
 
-  {
-    absl::WriterMutexLock lock(mutex_);
-    stored_ = *output_config;
-  }
-  auto effective = std::make_shared<Config>(*output_config);
-  floatype::ApplyOverlay(overlay, *effective);
-  SetConfigInternal(effective);
+  SetConfigInternal(output_config);
 }
 
 // Reload from file
@@ -287,14 +288,30 @@ void ConfigHandlerImpl::Reload() {
   // we set default config when file is broken
   NormalizeConfig(input_config.get());
 
-  // floatype: the settings file overrides the fields it sets.
-  {
-    absl::WriterMutexLock lock(mutex_);
-    stored_ = *input_config;
+  // floatype: the settings file decides. A broken file keeps the last good
+  // settings: those in memory, or else config1.db, read above, their copy.
+  if (floatype::SettingsFileEnabled()) {
+    // Mozc always writes general_config; without it there was no config1.db.
+    if (!input_config->has_general_config()) {
+      *input_config = *default_config_;
+    }
+    // The copy is rewritten from the file whatever was stored before.
+    config_hash_ = 0;
+    content_hash_ = 0;
+    bool migrated = false;
+    absl::StatusOr<Config> settings =
+        floatype::ReadSettingsFile(*default_config_, *input_config, migrated);
+    if (settings.ok() && !migrated && floatype::SettingsFileWritable()) {
+      StoreConfig(*std::move(settings));
+      return;
+    }
+    if (settings.ok()) {
+      *input_config = *std::move(settings);
+      NormalizeConfig(input_config.get());
+    } else if (floatype::SettingsFileLoaded()) {
+      return;
+    }
   }
-  floatype::ReloadTextConfig();
-  floatype::ApplyOverlay(floatype::TextConfigOverlay(), *input_config);
-  NormalizeConfig(input_config.get());
 
   SetConfigInternal(input_config);
 }
