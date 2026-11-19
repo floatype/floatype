@@ -74,10 +74,6 @@ class CandidateController : public RendererInterface {
   // floatype: the indicator next to the composition.
   IndicatorWindow *indicator_window_;
   mozc::commands::RendererCommand command_;
-  // floatype: the candidate window went above the composition, for lack of
-  // room below, and stays there until it hides, rather than jumping back
-  // down when it shrinks.
-  bool above_ = false;
 };
 
 }  // namespace mac

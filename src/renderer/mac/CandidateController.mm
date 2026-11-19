@@ -29,8 +29,6 @@
 
 #import "renderer/mac/CandidateView.h"
 
-#include <algorithm>
-
 #include "base/coordinates.h"
 #include "protocol/commands.pb.h"
 #include "renderer/mac/CandidateController.h"
@@ -151,7 +149,6 @@ bool CandidateController::ExecCommand(const RendererCommand &command) {
     candidate_window_->Hide();
     cascading_window_->Hide();
     infolist_window_->Hide();
-    above_ = false;
     return true;
   }
 
@@ -250,18 +247,9 @@ void CandidateController::AlignWindows() {
                                          0);
 
   const mozc::Point target_point(preedit_rect.Left(), preedit_rect.Bottom());
-  mozc::Rect candidate_rect = WindowUtil::GetWindowRectForMainWindowFromTargetPointAndPreedit(
+  const mozc::Rect candidate_rect = WindowUtil::GetWindowRectForMainWindowFromTargetPointAndPreedit(
       target_point, preedit_rect, candidate_window_->GetWindowSize(), candidate_zero_point,
       display_rect, is_vertical);
-  // floatype: once above, stay above while the window shows.
-  if (!is_vertical) {
-    if (candidate_rect.Top() < preedit_rect.Top()) {
-      above_ = true;
-    } else if (above_) {
-      candidate_rect.origin.y =
-          std::max(display_rect.Top(), preedit_rect.Top() - candidate_rect.Height());
-    }
-  }
   candidate_window_->MoveWindow(OriginPointInCocoaCoord(candidate_rect));
 
   // Align infolist window
