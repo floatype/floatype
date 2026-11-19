@@ -255,7 +255,7 @@ mozc_cc_library(
     ],
     hdrs = ["renderer_style_handler.h"],
     visibility = [
-        "//floatype/candidate:__pkg__",
+        "//floatype/look:__pkg__",
         "//renderer:__subpackages__",
     ],
     deps = [
@@ -348,8 +348,8 @@ mozc_objc_library(
         "//base:util",
         "//base/mac:mac_util",
         "//client:client_interface",
-        "//floatype/candidate:candidate_style",
         "//floatype/indicator:indicator_layout",
+        "//floatype/look:window_look",
         "//mac:common",
         "//protocol:candidate_window_cc_proto",
         "//protocol:commands_cc_proto",
@@ -380,6 +380,7 @@ mozc_objc_test(
     srcs = ["mac/floatype_look_test.mm"],
     deps = [
         ":mozc_renderer_lib_macos",
+        "//floatype/look:window_look",
         "//protocol:candidate_window_cc_proto",
         "//protocol:commands_cc_proto",
         "//protocol:config_cc_proto",

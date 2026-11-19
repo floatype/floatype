@@ -57,20 +57,34 @@ class CandidateWindow : public RendererBaseWindow {
   void SetSendCommandInterface(
       client::SendCommandInterface *send_command_interface);
   void SetCandidateWindow(const commands::CandidateWindow &candidate_window);
-  // floatype: the fonts' scale in percent (0: 100) and the colors for the
-  // next candidates.
-  void SetLook(uint32_t percent, const config::Config::CandidateStyle &colors) {
-    font_scale_percent_ = percent;
-    colors_ = colors;
+  // floatype: the looks for the next candidates: `conversion` for the
+  // conversion window, `suggest` for predictions and suggestions.
+  void SetLook(const config::Config::CandidateStyle &conversion,
+               const config::Config::CandidateStyle &suggest) {
+    conversion_style_ = conversion;
+    suggest_style_ = suggest;
   }
+  void Show() override;
+  void Hide() override;
+  void MoveWindow(const NSPoint &point) override;
+  void SetWindowLevel(NSInteger window_level) override;
+  NSWindow *WindowForTesting() const { return window_; }
+  NSView *ViewForTesting() const { return view_; }
+  NSWindow *ShadowWindowForTesting() const { return shadow_window_; }
   const renderer::TableLayout *GetTableLayout() const;
 
  private:
   void InitWindow();
   void ResetView();
+  // floatype: puts the window's part of the look (corners, opacity, shadow)
+  // on it, and the strong shadow's window behind it.
+  void ApplyWindowLook();
+  void PlaceShadow();
   mozc::client::SendCommandInterface *command_sender_;
-  uint32_t font_scale_percent_ = 100;
-  config::Config::CandidateStyle colors_;
+  config::Config::CandidateStyle conversion_style_;
+  config::Config::CandidateStyle suggest_style_;
+  // Draws the strong shadow, which the system's window shadow cannot.
+  NSPanel *shadow_window_ = nil;
 };
 
 }  // namespace mac

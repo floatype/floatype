@@ -85,10 +85,6 @@
 ## 見た目は下の [ruby_style] で変えられます。
 # live_conversion_ruby = false
 
-## 候補の窓の文字の大きさ（Mozc の大きさに対する %、50〜300）。
-## 色は下の [candidate_style] で変えられます。
-# candidate_font_scale_percent = 100
-
 ## 未確定文字の近くに出す状態インジケータ（入力中 / Mozc / Zenz… / Zenz）。
 ## 見た目は下の [indicator_style] で変えられます。
 # show_indicator = true
@@ -154,19 +150,40 @@
 
 ## ── 表（ほかの項目より後に置きます） ──────────────────────────────
 
-## ルビの見た目。文字の大きさ（6〜72）、文字と背景の色（0xRRGGBB）。
+## ルビの見た目。文字の大きさ（6〜72）、文字と背景の色（0xRRGGBB）、
+## 角の丸み（0〜24）、不透明度（30〜100）。
 # [ruby_style]
 # font_size = 11
 # text_color = 0x404040
 # background_color = 0xffffff
+# corner_radius = 4
+# opacity_percent = 92
 
-## 候補の窓の色（0xRRGGBB）。書かない色は Mozc の色のまま。値は Mozc の色。
+## 変換の候補の窓の見た目。
 # [candidate_style]
-##   候補の文字、選んでいる行の背景と枠、窓の枠
+##   配色: AUTO（システムのライトとダークに合わせる）、LIGHT、DARK、CUSTOM（下の色を使う）
+# theme = "AUTO"
+##   CUSTOM の色（0xRRGGBB）。書かない色は LIGHT の色。値は LIGHT の色。
+##   候補の文字、窓の背景、選んでいる行の背景と枠、窓の枠
 # text_color = 0x000000
+# background_color = 0xffffff
 # focused_background_color = 0xd1eaff
 # focused_border_color = 0x7facdd
 # border_color = 0x969696
+##   文字と行の大きさ（Mozc の大きさに対する %、50〜300）
+# size_percent = 100
+##   角の丸み（0〜24）と不透明度（30〜100）
+# corner_radius = 0
+# opacity_percent = 100
+##   影: SOFT（システムの影）、NONE（なし）、STRONG（濃い影）
+# shadow = "SOFT"
+##   書体のファミリー名（例 "Hiragino Sans"）。空かないものはシステムの書体
+# font_family = ""
+
+## 予測と サジェスト の候補の窓の見た目。項目は [candidate_style] と同じ。
+# [suggest_style]
+# theme = "AUTO"
+# size_percent = 100
 
 ## インジケータの見た目。色は 0xRRGGBB です。
 # [indicator_style]

@@ -50,18 +50,23 @@ constexpr Range kConfigRanges[] = {
     {"zenz_delay_millisec", 0, 5000},
     {"zenz_timeout_millisec", 50, 5000},
     {"live_conversion_waits_for_zenz_millisec", 0, 1000},
-    {"candidate_font_scale_percent", 50, 300},
 };
 constexpr Range kCandidateRanges[] = {
     {"text_color", 0, 0xffffff},
     {"focused_background_color", 0, 0xffffff},
     {"focused_border_color", 0, 0xffffff},
     {"border_color", 0, 0xffffff},
+    {"background_color", 0, 0xffffff},
+    {"size_percent", 50, 300},
+    {"corner_radius", 0, 24},
+    {"opacity_percent", 30, 100},
 };
 constexpr Range kRubyRanges[] = {
     {"font_size", 6, 72},
     {"text_color", 0, 0xffffff},
     {"background_color", 0, 0xffffff},
+    {"corner_radius", 0, 24},
+    {"opacity_percent", 30, 100},
 };
 constexpr Range kIndicatorRanges[] = {
     {"reading_color", 0, 0xffffff},
@@ -157,12 +162,12 @@ absl::StatusOr<config::Config> ParseTextConfig(absl::string_view text) {
     return status;
   }
   for (const absl::string_view name :
-       {"candidate_style", "ruby_style", "indicator_style"}) {
+       {"candidate_style", "suggest_style", "ruby_style", "indicator_style"}) {
     const FieldDescriptor* field =
         config::Config::descriptor()->FindFieldByName(name);
-    if (absl::Status status = CheckRanges(
-            config.GetReflection()->GetMessage(config, field),
-            tree.GetTreeForNested(field, -1));
+    if (absl::Status status =
+            CheckRanges(config.GetReflection()->GetMessage(config, field),
+                        tree.GetTreeForNested(field, -1));
         !status.ok()) {
       return status;
     }

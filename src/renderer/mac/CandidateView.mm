@@ -33,22 +33,22 @@
 
 #include <algorithm>
 #include <set>
+#include <string>
+#include <utility>
 
 #include "absl/log/log.h"
 #include "absl/strings/str_format.h"
 #include "client/client_interface.h"
-#include "floatype/candidate/candidate_style.h"
+#include "floatype/look/window_look.h"
 #include "protocol/commands.pb.h"
 #include "protocol/renderer_style.pb.h"
 #include "renderer/mac/mac_view_util.h"
-#include "renderer/renderer_style_handler.h"
 #include "renderer/table_layout.h"
 
 using mozc::client::SendCommandInterface;
 using mozc::commands::CandidateWindow;
 using mozc::commands::Output;
 using mozc::commands::SessionCommand;
-using mozc::renderer::RendererStyleHandler;
 using mozc::renderer::ColumnType;
 using mozc::renderer::kColumnShortcut;
 using mozc::renderer::kColumnGap1;
@@ -65,6 +65,8 @@ using mozc::renderer::mac::MacViewUtil;
 // Private method declarations.
 @interface CandidateView ()
 - (void)initializeDefaultStyle;
+- (BOOL)systemDark;
+- (BOOL)updateLook;
 
 // Draw the |row|-th row.
 - (void)drawRow:(int)row;
@@ -93,9 +95,11 @@ using mozc::renderer::mac::MacViewUtil;
   // |command_sender_| holds a callback for mouse clicks.
   mozc::client::SendCommandInterface *command_sender_;
 
-  // floatype: the fonts' scale in percent and the colors set.
-  uint32_t fontScalePercent_;
-  mozc::config::Config::CandidateStyle colors_;
+  // floatype: the look's settings and what they come to now.
+  mozc::config::Config::CandidateStyle lookStyle_;
+  mozc::floatype::WindowLook look_;
+  // The settings and appearance look_ is for, to resolve it only on a change.
+  std::string lookKey_;
 }
 
 #pragma mark initialization
@@ -103,17 +107,14 @@ using mozc::renderer::mac::MacViewUtil;
 - (id)initWithFrame:(NSRect)frame {
   self = [super initWithFrame:frame];
   if (self) {
-    fontScalePercent_ = 100;
-    [self initializeDefaultStyle];
+    [self updateLook];
     focusedRow_ = -1;
   }
   return self;
 }
 
 - (void)initializeDefaultStyle {
-  style_ = RendererStyleHandler::GetRendererStyle();
-  mozc::floatype::ScaleFonts(style_, fontScalePercent_);
-  mozc::floatype::ApplyColors(style_, colors_);
+  style_ = mozc::floatype::RendererStyleFor(look_);
 
   const std::string &logo_file_name = style_.logo_file_name();
   logoImage_ = [NSImage imageNamed:[NSString stringWithUTF8String:logo_file_name.c_str()]];
@@ -133,12 +134,9 @@ using mozc::renderer::mac::MacViewUtil;
   if (!min_width_string.empty()) {
     min_width_string.append("  ");
   }
-  NSString *nsstr = [NSString stringWithUTF8String:min_width_string.c_str()];
-  NSDictionary *attr =
-      [NSDictionary dictionaryWithObject:[NSFont messageFontOfSize:14 * fontScalePercent_ / 100.0]
-                                  forKey:NSFontAttributeName];
-  const NSAttributedString *defaultMessage = [[NSAttributedString alloc] initWithString:nsstr
-                                                                             attributes:attr];
+  // floatype: in the candidates' font (Mozc's: the message font at 14pt).
+  const NSAttributedString *defaultMessage =
+      MacViewUtil::ToNSAttributedString(min_width_string, style_.candidate_style());
   columnMinimumWidth_ = [defaultMessage size].width;
 
   // default line width is specified as 1.0 *pt*, but we want to draw
@@ -147,16 +145,41 @@ using mozc::renderer::mac::MacViewUtil;
   [NSBezierPath setDefaultLineJoinStyle:NSLineJoinStyleMiter];
 }
 
-- (void)setFontScalePercent:(uint32_t)percent
-                     colors:(const mozc::config::Config::CandidateStyle &)colors {
-  const uint32_t scale = percent == 0 ? 100 : percent;
-  if (scale == fontScalePercent_ &&
-      colors.SerializeAsString() == colors_.SerializeAsString()) {
-    return;
+- (BOOL)systemDark {
+  return [[self.effectiveAppearance
+             bestMatchFromAppearancesWithNames:@[ NSAppearanceNameAqua, NSAppearanceNameDarkAqua ]]
+      isEqualToString:NSAppearanceNameDarkAqua];
+}
+
+// Resolves the look again; returns whether it changed.
+- (BOOL)updateLook {
+  const BOOL dark = [self systemDark];
+  std::string key = lookStyle_.SerializeAsString() + (dark ? "dark" : "light");
+  if (key == lookKey_) {
+    return NO;
   }
-  fontScalePercent_ = scale;
-  colors_ = colors;
+  lookKey_ = std::move(key);
+  look_ = mozc::floatype::ResolveWindowLook(lookStyle_, dark);
   [self initializeDefaultStyle];
+  return YES;
+}
+
+- (void)setLookStyle:(const mozc::config::Config::CandidateStyle &)style {
+  lookStyle_ = style;
+  [self updateLook];
+}
+
+- (const mozc::floatype::WindowLook &)look {
+  return look_;
+}
+
+// Only colors change with the appearance, but the laid-out strings hold them.
+- (void)viewDidChangeEffectiveAppearance {
+  [super viewDidChangeEffectiveAppearance];
+  if ([self updateLook]) {
+    [self updateLayout];
+    [self setNeedsDisplay:YES];
+  }
 }
 
 - (void)setCandidateWindow:(const CandidateWindow *)candidate_window {
@@ -304,6 +327,20 @@ using mozc::renderer::mac::MacViewUtil;
     return;
   }
 
+  // floatype: the background, which shows between the cells, inside the
+  // rounded corners.
+  const CGFloat radius = look_.corner_radius;
+  [MacViewUtil::ToNSColor(style_.candidate_style().background_color()) set];
+  if (radius > 0) {
+    NSBezierPath *shape = [NSBezierPath bezierPathWithRoundedRect:self.bounds
+                                                          xRadius:radius
+                                                          yRadius:radius];
+    [shape addClip];
+    [shape fill];
+  } else {
+    NSRectFill(self.bounds);
+  }
+
   for (int i = 0; i < candidate_window_.candidate_size(); ++i) {
     [self drawRow:i];
   }
@@ -316,7 +353,14 @@ using mozc::renderer::mac::MacViewUtil;
   // Draw the window border at last
   [MacViewUtil::ToNSColor(style_.border_color()) set];
   const mozc::Size windowSize = tableLayout_.GetTotalSize();
-  [NSBezierPath strokeRect:NSMakeRect(0.5, 0.5, windowSize.width - 1, windowSize.height - 1)];
+  const NSRect borderRect = NSMakeRect(0.5, 0.5, windowSize.width - 1, windowSize.height - 1);
+  if (radius > 0) {
+    [[NSBezierPath bezierPathWithRoundedRect:borderRect
+                                     xRadius:radius - 0.5
+                                     yRadius:radius - 0.5] stroke];
+  } else {
+    [NSBezierPath strokeRect:borderRect];
+  }
 }
 
 #pragma mark drawing aux methods

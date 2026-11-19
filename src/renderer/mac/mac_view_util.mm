@@ -70,11 +70,20 @@ NSColor *MacViewUtil::MacViewUtil::ToNSColor(
 NSAttributedString *MacViewUtil::ToNSAttributedString(const std::string &str,
                                                       const RendererStyle::TextStyle &style) {
   NSString *nsstr = [NSString stringWithUTF8String:str.c_str()];
-  NSFont *font;
+  NSFont *font = nil;
   if (style.has_font_name()) {
-    font = [NSFont fontWithName:[NSString stringWithUTF8String:style.font_name().c_str()]
-                           size:style.font_size()];
-  } else {
+    NSString *name = [NSString stringWithUTF8String:style.font_name().c_str()];
+    font = [NSFont fontWithName:name size:style.font_size()];
+    // floatype: the name may be a family's (the settings'), and a font not
+    // installed falls back to the system's.
+    if (font == nil) {
+      font = [[NSFontManager sharedFontManager] fontWithFamily:name
+                                                        traits:0
+                                                        weight:5
+                                                          size:style.font_size()];
+    }
+  }
+  if (font == nil) {
     font = [NSFont messageFontOfSize:style.font_size()];
   }
   NSDictionary *attr;

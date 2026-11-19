@@ -29,7 +29,9 @@
 
 #import <Cocoa/Cocoa.h>
 
+#include "floatype/look/window_look.h"
 #include "protocol/candidate_window.pb.h"
+#include "protocol/config.pb.h"
 #include "protocol/renderer_command.pb.h"
 
 namespace mozc {
@@ -69,10 +71,12 @@ enum ColumnType {
 // It also returns the size which is necessary to draw all GUI elements.
 - (NSSize)updateLayout;
 
-// floatype: scales the fonts by `percent` (0 means 100) and puts in the
-// colors set in `colors`.
-- (void)setFontScalePercent:(uint32_t)percent
-                     colors:(const mozc::config::Config::CandidateStyle &)colors;
+// floatype: draws with the look of `style`, light or dark as the view's
+// appearance is, and follows the appearance as it changes.
+- (void)setLookStyle:(const mozc::config::Config::CandidateStyle &)style;
+
+// floatype: the look it draws with now.
+- (const mozc::floatype::WindowLook &)look;
 
 // Returns the table layout of the current candidates.
 - (const mozc::renderer::TableLayout *)tableLayout;

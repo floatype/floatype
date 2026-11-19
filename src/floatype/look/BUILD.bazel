@@ -3,21 +3,25 @@ load("//:build_defs.bzl", "mozc_cc_library", "mozc_cc_test")
 package(default_visibility = ["//visibility:private"])
 
 mozc_cc_library(
-    name = "candidate_style",
-    srcs = ["candidate_style.cc"],
-    hdrs = ["candidate_style.h"],
-    visibility = ["//renderer:__pkg__"],
+    name = "window_look",
+    srcs = ["window_look.cc"],
+    hdrs = ["window_look.h"],
+    visibility = [
+        "//gui/config_dialog:__pkg__",
+        "//renderer:__subpackages__",
+    ],
     deps = [
         "//protocol:config_cc_proto",
         "//protocol:renderer_cc_proto",
+        "//renderer:renderer_style_handler",
     ],
 )
 
 mozc_cc_test(
-    name = "candidate_style_test",
-    srcs = ["candidate_style_test.cc"],
+    name = "window_look_test",
+    srcs = ["window_look_test.cc"],
     deps = [
-        ":candidate_style",
+        ":window_look",
         "//protocol:config_cc_proto",
         "//protocol:renderer_cc_proto",
         "//renderer:renderer_style_handler",

@@ -423,17 +423,42 @@ message Config {
   // floatype: a live conversion waits up to this long for zenz before showing
   // anything, so that the text changes once; 0 shows Mozc's result first.
   optional uint32 live_conversion_waits_for_zenz_millisec = 1011 [default = 0];
-  // floatype: the candidate window's font sizes, in percent of Mozc's.
-  optional uint32 candidate_font_scale_percent = 1012 [default = 100];
-  // floatype: the candidate window's colors, 0xRRGGBB; unset ones stay
-  // Mozc's.
+  reserved 1012;
+  reserved "candidate_font_scale_percent";
+  // floatype: the look of a candidate window. Colors are 0xRRGGBB and apply
+  // only with CUSTOM; an unset one there is the LIGHT palette's.
   message CandidateStyle {
     optional uint32 text_color = 1;
     optional uint32 focused_background_color = 2;
     optional uint32 focused_border_color = 3;
     optional uint32 border_color = 4;
+    // AUTO follows the system's light or dark appearance.
+    enum Theme {
+      AUTO = 0;
+      LIGHT = 1;
+      DARK = 2;
+      CUSTOM = 3;
+    }
+    optional Theme theme = 5 [default = AUTO];
+    optional uint32 background_color = 6;
+    // The font and row sizes, in percent of Mozc's.
+    optional uint32 size_percent = 7 [default = 100];
+    optional uint32 corner_radius = 8 [default = 0];
+    optional uint32 opacity_percent = 9 [default = 100];
+    // SOFT is the system's window shadow.
+    enum Shadow {
+      SOFT = 0;
+      NONE = 1;
+      STRONG = 2;
+    }
+    optional Shadow shadow = 10 [default = SOFT];
+    // Empty is the system font, as is a family not installed.
+    optional string font_family = 11 [default = ""];
   }
+  // The conversion window (conversion, transliteration, usage).
   optional CandidateStyle candidate_style = 1014;
+  // The prediction and suggestion window.
+  optional CandidateStyle suggest_style = 1024;
   // floatype: with use_direct_commit on, typing one of these characters at
   // the end of the composition converts it, waits for zenz, and commits it.
   // Mozkey's characters and first choice.
@@ -458,6 +483,8 @@ message Config {
     optional uint32 font_size = 1 [default = 11];
     optional uint32 text_color = 2 [default = 0x404040];
     optional uint32 background_color = 3 [default = 0xffffff];
+    optional uint32 corner_radius = 4 [default = 4];
+    optional uint32 opacity_percent = 5 [default = 92];
   }
   optional RubyStyle ruby_style = 1019;
   // floatype: an English word typed in a kana mode, told by romaji letters

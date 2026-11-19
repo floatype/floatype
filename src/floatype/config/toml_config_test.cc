@@ -115,6 +115,26 @@ TEST(ParseTomlConfigTest, ChecksRangesLikeTheTextFile) {
   ExpectErrorAt("\n[ruby_style]\nfont_size = 200\n", "3 行目");
   ExpectErrorAt("zenz_timeout_millisec = 10\n", "1 行目");
   EXPECT_TRUE(ParseTomlConfig("zenz_timeout_millisec = 50\n").ok());
+  ExpectErrorAt("\n[suggest_style]\nsize_percent = 20\n", "3 行目");
+  ExpectErrorAt("[candidate_style]\ncorner_radius = 30\n", "2 行目");
+}
+
+TEST(ParseTomlConfigTest, PassesOverRemovedSettings) {
+  const absl::StatusOr<Config> config =
+      ParseTomlConfig("candidate_font_scale_percent = 150\nuse_zenz = false\n");
+  ASSERT_TRUE(config.ok()) << config.status();
+  EXPECT_FALSE(config->use_zenz());
+  ExpectErrorAt("no_such_setting = 1\n", "1 行目");
+}
+
+TEST(ParseTomlConfigTest, ReadsTheLookEnums) {
+  const absl::StatusOr<Config> config = ParseTomlConfig(
+      "[suggest_style]\ntheme = \"DARK\"\nshadow = \"STRONG\"\n"
+      "font_family = \"Hiragino Sans\"\n");
+  ASSERT_TRUE(config.ok()) << config.status();
+  EXPECT_EQ(config->suggest_style().theme(), Config::CandidateStyle::DARK);
+  EXPECT_EQ(config->suggest_style().shadow(), Config::CandidateStyle::STRONG);
+  EXPECT_EQ(config->suggest_style().font_family(), "Hiragino Sans");
 }
 
 TEST(ParseTomlConfigTest, IgnoresGeneralConfig) {
@@ -441,6 +461,8 @@ TEST(ExampleTest, ListsEveryFloatypeFieldWithItsDefault) {
   ASSERT_TRUE(example.ok()) << example.status();
   ExpectListed(*example, 1001);
   ExpectListed(example->indicator_style(), 1);
+  ExpectListed(example->ruby_style(), 1);
+  ExpectListed(example->candidate_style(), 1);
   const Config& defaults = config::ConfigHandler::DefaultConfig();
   ExpectDefaults(*example, defaults);
   ExpectDefaults(example->indicator_style(), defaults.indicator_style());

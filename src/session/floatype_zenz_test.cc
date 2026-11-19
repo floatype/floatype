@@ -657,21 +657,21 @@ TEST_F(FloatypeZenzTest, SpaceAfterTheLiveConversionStillConverts) {
   EXPECT_TRUE(space.candidate_window().has_focused_index());
 }
 
-TEST_F(FloatypeZenzTest, TheCandidateWindowGetsItsFontScale) {
+TEST_F(FloatypeZenzTest, TheSuggestionsGetTheirStyle) {
   floatype::EnableSessionFeatures(true);
-  EXPECT_FALSE(
-      SendKeys({"k", "i", "k", "a", "i"}).has_candidate_font_scale_percent())
-      << "100% is Mozc's look, left unsaid";
+  EXPECT_FALSE(SendKeys({"k", "i", "k", "a", "i"}).has_suggest_style())
+      << "the default look is left unsaid";
   SendKeys({"Escape"});
   config::Config config = config::ConfigHandler::DefaultConfig();
-  config.set_candidate_font_scale_percent(150);
+  config.mutable_suggest_style()->set_size_percent(150);
   commands::Input input;
   input.set_type(commands::Input::SET_CONFIG);
   *input.mutable_config() = config;
   Eval(std::move(input));
   const commands::Output suggested = SendKeys({"k", "i", "k", "a", "i"});
   ASSERT_TRUE(suggested.has_candidate_window());
-  EXPECT_EQ(suggested.candidate_font_scale_percent(), 150);
+  EXPECT_EQ(suggested.suggest_style().size_percent(), 150);
+  EXPECT_FALSE(suggested.has_candidate_style());
 }
 
 TEST_F(FloatypeZenzTest, CtrlDeleteStopsACorrectionForGood) {

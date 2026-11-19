@@ -1,5 +1,6 @@
 #import "renderer/mac/IndicatorWindow.h"
 
+#include <algorithm>
 #include <string>
 
 #include "floatype/indicator/indicator_layout.h"
@@ -155,11 +156,11 @@ void IndicatorWindow::UpdateRuby(const commands::RendererCommand &command,
   };
   ruby_view_.label = [[NSAttributedString alloc] initWithString:@(reading.c_str())
                                                      attributes:attributes];
-  ruby_view_.fillColor = ColorFromRGB(style.background_color(), 0.92);
+  ruby_view_.fillColor = ColorFromRGB(style.background_color(), style.opacity_percent() / 100.0);
   const NSSize size = ruby_view_.label.size;
   const double width = size.width + 8;
   const double height = size.height + 2;
-  ruby_view_.cornerRadius = 4;
+  ruby_view_.cornerRadius = std::min<double>(style.corner_radius(), height / 2);
   const auto to_rect = [](const NSRect &frame) {
     return floatype::IndicatorRect{NSMinX(frame), NSMinY(frame), NSWidth(frame),
                                    NSHeight(frame)};

@@ -34,8 +34,43 @@
 
 #include "absl/log/log.h"
 #include "base/coordinates.h"
+#include "floatype/look/window_look.h"
+#include "protocol/candidate_window.pb.h"
 #include "protocol/commands.pb.h"
 #include "renderer/mac/CandidateWindow.h"
+
+// floatype: the strong shadow, drawn outside a rounded rectangle inset by
+// `inset` from the bounds.
+@interface FloatypeShadowView : NSView
+@property(nonatomic) CGFloat inset;
+@property(nonatomic) CGFloat cornerRadius;
+@property(nonatomic) CGFloat blurRadius;
+@property(nonatomic) CGFloat offsetY;
+@property(nonatomic) CGFloat opacity;
+@end
+
+@implementation FloatypeShadowView
+- (void)drawRect:(NSRect)dirtyRect {
+  [[NSColor clearColor] set];
+  NSRectFill(self.bounds);
+  NSBezierPath* shape =
+      [NSBezierPath bezierPathWithRoundedRect:NSInsetRect(self.bounds, self.inset, self.inset)
+                                      xRadius:self.cornerRadius
+                                      yRadius:self.cornerRadius];
+  // Only outside the window, which may be see-through.
+  NSBezierPath* outside = [NSBezierPath bezierPathWithRect:self.bounds];
+  [outside appendBezierPath:shape];
+  outside.windingRule = NSWindingRuleEvenOdd;
+  [outside addClip];
+  NSShadow* shadow = [[NSShadow alloc] init];
+  shadow.shadowBlurRadius = self.blurRadius;
+  shadow.shadowOffset = NSMakeSize(0, -self.offsetY);
+  shadow.shadowColor = [NSColor colorWithWhite:0 alpha:self.opacity];
+  [shadow set];
+  [[NSColor blackColor] set];
+  [shape fill];
+}
+@end
 
 namespace mozc {
 namespace renderer {
@@ -43,7 +78,7 @@ namespace mac {
 
 CandidateWindow::CandidateWindow() : command_sender_(nullptr) {}
 
-CandidateWindow::~CandidateWindow() {}
+CandidateWindow::~CandidateWindow() { [shadow_window_ close]; }
 
 void CandidateWindow::SetSendCommandInterface(
     client::SendCommandInterface* send_command_interface) {
@@ -74,11 +109,83 @@ void CandidateWindow::SetCandidateWindow(const commands::CandidateWindow& candid
     InitWindow();
   }
   CandidateView* candidate_view = (CandidateView*)view_;
-  [candidate_view setFontScalePercent:font_scale_percent_ colors:colors_];
+  const bool suggest = candidate_window.category() == commands::SUGGESTION ||
+                       candidate_window.category() == commands::PREDICTION;
+  [candidate_view setLookStyle:suggest ? suggest_style_ : conversion_style_];
   [candidate_view setCandidateWindow:&candidate_window];
   [candidate_view setNeedsDisplay:YES];
   NSSize size = [candidate_view updateLayout];
   ResizeWindow(size.width, size.height);
+  ApplyWindowLook();
+}
+
+void CandidateWindow::ApplyWindowLook() {
+  const floatype::WindowLook& look = [(CandidateView*)view_ look];
+  // Square corners keep Mozc's opaque window.
+  const bool opaque = look.corner_radius <= 0;
+  [window_ setOpaque:opaque];
+  [window_ setBackgroundColor:opaque ? NSColor.whiteColor : NSColor.clearColor];
+  [window_ setAlphaValue:look.opacity];
+  [window_ setHasShadow:look.shadow != config::Config::CandidateStyle::NONE];
+  if (!opaque) {
+    // The system's shadow follows the rounded shape once drawn.
+    [window_ display];
+    [window_ invalidateShadow];
+  }
+  PlaceShadow();
+}
+
+void CandidateWindow::PlaceShadow() {
+  const floatype::WindowLook& look = [(CandidateView*)view_ look];
+  if (look.shadow != config::Config::CandidateStyle::STRONG || !IsVisible()) {
+    [shadow_window_ orderOut:nil];
+    return;
+  }
+  if (shadow_window_ == nil) {
+    shadow_window_ = [[NSPanel alloc]
+        initWithContentRect:NSMakeRect(0, 0, 1, 1)
+                  styleMask:NSWindowStyleMaskBorderless | NSWindowStyleMaskNonactivatingPanel
+                    backing:NSBackingStoreBuffered
+                      defer:YES];
+    [shadow_window_ setOpaque:NO];
+    [shadow_window_ setBackgroundColor:NSColor.clearColor];
+    [shadow_window_ setHasShadow:NO];
+    [shadow_window_ setIgnoresMouseEvents:YES];
+    [shadow_window_ setReleasedWhenClosed:NO];
+    [shadow_window_ setContentView:[[FloatypeShadowView alloc] initWithFrame:NSZeroRect]];
+  }
+  FloatypeShadowView* shadow = (FloatypeShadowView*)shadow_window_.contentView;
+  const CGFloat inset = look.shadow_radius + look.shadow_offset_y;
+  shadow.inset = inset;
+  shadow.cornerRadius = look.corner_radius;
+  shadow.blurRadius = look.shadow_radius;
+  shadow.offsetY = look.shadow_offset_y;
+  shadow.opacity = look.shadow_opacity;
+  [shadow_window_ setAlphaValue:look.opacity];
+  [shadow_window_ setLevel:window_.level];
+  [shadow_window_ setFrame:NSInsetRect(window_.frame, -inset, -inset) display:NO];
+  [shadow setNeedsDisplay:YES];
+  [shadow_window_ orderWindow:NSWindowBelow relativeTo:window_.windowNumber];
+}
+
+void CandidateWindow::Show() {
+  RendererBaseWindow::Show();
+  PlaceShadow();
+}
+
+void CandidateWindow::Hide() {
+  RendererBaseWindow::Hide();
+  [shadow_window_ orderOut:nil];
+}
+
+void CandidateWindow::MoveWindow(const NSPoint& point) {
+  RendererBaseWindow::MoveWindow(point);
+  PlaceShadow();
+}
+
+void CandidateWindow::SetWindowLevel(NSInteger window_level) {
+  RendererBaseWindow::SetWindowLevel(window_level);
+  [shadow_window_ setLevel:window_level];
 }
 
 void CandidateWindow::ResetView() {

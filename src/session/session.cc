@@ -3043,12 +3043,11 @@ void Session::SetCandidateLook(commands::Command* command) const {
   if (!floatype::SessionFeaturesEnabled() || !output->has_candidate_window()) {
     return;
   }
-  if (config.candidate_font_scale_percent() != 100) {
-    output->set_candidate_font_scale_percent(
-        config.candidate_font_scale_percent());
-  }
   if (config.has_candidate_style()) {
     *output->mutable_candidate_style() = config.candidate_style();
+  }
+  if (config.has_suggest_style()) {
+    *output->mutable_suggest_style() = config.suggest_style();
   }
 }
 

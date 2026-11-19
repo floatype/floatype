@@ -171,6 +171,11 @@ absl::Status ReadTable(const toml::table& table, Message& message) {
     const int line = static_cast<int>(key.source().begin.line);
     const FieldDescriptor* field = descriptor.FindFieldByName(key.str());
     if (field == nullptr) {
+      // A setting removed since (now a reserved name) is passed over, so a
+      // file written before still reads.
+      if (descriptor.IsReservedName(key.str())) {
+        continue;
+      }
       return LineError(line,
                        absl::StrCat(key.str(), " という設定はありません"));
     }

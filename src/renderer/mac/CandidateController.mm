@@ -152,10 +152,10 @@ bool CandidateController::ExecCommand(const RendererCommand &command) {
     return true;
   }
 
-  candidate_window_->SetLook(command_.output().candidate_font_scale_percent(),
-                             command_.output().candidate_style());
-  cascading_window_->SetLook(command_.output().candidate_font_scale_percent(),
-                             command_.output().candidate_style());
+  candidate_window_->SetLook(command_.output().candidate_style(),
+                             command_.output().suggest_style());
+  cascading_window_->SetLook(command_.output().candidate_style(),
+                             command_.output().suggest_style());
   candidate_window_->SetCandidateWindow(command_.output().candidate_window());
 
   bool cascading_visible = false;
