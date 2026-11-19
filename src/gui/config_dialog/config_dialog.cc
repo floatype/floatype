@@ -756,7 +756,7 @@ void ConfigDialog::SetUpFloatypeSettings() {
                   "補正にかかる時間 約 26ms → 約 50ms）");
   zenzLearningCheckBox_ =
       AddCheckBox(memory,
-                  "補正の表示中に Ctrl+Delete "
+                  "補正の表示中に control+delete "
                   "で止めた補正を覚え、同じ読みでは繰り返さない");
   zenzSuggestionLearningCheckBox_ =
       AddCheckBox(memory, "zenz が直した確定を予測候補に覚えさせる");

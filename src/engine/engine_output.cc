@@ -390,7 +390,7 @@ bool FillFooter(const commands::Category category,
           // TODO(noriyukit): Change the message depending on user's keymap.
           const absl::string_view kDeleteInstruction = []() {
             if constexpr (port::IsAppleBase()) {
-              return "control+fn+deleteで履歴から削除";
+              return "control+deleteで履歴から削除";
             } else if constexpr (port::IsChromeos()) {
               return "ctrl+search+backspaceで履歴から削除";
             } else {
