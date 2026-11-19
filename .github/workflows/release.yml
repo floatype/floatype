@@ -1,0 +1,110 @@
+name: Release package
+# Builds floatype-<version>.pkg for Apple Silicon with the zenz scorer, its
+# model and the added dictionaries, as src/floatype/update.sh does locally.
+# A v* tag attaches it to a draft release; a manual run only uploads it as an
+# artifact.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    # https://github.com/actions/runner-images/blob/main/images/macos/macos-26-arm64-Readme.md
+    runs-on: macos-26
+    timeout-minutes: 150
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          submodules: false
+          persist-credentials: false
+
+      - name: Try to restore update_deps cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: src/third_party_cache
+          key: update_deps-${{ runner.os }}-${{ hashFiles('src/build_tools/update_deps.py') }}
+
+      # The sources are pinned by SHA-256 in the script, so its hash keys them.
+      - name: Try to restore the dictionary sources
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/Library/Caches/floatype/dictionary
+          key: floatype-dictionary-${{ hashFiles('src/floatype/tools/make_extra_dictionary.py') }}
+
+      - name: Install dependencies
+        working-directory: ./src
+        # This command uses src/third_party_cache as the download cache.
+        run: |
+          python3 build_tools/update_deps.py
+
+      - name: Build Qt
+        working-directory: ./src
+        run: |
+          python3 build_tools/build_qt.py --release --confirm_license --macos_cpus=arm64
+
+      - name: Build the zenz scorer
+        working-directory: ./src
+        # Also downloads the pinned zenz model next to the scorer.
+        run: |
+          cmake -S floatype/scorer -B floatype/scorer/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build floatype/scorer/build -j --target floatype_scorer
+
+      - name: Make the added dictionaries
+        working-directory: ./src
+        run: |
+          python3 floatype/tools/make_extra_dictionary.py
+
+      - name: bazel build
+        working-directory: ./src
+        run: |
+          bazelisk build package --macos_cpus=arm64 --config release_build \
+            --define=floatype_zenz=bundle --output_filter=DONT_MATCH_ANYTHING
+
+      - name: Name the package and its checksum
+        id: name
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          if [ "$REF_TYPE" = tag ]; then
+            version="${REF_NAME#v}"
+          else
+            version="dev-${SHA:0:9}"
+          fi
+          mkdir dist
+          cp src/bazel-bin/mac/Mozc.pkg "dist/floatype-$version.pkg"
+          (cd dist && shasum -a 256 "floatype-$version.pkg" > "floatype-$version.pkg.sha256")
+          cat "dist/floatype-$version.pkg.sha256"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: upload artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: floatype-${{ steps.name.outputs.version }}
+          path: dist/
+          if-no-files-found: error
+
+      - name: Attach to a draft release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ steps.name.outputs.version }}
+        run: |
+          gh release create "$TAG" --draft --verify-tag \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "floatype $VERSION" \
+            --notes "floatype $VERSION for Apple Silicon Macs. See the README for installing and checking the SHA-256." \
+            "dist/floatype-$VERSION.pkg" "dist/floatype-$VERSION.pkg.sha256"
