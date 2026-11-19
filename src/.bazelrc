@@ -1,5 +1,12 @@
 ## Startup options
 startup  --windows_enable_symlinks  # ignored on non-Windows platforms
+# floatype: Bazel's default output root on macOS, ~/Library/Caches/bazel, lies
+# under ~/Library/, which apple_support declares a system include directory,
+# so every header read there (all of them) dropped out of the tracked inputs
+# and edited headers went unnoticed until a clean build.
+# shortcut: one fixed folder for all users of the Mac, make it per user if two
+# people build floatype on one machine.
+startup  --output_user_root=/private/var/tmp/_bazel_floatype
 
 ## If target platform is not specified, linux, macos, or windows will be used
 ## considering the host platform.
