@@ -260,6 +260,18 @@ class EngineConverterInterface {
   virtual bool PromoteCandidates(absl::Span<const int> candidate_indices,
                                  uint32_t attributes,
                                  uint32_t cleared_attributes) = 0;
+  // floatype: a copy of the conversion's segments, resized to `sizes` (the
+  // key length of each conversion segment, in characters) and converted
+  // again, or nullopt. The copy does not count as resized by the user, so
+  // committing it teaches no segment boundary.
+  virtual std::optional<converter::Segments> ResizedSegments(
+      const composer::Composer& composer,
+      absl::Span<const uint8_t> sizes) const = 0;
+  // floatype: shows `segments`, the conversion's own or a copy from
+  // ResizedSegments(), with the first segment focused and no candidate
+  // picked. Works only on a conversion the user has not changed; otherwise
+  // returns false and changes nothing.
+  virtual bool SetSegments(converter::Segments segments) = 0;
 
   // Operation for the candidate list.
   virtual void SetCandidateListVisible(bool visible) = 0;

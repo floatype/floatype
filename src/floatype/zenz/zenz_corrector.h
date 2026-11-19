@@ -4,12 +4,14 @@
 #define MOZC_FLOATYPE_ZENZ_ZENZ_CORRECTOR_H_
 
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
 
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
+#include "absl/types/span.h"
 #include "converter/segments.h"
 #include "floatype/zenz/scorer_client.h"
 
@@ -23,6 +25,41 @@ namespace mozc::floatype {
 // rejects any text whose reading differs from the conversion's.
 std::optional<std::vector<int>> MapToCandidates(const Segments& segments,
                                                 absl::string_view text);
+// For `text` that MapToCandidates() cannot write: new conversion segments
+// under which Mozc's candidates may write it (Zenzai has the converter search
+// again under zenz's answer; Mozc segments again). Segments that spell their
+// part of `text` stay. Segments whose kanji numeral candidates read together
+// as the digits `text` has there (線|九百|七|重|二 for 1972) become one, with
+// the digits to add to its candidates, as Mozc's number rewriter writes them
+// for a single 千九百七十二. Each run of other segments becomes one, and takes
+// in a neighbor when it is a single segment, since its boundary is wrong.
+// Returns nullopt when nothing would change. Mozc still has to convert the
+// new segments, and `text` may not map onto them either.
+struct Resegmentation {
+  // The key length of each new segment, in characters.
+  std::vector<uint8_t> sizes;
+  // For each new segment, digits to add to its candidates, or "".
+  std::vector<std::string> numbers;
+};
+std::optional<Resegmentation> ResegmentationFor(const Segments& segments,
+                                                absl::string_view text);
+// Converts the conversion again with conversion segments of the given key
+// lengths, in characters (EngineConverter's ResizedSegments()), or returns
+// nullopt.
+using Resegmenter =
+    std::function<std::optional<Segments>(absl::Span<const uint8_t> sizes)>;
+struct Mapping {
+  std::vector<int> candidate_indices;
+  // The conversion segmented again, which `candidate_indices` are into, or
+  // nullopt when they are into the conversion's own segments.
+  std::optional<Segments> segments;
+};
+// MapToCandidates(), or where that fails, the same on the conversion that
+// `resegment` (when given) converts again as ResegmentationFor() says, with
+// the digits added. Returns nullopt when neither writes `text`.
+std::optional<Mapping> MapWithResegmentation(const Segments& segments,
+                                             absl::string_view text,
+                                             const Resegmenter& resegment);
 // The conversion's reading: its segment keys in hiragana.
 std::string ConversionReading(const Segments& segments);
 
@@ -72,8 +109,14 @@ class ZenzCorrector {
     // With kApply: the conversion's reading in hiragana and zenz's text.
     std::string reading;
     std::string text;
+    // With kApply: the conversion segmented again to show instead, which
+    // `candidate_indices` are into, or nullopt.
+    std::optional<Segments> segments;
   };
-  PollResult Poll(const Segments& segments);
+  // With `resegment`, an answer Mozc's segments cannot write may still show
+  // on the conversion segmented again (MapWithResegmentation()).
+  PollResult Poll(const Segments& segments,
+                  const Resegmenter& resegment = nullptr);
 
   void Cancel() { pending_.reset(); }
   // Whether a scorer is there to ask.
@@ -113,7 +156,8 @@ class ZenzCorrector {
 
   // kApply when `response` changes what is shown, otherwise kDone.
   PollResult Judge(const Segments& segments,
-                   const ::floatype::scorer::Response& response) const;
+                   const ::floatype::scorer::Response& response,
+                   const Resegmenter& resegment) const;
   void Reject(absl::string_view conversion);
 
   ScorerClient* const client_;

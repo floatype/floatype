@@ -1,15 +1,18 @@
 #include "floatype/zenz/zenz_corrector.h"
 
 #include <chrono>
+#include <cstdint>
 #include <initializer_list>
 #include <memory>
 #include <optional>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "base/clock.h"
 #include "base/clock_mock.h"
 #include "base/file_util.h"
@@ -106,6 +109,75 @@ TEST(MapToCandidatesTest, IgnoresCandidatesForAnotherPartOfTheReading) {
   EXPECT_EQ(MapToCandidates(segments, "今日医者に行く"), std::nullopt);
 }
 
+TEST(ResegmentationForTest, JoinsKanjiNumeralsThatReadAsTheDigits) {
+  Segments segments;
+  AddSegment(segments, "せん", {"線", "千"});
+  AddSegment(segments, "きゅうひゃく", {"九百"});
+  AddSegment(segments, "なな", {"七"});
+  AddSegment(segments, "じゅう", {"重", "十"});
+  AddSegment(segments, "に", {"二"});
+  AddSegment(segments, "ねんの", {"年の"});
+  const std::optional<Resegmentation> resegmentation =
+      ResegmentationFor(segments, "1972年の");
+  ASSERT_TRUE(resegmentation.has_value());
+  EXPECT_THAT(resegmentation->sizes, ElementsAre(14, 3));
+  EXPECT_THAT(resegmentation->numbers, ElementsAre("1972", ""));
+  // Other digits are not the number's.
+  EXPECT_THAT(ResegmentationFor(segments, "1973年の")->numbers,
+              ElementsAre("", ""));
+}
+
+TEST(ResegmentationForTest, WritesTheDigitsInMozcsWidth) {
+  Segments segments;
+  AddSegment(segments, "ひゃく", {"百", "１００", "100"});
+  AddSegment(segments, "なな", {"ナナ", "七"});
+  EXPECT_THAT(ResegmentationFor(segments, "107")->numbers,
+              ElementsAre("１０７"));
+}
+
+TEST(ResegmentationForTest, JoinsARunOfSegmentsThatCannotSpellTheirPart) {
+  Segments segments;
+  AddSegment(segments, "かんぱん", {"甲板"});
+  AddSegment(segments, "たい", {"タイ", "対"});
+  AddSegment(segments, "くうき", {"空気"});
+  AddSegment(segments, "じゅうぐん", {"従軍"});
+  const std::optional<Resegmentation> resegmentation =
+      ResegmentationFor(segments, "甲板対空機銃群");
+  ASSERT_TRUE(resegmentation.has_value());
+  EXPECT_THAT(resegmentation->sizes, ElementsAre(4, 2, 8));
+  EXPECT_THAT(resegmentation->numbers, ElementsAre("", "", ""));
+}
+
+TEST(ResegmentationForTest, ARunOfOneSegmentTakesInANeighbor) {
+  Segments segments;
+  AddSegment(segments, "かみを", {"髪を"});
+  AddSegment(segments, "き", {"気", "木"});
+  AddSegment(segments, "る", {"る"});
+  EXPECT_THAT(ResegmentationFor(segments, "髪を切る")->sizes,
+              ElementsAre(3, 2));
+  // At the end, the one before.
+  Segments last;
+  AddSegment(last, "かみを", {"髪を"});
+  AddSegment(last, "き", {"気", "木"});
+  EXPECT_THAT(ResegmentationFor(last, "髪を切")->sizes, ElementsAre(4));
+}
+
+TEST(ResegmentationForTest, ReturnsNulloptWhenNothingWouldChange) {
+  const Segments segments = KyouHaIshaNiIku();
+  EXPECT_EQ(ResegmentationFor(segments, "今日は医者に行く"), std::nullopt);
+  // A run has no more characters than its reading.
+  EXPECT_EQ(ResegmentationFor(segments, "今日は医者に行きたいです"),
+            std::nullopt);
+  EXPECT_EQ(ResegmentationFor(Segments(), "今日"), std::nullopt);
+}
+
+TEST(ResegmentationForTest, KeepsATopCandidateLearnedFromTheUser) {
+  Segments segments = KyouHaIshaNiIku();
+  segments.mutable_conversion_segment(2)->mutable_candidate(0)->attributes |=
+      converter::Attribute::USER_SEGMENT_HISTORY_REWRITER;
+  EXPECT_EQ(ResegmentationFor(segments, "今日は医者に生く"), std::nullopt);
+}
+
 // The fake scorer's answers file (see ZenzCorrectorTest) turns キョウハ into
 // 京歯, which these candidates can write.
 Segments KyouHa() {
@@ -123,10 +195,10 @@ class ZenzCorrectorTest : public testing::TestWithTempUserProfile {
     ZenzCorrector::IgnoreSecureInputForTesting(true);
     answers_ = FileUtil::JoinPath(SystemUtil::GetUserProfileDirectory(),
                                   "answers.tsv");
-    ASSERT_OK(
-        FileUtil::SetContents(answers_,
-                              "キョウハ\t京歯\nアメ\t雨\nカップ\t河童\n"
-                              "３カイ\t三回\nサンカイ\t3回\n５カイ\t5回\n"));
+    ASSERT_OK(FileUtil::SetContents(answers_,
+                                    "キョウハ\t京歯\nアメ\t雨\nカップ\t河童\n"
+                                    "３カイ\t三回\nサンカイ\t3回\n５カイ\t5回\n"
+                                    "ヒャクナナ\t107\n"));
     client_ = std::make_unique<ScorerClient>(std::vector<std::string>{
         testing::GetSourceFileOrDie({"floatype", "zenz", "fake_scorer"}),
         answers_});
@@ -163,6 +235,39 @@ TEST_F(ZenzCorrectorTest, AppliesAnAnswerThatDiffersFromMozc) {
   EXPECT_THAT(result.candidate_indices, ElementsAre(1, 1));
   EXPECT_EQ(corrector.Poll(segments).kind, ZenzCorrector::PollResult::kDone)
       << "one correction per conversion";
+}
+
+TEST_F(ZenzCorrectorTest, AppliesAnAnswerOnTheConversionSegmentedAgain) {
+  ZenzCorrector corrector(client_.get());
+  Segments segments;
+  AddSegment(segments, "ひゃく", {"百", "１００", "100"});
+  AddSegment(segments, "なな", {"ナナ", "七"});
+  // The fake answers 107, which Mozc's segments cannot write.
+  ASSERT_TRUE(corrector.Request(segments, ""));
+  EXPECT_EQ(PollUntilDone(corrector, segments).kind,
+            ZenzCorrector::PollResult::kDone)
+      << "without a way to segment again";
+
+  std::vector<uint8_t> asked;
+  const Resegmenter resegment = [&](absl::Span<const uint8_t> sizes) {
+    asked.assign(sizes.begin(), sizes.end());
+    Segments resegmented;
+    AddSegment(resegmented, "ひゃくなな", {"ひゃくなな", "ヒャクナナ"});
+    return std::optional<Segments>(std::move(resegmented));
+  };
+  ASSERT_TRUE(corrector.Request(segments, ""));
+  ZenzCorrector::PollResult result;
+  for (int i = 0; i < 2000; ++i) {
+    result = corrector.Poll(segments, resegment);
+    if (result.kind != ZenzCorrector::PollResult::kWait) break;
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  EXPECT_EQ(result.kind, ZenzCorrector::PollResult::kApply);
+  EXPECT_THAT(asked, ElementsAre(5));
+  ASSERT_TRUE(result.segments.has_value());
+  EXPECT_THAT(result.candidate_indices, ElementsAre(2));
+  EXPECT_EQ(result.segments->conversion_segment(0).candidate(2).value, "１０７")
+      << "the digits in Mozc's width, added as a candidate";
 }
 
 TEST_F(ZenzCorrectorTest, KeepsMozcWhenZenzAgrees) {

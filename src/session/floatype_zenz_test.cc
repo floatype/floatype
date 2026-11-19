@@ -250,6 +250,53 @@ TEST_F(FloatypeZenzTest, EscapeAfterACommitKeepsTheLearning) {
   EXPECT_EQ(Preedit(ConvertKikai()), "機械");
 }
 
+// Mozc's test data splits ひゃくなな into ひゃく|なな (百|ナナ), with 百 and 七
+// among the candidates and full-width digits ranked above half-width ones,
+// so zenz's 107 shows on one segment, segmented again.
+TEST_F(FloatypeZenzTest, WritesInDigitsANumberMozcSplitIntoKanjiNumerals) {
+  ASSERT_OK(FileUtil::SetContents(answers_, "ヒャクナナ\t107\n"));
+  const commands::Output converted =
+      SendKeys({"h", "y", "a", "k", "u", "n", "a", "n", "a", "Space"});
+  ASSERT_EQ(Preedit(converted), "百ナナ");
+  ASSERT_EQ(converted.preedit().segment_size(), 2);
+  const commands::Output corrected = PollWhileAsked(converted);
+  EXPECT_EQ(Preedit(corrected), "１０７");
+  EXPECT_EQ(corrected.preedit().segment_size(), 1);
+
+  const commands::Output mozc = SendKeys({"Space"});
+  EXPECT_EQ(Preedit(mozc), "百ナナ") << "Space brings back Mozc's segments";
+  EXPECT_EQ(mozc.preedit().segment_size(), 2);
+}
+
+TEST_F(FloatypeZenzTest, DoesNotTeachMozcTheSegmentsOfZenzsCorrection) {
+  ASSERT_OK(FileUtil::SetContents(answers_, "ヒャクナナ\t107\n"));
+  ASSERT_EQ(Preedit(PollWhileAsked(SendKeys(
+                {"h", "y", "a", "k", "u", "n", "a", "n", "a", "Space"}))),
+            "１０７");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "１０７");
+
+  StartSession(/*zenz=*/false);
+  const commands::Output mozc =
+      SendKeys({"h", "y", "a", "k", "u", "n", "a", "n", "a", "Space"});
+  EXPECT_EQ(Preedit(mozc), "百ナナ");
+  EXPECT_EQ(mozc.preedit().segment_size(), 2) << "ひゃく|なな, not ひゃくなな";
+}
+
+TEST_F(FloatypeZenzTest, ACommittedCorrectionOnNewSegmentsShowsAtOnceNextTime) {
+  ASSERT_OK(FileUtil::SetContents(answers_, "ヒャクナナ\t107\n"));
+  ASSERT_EQ(Preedit(PollWhileAsked(SendKeys(
+                {"h", "y", "a", "k", "u", "n", "a", "n", "a", "Space"}))),
+            "１０７");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "１０７");
+  StartSession(/*zenz=*/true);
+
+  // Right at Space, before zenz answers.
+  EXPECT_EQ(Preedit(SendKeys(
+                {"h", "y", "a", "k", "u", "n", "a", "n", "a", "Space"})),
+            "１０７");
+  EXPECT_EQ(Preedit(SendKeys({"Space"})), "百ナナ");
+}
+
 TEST_F(FloatypeZenzTest, PickingZenzsCandidateAfterShowingMozcIsLearned) {
   ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
   ASSERT_EQ(Preedit(SendKeys({"Space"})), "機会");

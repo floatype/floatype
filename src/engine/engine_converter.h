@@ -232,6 +232,10 @@ class EngineConverter : public EngineConverterInterface {
   bool PromoteCandidates(absl::Span<const int> candidate_indices,
                          uint32_t attributes,
                          uint32_t cleared_attributes) override;
+  std::optional<Segments> ResizedSegments(
+      const composer::Composer& composer,
+      absl::Span<const uint8_t> sizes) const override;
+  bool SetSegments(Segments segments) override;
 
   // Operation for the candidate list.
   void SetCandidateListVisible(bool visible) override;

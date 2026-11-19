@@ -1207,6 +1207,43 @@ bool EngineConverter::PromoteCandidates(absl::Span<const int> candidate_indices,
   return true;
 }
 
+std::optional<Segments> EngineConverter::ResizedSegments(
+    const composer::Composer& composer, absl::Span<const uint8_t> sizes) const {
+  if (!CheckState(CONVERSION)) {
+    return std::nullopt;
+  }
+  DCHECK(request_);
+  DCHECK(config_);
+  const ConversionRequest conversion_request =
+      ConversionRequestBuilder()
+          .SetComposer(composer)
+          .SetRequestView(*request_)
+          .SetConfigView(*config_)
+          .SetRequestType(ConversionRequest::CONVERSION)
+          .Build();
+  Segments segments = segments_;
+  if (!converter_->ResizeSegments(&segments, conversion_request, 0, sizes)) {
+    return std::nullopt;
+  }
+  segments.set_resized(false);
+  return segments;
+}
+
+bool EngineConverter::SetSegments(Segments segments) {
+  if (!CheckState(CONVERSION) ||
+      std::any_of(selected_candidate_indices_.begin(),
+                  selected_candidate_indices_.end(),
+                  [](int index) { return index != 0; })) {
+    return false;
+  }
+  segments_ = std::move(segments);
+  segment_index_ = 0;
+  ResetResult();
+  UpdateCandidateList();
+  InitializeSelectedCandidateIndices();
+  return true;
+}
+
 void EngineConverter::CandidateMoveToPageIndex(const size_t index) {
   DCHECK(CheckState(PREDICTION | CONVERSION));
   ResetResult();

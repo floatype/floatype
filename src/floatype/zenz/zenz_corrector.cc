@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <string>
 #include <utility>
@@ -19,6 +20,7 @@
 #include "absl/strings/string_view.h"
 #include "base/clock.h"
 #include "base/file_util.h"
+#include "base/number_util.h"
 #include "base/strings/japanese.h"
 #include "base/system_util.h"
 #include "base/util.h"
@@ -162,8 +164,9 @@ bool FitsRequest(const std::vector<std::string>& rejected) {
 
 namespace {
 
-std::optional<std::vector<int>> Map(const Segments& segments,
-                                    absl::string_view text) {
+// The candidates MapToCandidates() may use, per conversion segment.
+std::vector<std::vector<std::string>> CandidateValues(
+    const Segments& segments) {
   // Full-width and half-width ASCII compare equal, so that among candidates
   // differing only in width, the one Mozc ranks higher wins: symbols, digits
   // and letters keep Mozc's width (spec section 4).
@@ -182,14 +185,7 @@ std::optional<std::vector<int>> Map(const Segments& segments,
               : "");
     }
   }
-  std::vector<int> chosen(values.size(), 0);
-  absl::flat_hash_set<std::pair<size_t, size_t>> dead_ends;
-  if (values.empty() ||
-      !Search(values, japanese::FullWidthAsciiToHalfWidthAscii(text), 0, 0,
-              chosen, dead_ends)) {
-    return std::nullopt;
-  }
-  return chosen;
+  return values;
 }
 
 }  // namespace
@@ -200,7 +196,265 @@ std::string ConversionReading(const Segments& segments) {
 
 std::optional<std::vector<int>> MapToCandidates(const Segments& segments,
                                                 absl::string_view text) {
-  return Map(segments, text);
+  const std::vector<std::vector<std::string>> values =
+      CandidateValues(segments);
+  std::vector<int> chosen(values.size(), 0);
+  absl::flat_hash_set<std::pair<size_t, size_t>> dead_ends;
+  if (values.empty() ||
+      !Search(values, japanese::FullWidthAsciiToHalfWidthAscii(text), 0, 0,
+              chosen, dead_ends)) {
+    return std::nullopt;
+  }
+  return chosen;
+}
+
+std::optional<Resegmentation> ResegmentationFor(const Segments& segments,
+                                                absl::string_view text) {
+  const std::vector<std::vector<std::string>> values =
+      CandidateValues(segments);
+  const size_t n = values.size();
+  const std::string folded = japanese::FullWidthAsciiToHalfWidthAscii(text);
+  // chars[b] is the number of characters before byte b, or -1 inside one.
+  std::vector<int> chars(folded.size() + 1, -1);
+  int count = 0;
+  for (size_t b = 0; b <= folded.size(); ++b) {
+    if (b == folded.size() || (folded[b] & 0xC0) != 0x80) {
+      chars[b] = count++;
+    }
+  }
+  // Aligns the segments with `text`. A segment spells its part with one of
+  // its candidates; a number, segments whose kanji numeral candidates
+  // together read as the digits in `text` (千|九百|七|十|二 for 1972); and a
+  // run, segments that do neither, any part of `text` that is not empty and
+  // has no more characters than their reading. The alignment that spells
+  // the most reading wins. best[i][b] is the reading spelled up to segment i
+  // and byte b, where no run ends; from[i][b] is the state before and whether
+  // a number led there.
+  struct From {
+    size_t segment = 0;
+    size_t byte = 0;
+    bool number = false;
+  };
+  std::vector<std::vector<int>> best(n + 1,
+                                     std::vector<int>(folded.size() + 1, -1));
+  std::vector<std::vector<From>> from(n + 1,
+                                      std::vector<From>(folded.size() + 1));
+  const auto relax = [&](size_t segment, size_t byte, int spelled,
+                         From before) {
+    if (spelled > best[segment][byte]) {
+      best[segment][byte] = spelled;
+      from[segment][byte] = before;
+    }
+  };
+  // spells[j]: the parts of `text`, as [start, end) bytes in order, that a
+  // candidate of segment j spells.
+  std::vector<std::vector<std::pair<size_t, size_t>>> spells(n);
+  for (size_t j = 0; j < n; ++j) {
+    for (size_t start = 0; start < folded.size(); ++start) {
+      if (chars[start] < 0) {
+        continue;
+      }
+      for (const std::string& value : values[j]) {
+        if (!value.empty() &&
+            absl::StartsWith(absl::string_view(folded).substr(start), value)) {
+          spells[j].emplace_back(start, start + value.size());
+        }
+      }
+    }
+  }
+  int end_best = -1;
+  From end_from;  // A run to the end starts here.
+  best[0][0] = 0;
+  for (size_t i = 0; i < n; ++i) {
+    for (size_t b = 0; b <= folded.size(); ++b) {
+      if (best[i][b] < 0) {
+        continue;
+      }
+      // Segments i..j-1 read as a number.
+      std::string numerals;
+      int number_chars = 0;
+      for (size_t j = i; j < n; ++j) {
+        const Segment& segment = segments.conversion_segment(j);
+        const auto numeral = std::find_if(
+            values[j].begin(), values[j].end(), [](const std::string& value) {
+              std::string kanji, digits;
+              return Util::IsScriptType(value, Util::KANJI) &&
+                     NumberUtil::NormalizeNumbers(value, true, &kanji, &digits);
+            });
+        if (KeepsTopCandidate(segment) || numeral == values[j].end()) {
+          break;
+        }
+        numerals += *numeral;
+        number_chars += static_cast<int>(segment.key_len());
+        std::string kanji, digits;
+        if (NumberUtil::NormalizeNumbers(numerals, true, &kanji, &digits) &&
+            absl::StartsWith(absl::string_view(folded).substr(b), digits)) {
+          relax(j + 1, b + digits.size(), best[i][b] + number_chars,
+                {i, b, true});
+        }
+      }
+      // Segments i..j-1 form the run, followed by segment j.
+      size_t run_chars = 0;
+      for (size_t j = i; j <= n; ++j) {
+        if (j > i) {
+          // A segment the user's history decided keeps its candidate.
+          if (KeepsTopCandidate(segments.conversion_segment(j - 1))) {
+            break;
+          }
+          run_chars += segments.conversion_segment(j - 1).key_len();
+        }
+        if (j == n) {
+          const int left = count - 1 - chars[b];
+          if (j > i && left > 0 && left <= static_cast<int>(run_chars) &&
+              best[i][b] > end_best) {
+            end_best = best[i][b];
+            end_from = {i, b, false};
+          }
+          break;
+        }
+        for (auto it = std::lower_bound(spells[j].begin(), spells[j].end(),
+                                        std::make_pair(b, size_t{0}));
+             it != spells[j].end(); ++it) {
+          const int run_length = chars[it->first] - chars[b];
+          if (run_length > static_cast<int>(run_chars) ||
+              (j == i && run_length > 0)) {
+            break;
+          }
+          if (j > i && run_length == 0) {
+            continue;
+          }
+          relax(j + 1, it->second,
+                best[i][b] +
+                    static_cast<int>(segments.conversion_segment(j).key_len()),
+                {i, b, false});
+        }
+      }
+    }
+  }
+  // Marks the new segments: group[k] is where segment k's new segment
+  // starts, and numbers[k] the digits of a number starting at segment k.
+  std::vector<size_t> group(n);
+  std::vector<std::string> numbers(n);
+  std::vector<bool> in_run(n, false);
+  for (size_t k = 0; k < n; ++k) {
+    group[k] = k;
+  }
+  size_t segment = n;
+  size_t byte = folded.size();
+  if (end_best > best[n][folded.size()]) {
+    for (size_t k = end_from.segment; k < n; ++k) {
+      group[k] = end_from.segment;
+      in_run[k] = true;
+    }
+    segment = end_from.segment;
+    byte = end_from.byte;
+  } else if (best[n][folded.size()] < 0) {
+    return std::nullopt;
+  }
+  bool changed = segment < n;
+  while (segment > 0) {
+    const From before = from[segment][byte];
+    if (before.number) {
+      for (size_t k = before.segment; k < segment; ++k) {
+        group[k] = before.segment;
+      }
+      numbers[before.segment] = folded.substr(before.byte, byte - before.byte);
+      changed = true;
+    } else if (before.segment + 1 < segment) {
+      for (size_t k = before.segment; k + 1 < segment; ++k) {
+        group[k] = before.segment;
+        in_run[k] = true;
+      }
+      changed = true;
+    }
+    segment = before.segment;
+    byte = before.byte;
+  }
+  if (!changed) {
+    return std::nullopt;
+  }
+  // A run of one segment whose candidates do not spell its part has its
+  // boundary wrong, so it takes in the segment after it, or the one before
+  // at the end, when that one spells its own part.
+  const auto alone = [&](size_t k) {
+    return group[k] == k && (k + 1 == n || group[k + 1] != k) &&
+           numbers[k].empty() &&
+           !KeepsTopCandidate(segments.conversion_segment(k));
+  };
+  for (size_t k = 0; k < n; ++k) {
+    if (!in_run[k] || !alone(k)) {
+      continue;
+    }
+    if (k + 1 < n && !in_run[k + 1] && alone(k + 1)) {
+      group[k + 1] = k;
+    } else if (k > 0 && !in_run[k - 1] && alone(k - 1)) {
+      group[k] = k - 1;
+    }
+  }
+  Resegmentation resegmentation;
+  for (size_t k = 0; k < n; ++k) {
+    const Segment& segment = segments.conversion_segment(k);
+    if (k > 0 && group[k] == group[k - 1]) {
+      const size_t size = resegmentation.sizes.back() + segment.key_len();
+      if (size > std::numeric_limits<uint8_t>::max()) {
+        return std::nullopt;
+      }
+      resegmentation.sizes.back() = static_cast<uint8_t>(size);
+      continue;
+    }
+    resegmentation.sizes.push_back(static_cast<uint8_t>(segment.key_len()));
+    std::string& number = resegmentation.numbers.emplace_back(numbers[k]);
+    // In the width Mozc writes digits in for the number's first segment.
+    for (int i = 0; i < segment.candidates_size() && !number.empty(); ++i) {
+      const std::string& value = segment.candidate(i).value;
+      if (Util::IsScriptType(value, Util::NUMBER)) {
+        if (value != japanese::FullWidthAsciiToHalfWidthAscii(value)) {
+          number = japanese::HalfWidthAsciiToFullWidthAscii(number);
+        }
+        break;
+      }
+    }
+  }
+  return resegmentation;
+}
+
+std::optional<Mapping> MapWithResegmentation(const Segments& segments,
+                                             absl::string_view text,
+                                             const Resegmenter& resegment) {
+  if (std::optional<std::vector<int>> indices = MapToCandidates(segments, text);
+      indices.has_value()) {
+    return Mapping{*std::move(indices), std::nullopt};
+  }
+  const std::optional<Resegmentation> resegmentation =
+      ResegmentationFor(segments, text);
+  if (!resegment || !resegmentation.has_value()) {
+    return std::nullopt;
+  }
+  std::optional<Segments> resegmented = resegment(resegmentation->sizes);
+  if (!resegmented.has_value() || resegmented->conversion_segments_size() !=
+                                      resegmentation->numbers.size()) {
+    return std::nullopt;
+  }
+  // The digits of a number Mozc wrote in kanji numerals, one per segment,
+  // are a candidate of the segment that now holds all of it.
+  for (size_t i = 0; i < resegmentation->numbers.size(); ++i) {
+    if (resegmentation->numbers[i].empty()) {
+      continue;
+    }
+    Segment* segment = resegmented->mutable_conversion_segment(i);
+    converter::Candidate* candidate = segment->add_candidate();
+    candidate->key = candidate->content_key = segment->key();
+    candidate->value = candidate->content_value = resegmentation->numbers[i];
+    if (segment->candidates_size() > 1) {
+      candidate->lid = segment->candidate(0).lid;
+      candidate->rid = segment->candidate(0).rid;
+    }
+  }
+  std::optional<std::vector<int>> indices = MapToCandidates(*resegmented, text);
+  if (!indices.has_value()) {
+    return std::nullopt;
+  }
+  return Mapping{*std::move(indices), *std::move(resegmented)};
 }
 
 void ZenzCorrector::Configure(bool stop_when_idle, bool low_memory) {
@@ -274,7 +528,8 @@ bool ZenzCorrector::Request(const Segments& segments,
   return true;
 }
 
-ZenzCorrector::PollResult ZenzCorrector::Poll(const Segments& segments) {
+ZenzCorrector::PollResult ZenzCorrector::Poll(const Segments& segments,
+                                              const Resegmenter& resegment) {
   if (!pending_.has_value() || Fingerprint(segments) != pending_->fingerprint) {
     Cancel();
     return {PollResult::kDone, {}};
@@ -289,7 +544,7 @@ ZenzCorrector::PollResult ZenzCorrector::Poll(const Segments& segments) {
   }
   Pending pending = *std::move(pending_);
   Cancel();
-  PollResult result = Judge(segments, *response);
+  PollResult result = Judge(segments, *response, resegment);
   if (result.kind == PollResult::kApply || response->conversion.empty()) {
     return result;
   }
@@ -307,8 +562,9 @@ ZenzCorrector::PollResult ZenzCorrector::Poll(const Segments& segments) {
   return result;
 }
 
-ZenzCorrector::PollResult ZenzCorrector::Judge(const Segments& segments,
-                                               const Response& response) const {
+ZenzCorrector::PollResult ZenzCorrector::Judge(
+    const Segments& segments, const Response& response,
+    const Resegmenter& resegment) const {
   // A length cap means zenz did not finish its answer.
   if (response.stop != "eog" && response.stop != "tag") {
     return {PollResult::kDone, {}};
@@ -338,11 +594,13 @@ ZenzCorrector::PollResult ZenzCorrector::Judge(const Segments& segments,
   // Proper nouns (by Mozc's part of speech) were tried too: keeping Mozc's
   // took the regression set from 254 to 252 right, and refusing zenz's
   // traded a harm for a win; both made AJIMEE-Bench's MinCER worse.
-  std::optional<std::vector<int>> indices =
-      MapToCandidates(segments, response.conversion);
-  if (!indices.has_value() ||
-      std::all_of(indices->begin(), indices->end(),
-                  [](int index) { return index == 0; })) {
+  std::optional<Mapping> mapping =
+      MapWithResegmentation(segments, response.conversion, resegment);
+  if (!mapping.has_value() ||
+      (!mapping->segments.has_value() &&
+       std::all_of(mapping->candidate_indices.begin(),
+                   mapping->candidate_indices.end(),
+                   [](int index) { return index == 0; }))) {
     return {PollResult::kDone, {}};
   }
   // A correction the user stopped before is not made again.
@@ -351,8 +609,9 @@ ZenzCorrector::PollResult ZenzCorrector::Judge(const Segments& segments,
       ZenzMemory::Stopped().Contains(reading, response.conversion)) {
     return {PollResult::kDone, {}};
   }
-  return {PollResult::kApply, *std::move(indices), std::move(reading),
-          response.conversion};
+  return {PollResult::kApply, std::move(mapping->candidate_indices),
+          std::move(reading), response.conversion,
+          std::move(mapping->segments)};
 }
 
 void ZenzCorrector::Reject(absl::string_view conversion) {

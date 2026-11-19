@@ -44,6 +44,7 @@
 #include "absl/types/span.h"
 #include "composer/composer.h"
 #include "composer/table.h"
+#include "converter/segments.h"
 #include "engine/engine_interface.h"
 #include "floatype/zenz/zenz_corrector.h"
 #include "protocol/commands.pb.h"
@@ -307,6 +308,17 @@ class Session {
   // The reading and zenz's text of the correction on screen, for Ctrl+Delete.
   std::string zenz_reading_;
   std::string zenz_text_;
+  // Mozc's conversion as it was before zenz's correction on screen segmented
+  // it again, for Space to bring back; nullopt when the correction kept
+  // Mozc's segments. Set with each correction shown.
+  std::optional<converter::Segments> mozc_segments_;
+  // Converts the conversion again with other segments, for zenz's answers
+  // that Mozc's segments cannot write.
+  floatype::Resegmenter ZenzResegmenter() const;
+  // Shows zenz's `text` for `reading` as `mapping` says. Returns whether the
+  // conversion on screen changed.
+  bool ShowZenzText(absl::string_view reading, absl::string_view text,
+                    floatype::Mapping mapping);
   // A live conversion waiting for zenz before it shows (the setting
   // live_conversion_waits_for_zenz_millisec): what stays on screen meanwhile
   // and until when.
@@ -349,7 +361,8 @@ class Session {
   // Space while zenz's correction is shown: Mozc's result again.
   bool ShowMozcAgain(absl::Span<const int> zenz_indices, bool live,
                      commands::Command* command);
-  // Puts Mozc's candidates back on top where zenz's correction moved others.
+  // Puts Mozc's candidates back on top where zenz's correction moved others,
+  // or Mozc's segments back where it segmented the conversion again.
   void RestoreMozcOrder(absl::Span<const int> zenz_indices);
   // Tells the client what the indicator next to the composition shows.
   void SetIndicator(commands::Command* command) const;

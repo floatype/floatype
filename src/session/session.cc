@@ -345,6 +345,7 @@ bool Session::SendCommand(commands::Command* command) {
       StopWaitingForZenz();
       commit_after_zenz_ = false;
       zenz_indices_.clear();
+      mozc_segments_.reset();
       live_conversion_ = false;
       live_reading_.clear();
   }
@@ -2960,22 +2961,54 @@ bool Session::ApplyAcceptedCorrection() {
   if (text.empty() || floatype::ZenzMemory::Stopped().Contains(reading, text)) {
     return false;
   }
-  const std::optional<std::vector<int>> indices =
-      floatype::MapToCandidates(segments, text);
-  if (!indices.has_value() ||
-      std::all_of(indices->begin(), indices->end(),
-                  [](int index) { return index == 0; }) ||
-      !context_->mutable_converter()->PromoteCandidates(
-          *indices,
-          context_->GetConfig().zenz_suggestion_learning()
-              ? converter::Attribute::NO_HISTORY_LEARNING
-              : converter::Attribute::NO_LEARNING,
-          0)) {
+  std::optional<floatype::Mapping> mapping =
+      floatype::MapWithResegmentation(segments, text, ZenzResegmenter());
+  return mapping.has_value() &&
+         ShowZenzText(reading, text, *std::move(mapping));
+}
+
+floatype::Resegmenter Session::ZenzResegmenter() const {
+  return [this](absl::Span<const uint8_t> sizes) {
+    return context_->converter().ResizedSegments(context_->composer(), sizes);
+  };
+}
+
+bool Session::ShowZenzText(absl::string_view reading, absl::string_view text,
+                           floatype::Mapping mapping) {
+  EngineConverterInterface* converter = context_->mutable_converter();
+  // zenz's choices never teach the conversion ranking; the suggestion
+  // history may learn the committed sentence.
+  const uint32_t attributes = context_->GetConfig().zenz_suggestion_learning()
+                                  ? converter::Attribute::NO_HISTORY_LEARNING
+                                  : converter::Attribute::NO_LEARNING;
+  std::optional<Segments> mozc;
+  if (mapping.segments.has_value()) {
+    // On new segments, every candidate shown is zenz's choice, the ones Mozc
+    // ranks first included.
+    for (size_t i = 0; i < mapping.segments->conversion_segments_size(); ++i) {
+      mapping.segments->mutable_conversion_segment(i)
+          ->mutable_candidate(mapping.candidate_indices[i])
+          ->attributes |= attributes;
+    }
+    mozc = converter->GetSegments();
+    if (!converter->SetSegments(*std::move(mapping.segments))) {
+      return false;
+    }
+  } else if (std::all_of(mapping.candidate_indices.begin(),
+                         mapping.candidate_indices.end(),
+                         [](int index) { return index == 0; })) {
     return false;
   }
-  zenz_indices_ = *indices;
-  zenz_reading_ = reading;
-  zenz_text_ = text;
+  if (!converter->PromoteCandidates(mapping.candidate_indices, attributes, 0)) {
+    if (mozc.has_value()) {
+      converter->SetSegments(*std::move(mozc));
+    }
+    return false;
+  }
+  zenz_indices_ = std::move(mapping.candidate_indices);
+  zenz_reading_ = std::string(reading);
+  zenz_text_ = std::string(text);
+  mozc_segments_ = std::move(mozc);
   return true;
 }
 
@@ -3016,6 +3049,11 @@ bool Session::CorrectWithZenzNow(commands::Command* command) {
 }
 
 void Session::RestoreMozcOrder(absl::Span<const int> zenz_indices) {
+  if (mozc_segments_.has_value()) {
+    context_->mutable_converter()->SetSegments(
+        *std::exchange(mozc_segments_, std::nullopt));
+    return;
+  }
   // zenz moved its candidate to the top, so Mozc's is second where it moved
   // one. shortcut: zenz's candidate stays second instead of where Mozc ranked
   // it, which also keeps it within reach.
@@ -3273,32 +3311,21 @@ bool Session::PollZenz(commands::Command* command) {
   }
   command->mutable_output()->set_consumed(true);
   floatype::ZenzCorrector::PollResult result =
-      zenz_.Poll(context_->converter().GetSegments());
+      zenz_.Poll(context_->converter().GetSegments(), ZenzResegmenter());
   if (result.kind == floatype::ZenzCorrector::PollResult::kApply) {
-    // An answer that replaces zenz's correction goes on Mozc's order, so that
-    // Space still brings back Mozc's result. It may be Mozc's result itself.
+    floatype::Mapping mapping{std::move(result.candidate_indices),
+                              std::move(result.segments)};
+    // An answer that replaces zenz's correction goes on Mozc's conversion,
+    // so that Space still brings back Mozc's result. It may be Mozc's result
+    // itself.
     if (!zenz_indices_.empty()) {
       RestoreMozcOrder(std::exchange(zenz_indices_, {}));
-      result.candidate_indices =
-          floatype::MapToCandidates(context_->converter().GetSegments(),
-                                    result.text)
-              .value_or(std::vector<int>());
+      mapping =
+          floatype::MapWithResegmentation(context_->converter().GetSegments(),
+                                          result.text, ZenzResegmenter())
+              .value_or(floatype::Mapping());
     }
-    // zenz's choices never teach the conversion ranking; the suggestion
-    // history may learn the committed sentence.
-    if (std::any_of(result.candidate_indices.begin(),
-                    result.candidate_indices.end(),
-                    [](int index) { return index != 0; }) &&
-        context_->mutable_converter()->PromoteCandidates(
-            result.candidate_indices,
-            context_->GetConfig().zenz_suggestion_learning()
-                ? converter::Attribute::NO_HISTORY_LEARNING
-                : converter::Attribute::NO_LEARNING,
-            0)) {
-      zenz_indices_ = result.candidate_indices;
-      zenz_reading_ = result.reading;
-      zenz_text_ = result.text;
-    }
+    ShowZenzText(result.reading, result.text, std::move(mapping));
   }
   // A direct commit commits once zenz has answered or given up.
   if (commit_after_zenz_ &&
