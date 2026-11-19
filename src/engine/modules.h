@@ -31,6 +31,7 @@
 #define MOZC_ENGINE_MODULES_H_
 
 #include <memory>
+#include <optional>
 
 #include "absl/log/check.h"
 #include "absl/status/status.h"
@@ -101,6 +102,14 @@ class Modules {
   const SuggestionFilter& GetSuggestionFilter() const {
     return suggestion_filter_;
   }
+  // floatype: the filter for a request; without the added words when the user
+  // wants them suggested (ConversionOptions::suggest_added_words) and the data
+  // set has Mozc's own filter.
+  const SuggestionFilter& GetSuggestionFilter(bool suggest_added_words) const {
+    return suggest_added_words && mozc_suggestion_filter_.has_value()
+               ? *mozc_suggestion_filter_
+               : suggestion_filter_;
+  }
 
   const dictionary::SingleKanjiDictionary& GetSingleKanjiDictionary() const {
     DCHECK(single_kanji_dictionary_);
@@ -141,6 +150,7 @@ class Modules {
   std::unique_ptr<const dictionary::PosGroup> pos_group_;
   std::unique_ptr<prediction::UserHistoryStorage> user_history_storage_;
   SuggestionFilter suggestion_filter_;
+  std::optional<SuggestionFilter> mozc_suggestion_filter_;
   std::unique_ptr<const dictionary::SingleKanjiDictionary>
       single_kanji_dictionary_;
   ZeroQueryDict zero_query_dict_;

@@ -97,6 +97,7 @@ mozc_cc_library(
     srcs = ["existence_filter.cc"],
     hdrs = ["existence_filter.h"],
     visibility = [
+        "//engine:__pkg__",  # floatype: modules_test
         "//prediction:__pkg__",
         "//rewriter:__pkg__",
     ],

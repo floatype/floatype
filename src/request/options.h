@@ -151,6 +151,10 @@ struct ConversionOptions {
 
   // This conversion request is called by predictor for realtime conversion.
   bool used_in_predictor_realtime_conversion = false;
+
+  // floatype: suggests the words of the added dictionaries too
+  // (config suggest_added_words).
+  bool suggest_added_words = false;
 };
 
 static_assert(std::is_trivially_copyable<ConversionOptions>::value,

@@ -156,6 +156,15 @@ absl::Status Modules::Init(std::unique_ptr<const DataManager> data_manager) {
     }
     suggestion_filter_ = *std::move(status_or_suggestion_filter);
   }
+  if (const absl::Span<const uint32_t> data =
+          data_manager_->GetMozcSuggestionFilterData();
+      !data.empty()) {
+    absl::StatusOr<SuggestionFilter> filter = SuggestionFilter::Create(data);
+    if (!filter.ok()) {
+      return std::move(filter).status();
+    }
+    mozc_suggestion_filter_ = *std::move(filter);
+  }
 
   if (!single_kanji_dictionary_) {
     single_kanji_dictionary_ =

@@ -221,7 +221,6 @@ class DictionaryPredictor : public PredictorInterface {
   const RealtimeDecoder& decoder_;
   const Connector& connector_;
   const Segmenter& segmenter_;
-  const SuggestionFilter& suggestion_filter_;
   const dictionary::PosMatcher pos_matcher_;
   const uint16_t general_symbol_id_;
   const engine::Modules& modules_;

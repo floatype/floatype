@@ -30,19 +30,76 @@
 #include "engine/modules.h"
 
 #include <memory>
+#include <vector>
+#include <string>
+#include <cstring>
+#include <cstdint>
 #include <utility>
 
+#include "absl/types/span.h"
 #include "data_manager/testing/mock_data_manager.h"
 #include "dictionary/dictionary_interface.h"
 #include "dictionary/dictionary_mock.h"
 #include "dictionary/pos_id_map.h"
 #include "dictionary/pos_matcher.h"
 #include "engine/supplemental_model_interface.h"
+#include "prediction/suggestion_filter.h"
+#include "storage/existence_filter.h"
 #include "testing/gmock.h"
 #include "testing/gunit.h"
 
 namespace mozc {
 namespace engine {
+
+// floatype: a data set with both suggestion filters, each holding `words`.
+class FilterDataManager : public testing::MockDataManager {
+ public:
+  FilterDataManager(std::vector<absl::string_view> all,
+                    std::vector<absl::string_view> mozc)
+      : all_(Filter(all)), mozc_(Filter(mozc)) {}
+  absl::Span<const uint32_t> GetSuggestionFilterData() const override {
+    return all_;
+  }
+  absl::Span<const uint32_t> GetMozcSuggestionFilterData() const override {
+    return mozc_;
+  }
+
+ private:
+  static std::vector<uint32_t> Filter(std::vector<absl::string_view> words) {
+    storage::ExistenceFilterBuilder builder =
+        storage::ExistenceFilterBuilder::CreateOptimal(1024, words.size());
+    for (const absl::string_view word : words) {
+      builder.Insert(word);
+    }
+    const std::string bytes = builder.SerializeAsString();
+    std::vector<uint32_t> data((bytes.size() + 3) / 4);
+    std::memcpy(data.data(), bytes.data(), bytes.size());
+    return data;
+  }
+  std::vector<uint32_t> all_, mozc_;
+};
+
+TEST(ModulesTest, SuggestsAddedWordsWhenAsked) {
+  absl::StatusOr<std::unique_ptr<const Modules>> modules = Modules::Create(
+      std::make_unique<FilterDataManager>(
+          std::vector<absl::string_view>{"mozcword", "addedword"},
+          std::vector<absl::string_view>{"mozcword"}));
+  ASSERT_OK(modules);
+  EXPECT_TRUE(
+      (*modules)->GetSuggestionFilter(false).IsBadSuggestion("addedword"));
+  EXPECT_FALSE(
+      (*modules)->GetSuggestionFilter(true).IsBadSuggestion("addedword"));
+  EXPECT_TRUE((*modules)->GetSuggestionFilter(true).IsBadSuggestion("mozcword"))
+      << "Mozc's own list still applies";
+}
+
+TEST(ModulesTest, WithoutMozcsOwnFilterUsesTheOne) {
+  absl::StatusOr<std::unique_ptr<const Modules>> modules =
+      Modules::Create(std::make_unique<testing::MockDataManager>());
+  ASSERT_OK(modules);
+  EXPECT_EQ(&(*modules)->GetSuggestionFilter(true),
+            &(*modules)->GetSuggestionFilter());
+}
 
 TEST(ModulesTest, CreateTest) {
   ASSERT_OK_AND_ASSIGN(

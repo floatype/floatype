@@ -51,6 +51,24 @@ MOZC_DATASET_MAGIC_NUMBER = magic_number([
     0x0A,  # <LF>
 ])
 
+# floatype: Mozc's own suggestion filter, without the added words, for the
+# setting that suggests them (suggest_added_words).
+genrule(
+    name = "mozc_suggestion_filter",
+    srcs = [
+        "//data/dictionary_oss:suggestion_filter.txt",
+        "//data/dictionary_oss:suggestion_filter_safe",
+    ],
+    outs = ["mozc_suggestion_filter.data"],
+    cmd = (
+        "$(location //prediction:gen_suggestion_filter_main) " +
+        "--input=$(location //data/dictionary_oss:suggestion_filter.txt) " +
+        "--safe_list_files=$(location //data/dictionary_oss:suggestion_filter_safe) " +
+        "--output=$@ --header=false"
+    ),
+    tools = ["//prediction:gen_suggestion_filter_main"],
+)
+
 mozc_dataset(
     name = "mozc_dataset_for_oss",
     outs = [
@@ -111,6 +129,7 @@ mozc_dataset(
     use_1byte_cost = "false",
     user_pos_def = "//data/rules:user_pos.def",
     variant_rule = "//data/single_kanji:variant_rule.txt",
+    extra_data = ["msug:32::mozc_suggestion_filter"],
     varname = "kOssMozcDataSet",
     zero_query_def = "//data/zero_query:zero_query.def",
     zero_query_number_def = (

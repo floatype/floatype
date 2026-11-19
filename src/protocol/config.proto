@@ -446,6 +446,10 @@ message Config {
   // repacked for the CPU: about 64MB less while it runs, and corrections take
   // about twice as long (median 26ms to 50ms on an M4 Pro).
   optional bool zenz_low_memory = 1022 [default = false];
+  // floatype: the words of the added dictionaries (names, places,
+  // SudachiDict, Niconico and pixiv) are suggested too, as in Mozkey. Off,
+  // they come only when the whole reading is converted.
+  optional bool suggest_added_words = 1023 [default = false];
   optional string direct_commit_characters = 1015 [default = "、。？！「」"];
   // floatype: the reading above a live conversion, in small type.
   optional bool live_conversion_ruby = 1016 [default = false];

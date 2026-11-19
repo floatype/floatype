@@ -95,6 +95,9 @@ class DataManager {
   virtual absl::string_view GetSystemDictionaryData() const;
 
   virtual absl::Span<const uint32_t> GetSuggestionFilterData() const;
+  // floatype: Mozc's own suggestion filter, without the added words; empty if
+  // the data set has none.
+  virtual absl::Span<const uint32_t> GetMozcSuggestionFilterData() const;
 
   // [collocation_data, collocation_suppression_data]
   virtual std::array<absl::string_view, 2> GetCollocationData() const;
@@ -186,6 +189,7 @@ class DataManager {
   absl::string_view connection_data_;
   absl::string_view dictionary_data_;
   absl::string_view suggestion_filter_data_;
+  absl::string_view mozc_suggestion_filter_data_;
   absl::string_view collocation_data_;
   absl::string_view collocation_suppression_data_;
   absl::string_view pos_group_data_;

@@ -205,7 +205,6 @@ DictionaryPredictor::DictionaryPredictor(const engine::Modules& modules,
     : decoder_(decoder),
       connector_(modules.GetConnector()),
       segmenter_(modules.GetSegmenter()),
-      suggestion_filter_(modules.GetSuggestionFilter()),
       pos_matcher_(modules.GetPosMatcher()),
       general_symbol_id_(pos_matcher_.GetGeneralSymbolId()),
       modules_(modules),
@@ -620,7 +619,9 @@ std::vector<Result> DictionaryPredictor::RerankAndFilterResults(
       request.options().max_dictionary_prediction_candidates_size,
       results.size());
 
-  filter::ResultFilter filter(request, connector_, suggestion_filter_);
+  filter::ResultFilter filter(request, connector_,
+                              modules_.GetSuggestionFilter(
+                                  request.options().suggest_added_words));
 
   absl::flat_hash_map<std::string, uint32_t> merged_attributes;
   if (IsDebug(request)) {
@@ -897,7 +898,8 @@ void DictionaryPredictor::SetPredictionCostForMixedConversion(
     // Demote filtered word here, because they are not filtered for exact match.
     // Even for exact match, we don't want to show aggressive words with high
     // ranking.
-    if (suggestion_filter_.IsBadSuggestion(result.value)) {
+    if (modules_.GetSuggestionFilter(request.options().suggest_added_words)
+            .IsBadSuggestion(result.value)) {
       // Cost penalty means for bad suggestion.
       // 3453 = 500 * log(1000)
       constexpr int kBadSuggestionPenalty = 3453;

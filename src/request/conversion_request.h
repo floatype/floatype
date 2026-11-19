@@ -296,6 +296,8 @@ class ConversionRequestBuilder {
         request_.config().use_zip_code_conversion();
     request_.options_.use_t13n_conversion =
         request_.config().use_t13n_conversion();
+    request_.options_.suggest_added_words =
+        request_.config().suggest_added_words();
     if (request_.config().preedit_method() == config::Config::ROMAN) {
       request_.options_.input_mode = ConversionOptions::InputMode::ROMAN;
     } else {

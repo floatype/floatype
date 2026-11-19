@@ -222,6 +222,8 @@ absl::Status DataManager::InitFromReader(const DataSetReader& reader) {
   if (!reader.Get("sugg", &suggestion_filter_data_)) {
     return absl::NotFoundError("Cannot find a suggestion filter data");
   }
+  // floatype: optional.
+  reader.Get("msug", &mozc_suggestion_filter_data_);
   if (!reader.Get("coll", &collocation_data_)) {
     return absl::NotFoundError("Cannot find a collocation data");
   }
@@ -466,6 +468,10 @@ std::array<absl::string_view, 2> DataManager::GetCollocationData() const {
 
 absl::Span<const uint32_t> DataManager::GetSuggestionFilterData() const {
   return MakeAlignedConstSpan<uint32_t>(suggestion_filter_data_);
+}
+
+absl::Span<const uint32_t> DataManager::GetMozcSuggestionFilterData() const {
+  return MakeAlignedConstSpan<uint32_t>(mozc_suggestion_filter_data_);
 }
 
 std::array<absl::string_view, 2> DataManager::GetUserPosData() const {

@@ -185,7 +185,8 @@ class ImmutableConverter : public ImmutableConverterInterface {
   const Segmenter& segmenter_;
   const dictionary::PosMatcher& pos_matcher_;
   const dictionary::PosGroup& pos_group_;
-  const SuggestionFilter& suggestion_filter_;
+  // floatype: picks the suggestion filter for each request.
+  const engine::Modules& modules_;
 
   // Cache for POS ids.
   const uint16_t first_name_id_;

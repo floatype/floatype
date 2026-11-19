@@ -297,7 +297,7 @@ ImmutableConverter::ImmutableConverter(const engine::Modules& modules)
       segmenter_(modules.GetSegmenter()),
       pos_matcher_(modules.GetPosMatcher()),
       pos_group_(modules.GetPosGroup()),
-      suggestion_filter_(modules.GetSuggestionFilter()),
+      modules_(modules),
       first_name_id_(pos_matcher_.GetFirstNameId()),
       last_name_id_(pos_matcher_.GetLastNameId()),
       number_id_(pos_matcher_.GetNumberId()),
@@ -1537,7 +1537,8 @@ void ImmutableConverter::InsertCandidatesImpl(
 
   NBestGenerator<TConnector> nbest_generator(user_dictionary_, segmenter_, conn,
                                              pos_matcher_, lattice,
-                                             suggestion_filter_);
+                                             modules_.GetSuggestionFilter(
+                                                 options.suggest_added_words));
 
   std::string original_key;
   for (const Segment& segment : segments->conversion_segments()) {
