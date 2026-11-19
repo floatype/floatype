@@ -1,6 +1,7 @@
 """Renders floatype's menu bar icons as template images: the floatype F mark,
-large, with the input mode's character in its lower right, inside an outlined
-wide rounded rectangle (the frame is left out for direct input).
+large, with the input mode's character in its lower right, both cut out of a
+filled wide rounded rectangle as macOS's own input sources are (direct input
+has no badge).
 
 Run from src/ on macOS (Hiragino Maru Gothic and tiffutil come with the system):
   uv run --with pillow python floatype/tools/make_menu_icons.py
@@ -68,15 +69,18 @@ def draw_char(img, char, cx, cy, height, xscale):
 
 def render(char, xscale, framed):
     w, h = WIDTH * SS, HEIGHT * SS
+    marks = Image.new("L", (w, h), 0)
+    # Smaller than the badge allows, for room inside it.
+    draw_f(ImageDraw.Draw(marks), w * 0.17, h * 0.23, h * 0.54, weight=0.95)
+    draw_char(marks, char, w * 0.67, h * 0.58, h * 0.42, xscale)
+    if not framed:
+        return marks
+    # A filled badge with the marks cut out, like macOS's own input sources.
     img = Image.new("L", (w, h), 0)
-    d = ImageDraw.Draw(img)
-    if framed:
-        pad = h * 0.05
-        d.rounded_rectangle((pad, pad, w - pad, h - pad), radius=h * 0.24,
-                            outline=255, width=int(h * 0.075))
-    # Smaller than the frame allows, for room inside it.
-    draw_f(d, w * 0.17, h * 0.23, h * 0.54, weight=0.95)
-    draw_char(img, char, w * 0.67, h * 0.58, h * 0.42, xscale)
+    pad = h * 0.05
+    ImageDraw.Draw(img).rounded_rectangle((pad, pad, w - pad, h - pad),
+                                          radius=h * 0.24, fill=255)
+    img.paste(0, (0, 0), mask=marks)
     return img
 
 
@@ -87,26 +91,31 @@ def template(alpha, scale):
     return out
 
 
-out = Path(tempfile.gettempdir()) / "floatype-menu-icons"
-out.mkdir(exist_ok=True)
-for name, (char, xscale, framed) in MODES.items():
-    big = render(char, xscale, framed)
-    template(big, 1).save(out / f"{name}.png")
-    template(big, 2).save(out / f"{name}@2x.png")
-    subprocess.run(["tiffutil", "-cathidpicheck", out / f"{name}.png",
-                    out / f"{name}@2x.png", "-out",
-                    f"data/images/mac/{name}.tiff"], check=True)
+def main():
+    out = Path(tempfile.gettempdir()) / "floatype-menu-icons"
+    out.mkdir(exist_ok=True)
+    for name, (char, xscale, framed) in MODES.items():
+        big = render(char, xscale, framed)
+        template(big, 1).save(out / f"{name}.png")
+        template(big, 2).save(out / f"{name}@2x.png")
+        subprocess.run(["tiffutil", "-cathidpicheck", out / f"{name}.png",
+                        out / f"{name}@2x.png", "-out",
+                        f"data/images/mac/{name}.tiff"], check=True)
 
-# A preview on light and dark menu bars.
-cell_w, cell_h = WIDTH * 2 + 16, HEIGHT * 2 + 12
-preview = Image.new("RGBA", (len(MODES) * cell_w + 8, 2 * cell_h))
-for row, (bg, fg) in enumerate([((236, 236, 236), (30, 30, 30)),
-                                ((40, 40, 40), (235, 235, 235))]):
-    strip = Image.new("RGBA", (preview.width, cell_h), bg + (255,))
-    for i, name in enumerate(MODES):
-        icon = Image.open(out / f"{name}@2x.png")
-        tinted = Image.new("RGBA", icon.size, fg + (255,))
-        tinted.putalpha(icon.getchannel("A"))
-        strip.alpha_composite(tinted, (8 + i * cell_w, 6))
-    preview.paste(strip, (0, row * cell_h))
-preview.save(out / "preview.png")
+    # A preview on light and dark menu bars.
+    cell_w, cell_h = WIDTH * 2 + 16, HEIGHT * 2 + 12
+    preview = Image.new("RGBA", (len(MODES) * cell_w + 8, 2 * cell_h))
+    for row, (bg, fg) in enumerate([((236, 236, 236), (30, 30, 30)),
+                                    ((40, 40, 40), (235, 235, 235))]):
+        strip = Image.new("RGBA", (preview.width, cell_h), bg + (255,))
+        for i, name in enumerate(MODES):
+            icon = Image.open(out / f"{name}@2x.png")
+            tinted = Image.new("RGBA", icon.size, fg + (255,))
+            tinted.putalpha(icon.getchannel("A"))
+            strip.alpha_composite(tinted, (8 + i * cell_w, 6))
+        preview.paste(strip, (0, row * cell_h))
+    preview.save(out / "preview.png")
+
+
+if __name__ == "__main__":
+    main()
