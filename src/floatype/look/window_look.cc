@@ -144,12 +144,12 @@ WindowLook ResolveWindowLook(const Config::CandidateStyle& style,
 
   look.size_percent = style.size_percent();
   const double scale = style.size_percent() / 100.0;
-  look.window_padding = 5 * scale;
-  look.row_height = 24 * scale;
+  look.window_padding = 4 * scale;
+  look.row_height = 22 * scale;
   look.row_padding = 9 * scale;
   look.row_corner_radius = 7 * scale;
   look.number_width = 14 * scale;
-  look.footer_top_padding = 3 * scale;
+  look.footer_top_padding = 2 * scale;
   look.footer_bottom_padding = 1 * scale;
   look.scrollbar_width = 4 * scale;
   look.corner_radius = style.corner_radius();

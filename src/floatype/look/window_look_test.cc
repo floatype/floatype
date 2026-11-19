@@ -116,8 +116,8 @@ TEST(WindowLookTest, TheDefaultMeasures) {
   EXPECT_EQ(look.opacity, 1);
   EXPECT_EQ(look.shadow, Config::CandidateStyle::SOFT);
   EXPECT_TRUE(look.font_family.empty());
-  EXPECT_EQ(look.window_padding, 5);
-  EXPECT_EQ(look.row_height, 24);
+  EXPECT_EQ(look.window_padding, 4);
+  EXPECT_EQ(look.row_height, 22);
   EXPECT_EQ(look.row_padding, 9);
   EXPECT_EQ(look.row_corner_radius, 7);
   EXPECT_EQ(look.number_width, 14);
@@ -129,7 +129,7 @@ TEST(WindowLookTest, TheDefaultMeasures) {
   EXPECT_FALSE(style.shortcut_style().has_background_color())
       << "no number column";
   EXPECT_EQ(style.footer_border_colors_size(), 0) << "no line over the footer";
-  EXPECT_EQ(style.window_border(), 5);
+  EXPECT_EQ(style.window_border(), 4);
   EXPECT_EQ(style.row_rect_padding(), 0);
   EXPECT_EQ(style.shortcut_style().left_padding(), 9);
   EXPECT_EQ(style.description_style().right_padding(), 9);
@@ -140,10 +140,10 @@ TEST(WindowLookTest, MeasuresScaleWithTheSize) {
   Config::CandidateStyle style;
   style.set_size_percent(200);
   const WindowLook look = ResolveWindowLook(style, false);
-  EXPECT_EQ(look.row_height, 48);
-  EXPECT_EQ(look.window_padding, 10);
+  EXPECT_EQ(look.row_height, 44);
+  EXPECT_EQ(look.window_padding, 8);
   const RendererStyle rendered = RendererStyleFor(look);
-  EXPECT_EQ(rendered.window_border(), 10);
+  EXPECT_EQ(rendered.window_border(), 8);
   EXPECT_EQ(rendered.shortcut_style().left_padding(), 18);
   EXPECT_EQ(rendered.shortcut_style().font_size(), 24);
 }
