@@ -18,6 +18,7 @@ mozc_cc_library(
     deps = [
         "//base:clock",
         "//base:file_util",
+        "//base/protobuf:descriptor",
         "//base/protobuf:text_format",
         "//protocol:config_cc_proto",
         "@com_google_absl//absl/base:no_destructor",
@@ -61,5 +62,45 @@ mozc_cc_test(
         "//protocol:config_cc_proto",
         "//testing:gunit_main",
         "//testing:mozctest",
+    ],
+)
+
+mozc_cc_library(
+    name = "toml_config",
+    srcs = ["toml_config.cc"],
+    hdrs = ["toml_config.h"],
+    visibility = [
+        "//config:__pkg__",
+        "//gui/config_dialog:__pkg__",
+        "//mac:__pkg__",
+        "//server:__pkg__",
+        "//session:__pkg__",
+    ],
+    deps = [
+        ":text_config",
+        "//base/protobuf:descriptor",
+        "//base/protobuf:message",
+        "//base/protobuf:text_format",
+        "//protocol:config_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@tomlplusplus",
+    ],
+)
+
+mozc_cc_test(
+    name = "toml_config_test",
+    srcs = ["toml_config_test.cc"],
+    deps = [
+        ":text_config",
+        ":toml_config",
+        "//base/protobuf:text_format",
+        "//config:config_handler",
+        "//protocol:config_cc_proto",
+        "//testing:gunit_main",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
     ],
 )

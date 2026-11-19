@@ -109,22 +109,36 @@ int64_t IntegerValue(const Message& message, const FieldDescriptor& field) {
   }
 }
 
+absl::Span<const Range> RangesOf(const Descriptor* descriptor) {
+  if (descriptor == config::Config::descriptor()) {
+    return kConfigRanges;
+  }
+  if (descriptor == config::Config::CandidateStyle::descriptor()) {
+    return kCandidateRanges;
+  }
+  if (descriptor == config::Config::RubyStyle::descriptor()) {
+    return kRubyRanges;
+  }
+  if (descriptor == config::Config::IndicatorStyle::descriptor()) {
+    return kIndicatorRanges;
+  }
+  return {};
+}
+
 absl::Status CheckRanges(const Message& message,
-                         const TextFormat::ParseInfoTree* tree,
-                         absl::Span<const Range> ranges) {
+                         const TextFormat::ParseInfoTree* tree) {
   const Descriptor& descriptor = *message.GetDescriptor();
-  for (const Range& range : ranges) {
+  for (const Range& range : RangesOf(&descriptor)) {
     const FieldDescriptor* field = descriptor.FindFieldByName(range.field);
     if (field == nullptr ||
         !message.GetReflection()->HasField(message, field)) {
       continue;
     }
-    const int64_t value = IntegerValue(message, *field);
-    if (value < range.min || value > range.max) {
-      const int line = tree == nullptr ? -1 : tree->GetLocation(field, -1).line;
-      return absl::InvalidArgumentError(absl::StrCat(
-          line + 1, " 行目: ", range.field, " は ", range.min, "〜", range.max,
-          " の範囲で書いてください（", value, " と書かれています）"));
+    const int line = tree == nullptr ? -1 : tree->GetLocation(field, -1).line;
+    if (absl::Status status =
+            CheckConfigRange(*field, IntegerValue(message, *field), line + 1);
+        !status.ok()) {
+      return status;
     }
   }
   return absl::OkStatus();
@@ -193,6 +207,19 @@ void Notify(const std::string& message) {
 
 }  // namespace
 
+absl::Status CheckConfigRange(const FieldDescriptor& field, int64_t value,
+                              int line) {
+  for (const Range& range : RangesOf(field.containing_type())) {
+    if (range.field == field.name() &&
+        (value < range.min || value > range.max)) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          line, " 行目: ", range.field, " は ", range.min, "〜", range.max,
+          " の範囲で書いてください（", value, " と書かれています）"));
+    }
+  }
+  return absl::OkStatus();
+}
+
 std::string DefaultTextConfigPath() {
   const char* home = std::getenv("HOME");
   return FileUtil::JoinPath(
@@ -209,32 +236,19 @@ absl::StatusOr<config::Config> ParseTextConfig(absl::string_view text) {
   if (!parser.ParseFromString(text, &config)) {
     return absl::InvalidArgumentError(errors.first());
   }
-  if (absl::Status status = CheckRanges(config, &tree, kConfigRanges);
-      !status.ok()) {
+  if (absl::Status status = CheckRanges(config, &tree); !status.ok()) {
     return status;
   }
-  const FieldDescriptor* candidate =
-      config::Config::descriptor()->FindFieldByName("candidate_style");
-  if (absl::Status status =
-          CheckRanges(config.candidate_style(),
-                      tree.GetTreeForNested(candidate, -1), kCandidateRanges);
-      !status.ok()) {
-    return status;
-  }
-  const FieldDescriptor* ruby =
-      config::Config::descriptor()->FindFieldByName("ruby_style");
-  if (absl::Status status = CheckRanges(
-          config.ruby_style(), tree.GetTreeForNested(ruby, -1), kRubyRanges);
-      !status.ok()) {
-    return status;
-  }
-  const FieldDescriptor* indicator =
-      config::Config::descriptor()->FindFieldByName("indicator_style");
-  if (absl::Status status =
-          CheckRanges(config.indicator_style(),
-                      tree.GetTreeForNested(indicator, -1), kIndicatorRanges);
-      !status.ok()) {
-    return status;
+  for (const absl::string_view name :
+       {"candidate_style", "ruby_style", "indicator_style"}) {
+    const FieldDescriptor* field =
+        config::Config::descriptor()->FindFieldByName(name);
+    if (absl::Status status = CheckRanges(
+            config.GetReflection()->GetMessage(config, field),
+            tree.GetTreeForNested(field, -1));
+        !status.ok()) {
+      return status;
+    }
   }
   return config;
 }

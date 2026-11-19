@@ -76,6 +76,14 @@ bazel_dep(
     version = "2025-08-12.bcr.1",
 )
 
+# tomlplusplus: 3.4.0 2023-10-13
+# https://github.com/marzer/tomlplusplus
+# floatype: reads and writes the settings file, config.toml.
+bazel_dep(
+    name = "tomlplusplus",
+    version = "3.4.0.bcr.1",
+)
+
 # platforms: 1.0.0 2025-05-22
 # https://github.com/bazelbuild/platforms/
 bazel_dep(
