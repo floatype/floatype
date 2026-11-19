@@ -1,6 +1,7 @@
 name: Release package
-# Builds floatype-<version>.pkg for Apple Silicon with the zenz scorer, its
-# model and the added dictionaries, as src/floatype/update.sh does locally.
+# Builds floatype-<version>.pkg (0.1.0+mozc.3.35.6354) for Apple Silicon with
+# the zenz scorer, its model and the added dictionaries, as
+# src/floatype/update.sh does locally.
 # A v* tag attaches it to a draft release; a manual run only uploads it as an
 # artifact.
 
@@ -77,11 +78,20 @@ jobs:
           REF_TYPE: ${{ github.ref_type }}
           REF_NAME: ${{ github.ref_name }}
           SHA: ${{ github.sha }}
+        # The version is version.bzl's: floatype's, then the Mozc it is built on
+        # (0.1.0+mozc.3.35.6354). A tag must name the floatype part (v0.1.0).
         run: |
+          props=src/bazel-bin/base/mozc_version.txt
+          get() { sed -n "s/^$1=//p" "$props"; }
+          short="$(get FLOATYPE_MAJOR).$(get FLOATYPE_MINOR).$(get FLOATYPE_PATCH)"
+          version="$short+mozc.$(get MAJOR).$(get MINOR).$(get BUILD)"
           if [ "$REF_TYPE" = tag ]; then
-            version="${REF_NAME#v}"
+            if [ "$REF_NAME" != "v$short" ]; then
+              echo "::error::tag $REF_NAME does not match version.bzl (v$short)"
+              exit 1
+            fi
           else
-            version="dev-${SHA:0:9}"
+            version="$version.dev.${SHA:0:9}"
           fi
           mkdir dist
           cp src/bazel-bin/mac/Mozc.pkg "dist/floatype-$version.pkg"
