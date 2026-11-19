@@ -43,6 +43,10 @@ inline constexpr int kMozcVersionRevision = @REVISION@;
 
 inline constexpr const char kMozcEngineVersion[] = "@ENGINE_VERSION@";
 
+// floatype: its version with the Mozc it is built on (version.bzl).
+inline constexpr const char kFloatypeVersion[] =
+    "@FLOATYPE_MAJOR@.@FLOATYPE_MINOR@.@FLOATYPE_PATCH@+mozc.@MAJOR@.@MINOR@.@BUILD@";
+
 }  // namespace version
 }  // namespace mozc
 

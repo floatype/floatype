@@ -79,6 +79,9 @@ VERSION_PROPERTIES = [
     'QT_VERSION',
     'ENGINE_VERSION',
     'DATA_VERSION',
+    'FLOATYPE_MAJOR',
+    'FLOATYPE_MINOR',
+    'FLOATYPE_PATCH',
     ]
 
 MOZC_EPOCH = datetime.date(2009, 5, 24)
@@ -264,6 +267,9 @@ def GenerateVersionFile(version_template_path, version_path, target_platform,
       'QT_VERSION=@QT_VERSION@',
       'ENGINE_VERSION=@ENGINE_VERSION@',
       'DATA_VERSION=@DATA_VERSION@',
+      'FLOATYPE_MAJOR=@FLOATYPE_MAJOR@',
+      'FLOATYPE_MINOR=@FLOATYPE_MINOR@',
+      'FLOATYPE_PATCH=@FLOATYPE_PATCH@',
   ]) + '\n'
   GenerateVersionFileFromTemplate(
       version_template_path,

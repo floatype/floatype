@@ -803,6 +803,7 @@ mozc_cc_test(
         ":util",
         ":version",
         "//testing:gunit_main",
+        "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
     ],
 )

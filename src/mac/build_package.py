@@ -90,6 +90,9 @@ def main():
       components = plistlib.load(f)
     for component in components:
       component['BundleOverwriteAction'] = ''
+      # floatype: always install, whatever version is there. Its short
+      # version (0.1.0) reads as older than Mozc's 3.35 before it.
+      component['BundleIsVersionChecked'] = False
     with open(component_plist, 'wb') as f:
       plistlib.dump(components, f)
 

@@ -29,6 +29,10 @@
 
 #include "base/version.h"
 
+#include <algorithm>
+#include <string>
+
+#include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "testing/gunit.h"
 
@@ -36,6 +40,16 @@
 #include "base/version_def.h"
 
 namespace mozc {
+
+TEST(VersionTest, FloatypeVersionNamesTheMozcItIsBuiltOn) {
+  // floatype: 0.1.0+mozc.3.35.6354
+  const std::string mozc = absl::StrCat(Version::GetMozcVersionMajor(), ".",
+                                        Version::GetMozcVersionMinor(), ".",
+                                        Version::GetMozcVersionBuildNumber());
+  const std::string version = Version::GetFloatypeVersion();
+  EXPECT_TRUE(version.ends_with("+mozc." + mozc)) << version;
+  EXPECT_EQ(std::count(version.begin(), version.end(), '.'), 5) << version;
+}
 
 TEST(VersionTest, BasicTest) {
   EXPECT_EQ(Version::GetMozcVersion(), version::kMozcVersion);

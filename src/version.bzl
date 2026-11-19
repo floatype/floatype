@@ -53,6 +53,18 @@ DEFAULT_BUILD_LABEL_MACOS = "%d.%d.%d.%d" % (MAJOR, MINOR, BUILD, REVISION + 1)
 #  * Any changes that loose data compatibility are made.
 ENGINE_VERSION = 24
 
+# floatype: its own version, shown with the Mozc it is built on as
+# 0.1.0+mozc.3.35.6354; the apps' short version is the first part alone. The
+# Mozc numbers above stay what upstream says: processes and data compare them.
+# A release tag is v + the floatype part (v0.1.0).
+FLOATYPE_MAJOR = 0
+
+FLOATYPE_MINOR = 1
+
+FLOATYPE_PATCH = 0
+
+FLOATYPE_SHORT_VERSION = "%d.%d.%d" % (FLOATYPE_MAJOR, FLOATYPE_MINOR, FLOATYPE_PATCH)
+
 # This version is used to manage the data version and is included only in the
 # data set file.  DATA_VERSION can be incremented without updating
 # ENGINE_VERSION as long as it's compatible with the engine.

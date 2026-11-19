@@ -85,7 +85,13 @@ def main():
 
   copyright_message = u'© %d Google Inc.' % _COPYRIGHT_YEAR
   long_version = version.GetVersionString()
-  short_version = version.GetVersionInFormat('@MAJOR@.@MINOR@.@BUILD@')
+  # floatype: its own version. Apple wants three numbers here, so the Mozc it
+  # is built on shows in the Finder string and in CFBundleVersion.
+  short_version = version.GetVersionInFormat(
+      '@FLOATYPE_MAJOR@.@FLOATYPE_MINOR@.@FLOATYPE_PATCH@')
+  full_version = version.GetVersionInFormat(
+      '@FLOATYPE_MAJOR@.@FLOATYPE_MINOR@.@FLOATYPE_PATCH@'
+      '+mozc.@MAJOR@.@MINOR@.@BUILD@')
 
   if options.branding == 'GoogleJapaneseInput':
     domain_prefix = 'com.google'
@@ -99,7 +105,7 @@ def main():
       'GOOGLE_VERSIONINFO_SHORT': short_version,
       'GOOGLE_VERSIONINFO_ABOUT': copyright_message,
       'GOOGLE_VERSIONINFO_FINDER':
-          '%s %s, %s' % (product_name, long_version, copyright_message),
+          '%s %s, %s' % (product_name, full_version, copyright_message),
       'BRANDING':
           options.branding,
       'DOMAIN_PREFIX':

@@ -41,7 +41,7 @@ load(
     "mozc_select_enable_supplemental_model",
     "mozc_select_enable_usage_rewriter",
 )
-load("//:version.bzl", "DEFAULT_BUILD_LABEL_MACOS")
+load("//:version.bzl", "DEFAULT_BUILD_LABEL_MACOS", "FLOATYPE_SHORT_VERSION")
 load("//bazel:stubs.bzl", "bzl_library")
 
 package(default_visibility = ["//:__subpackages__"])
@@ -239,7 +239,8 @@ apple_bundle_version(
         "revision": "\\d+",  # e.g. 101
     },
     fallback_build_label = DEFAULT_BUILD_LABEL_MACOS,  # e.g. 2.32.5994.101
-    short_version_string = "{version}",  # e.g. 2.32.5994
+    # floatype: its own version; the Mozc version stays in build_version.
+    short_version_string = FLOATYPE_SHORT_VERSION,  # e.g. 0.1.0
     visibility = ["//:__subpackages__"],
 )
 # LINT.ThenChange(//version.bzl)

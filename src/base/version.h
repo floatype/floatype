@@ -54,6 +54,8 @@ class Version {
   static int GetMozcVersionBuildNumber();
   static int GetMozcVersionRevision();
   static const char* GetMozcEngineVersion();
+  // floatype: its version, e.g. 0.1.0+mozc.3.35.6354.
+  static std::string GetFloatypeVersion();
 
   // Returns true if lhs is less than rhs in the lexical order.
   // CompareVersion("1.2.3.4", "1.2.3.4") => false
