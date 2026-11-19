@@ -14,6 +14,7 @@ import hashlib
 import html
 import re
 import sys
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -53,7 +54,9 @@ NICO_PIXIV = (
 )
 
 # Japanese Wikipedia's article titles (CC BY-SA), only to tell how well
-# known a word is; no title becomes an entry.
+# known a word is; no title becomes an entry. Wikimedia keeps about eight
+# months of dumps, so this one goes around mid-2027: move to a newer dump
+# (and its SHA-256) before then, and measure again.
 JAWIKI_TITLES = (
     "https://dumps.wikimedia.org/jawiki/20261001/"
     "jawiki-20261001-pages-articles-multistream-index.txt.bz2",
@@ -81,8 +84,15 @@ def fetch(url: str, sha256: str) -> bytes:
   path = CACHE / url.rsplit("/", 1)[1]
   if not path.exists():
     CACHE.mkdir(parents=True, exist_ok=True)
-    with urllib.request.urlopen(url, timeout=120) as response:
-      path.with_suffix(".partial").write_bytes(response.read())
+    # GitHub and Wikimedia refuse Python's default User-Agent.
+    request = urllib.request.Request(
+        url, headers={"User-Agent": "floatype-dictionary-build/1.0"})
+    try:
+      with urllib.request.urlopen(request, timeout=600) as response:
+        path.with_suffix(".partial").write_bytes(response.read())
+    except urllib.error.URLError as error:
+      raise SystemExit(f"{url}: {error}. If the source moved or is gone, pin "
+                       "a newer one in this script.") from error
     path.with_suffix(".partial").rename(path)
   data = path.read_bytes()
   if hashlib.sha256(data).hexdigest() != sha256:
