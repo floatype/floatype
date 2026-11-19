@@ -115,6 +115,18 @@ TEST_F(ScorerClientTest, WarmStartsTheScorerAhead) {
   EXPECT_TRUE(WaitForResponse(client, 1).has_value());
 }
 
+TEST_F(ScorerClientTest, WarmLeavesTheStartToAnotherThread) {
+  ScorerClient client({FakeScorer()});
+  // Warm() only hands the start over; repeated calls while it runs add none.
+  const absl::Time start = absl::Now();
+  for (int i = 0; i < 100; ++i) {
+    client.Warm();
+  }
+  EXPECT_LT(absl::Now() - start, absl::Milliseconds(50));
+  ASSERT_TRUE(client.Send(Request{1, "", "ア"}));
+  EXPECT_TRUE(WaitForResponse(client, 1).has_value());
+}
+
 TEST_F(ScorerClientTest, NewArgumentsTakeEffectOnTheNextStart) {
   const std::string answers =
       FileUtil::JoinPath(SystemUtil::GetUserProfileDirectory(), "answers.tsv");

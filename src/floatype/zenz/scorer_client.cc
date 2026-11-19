@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "absl/log/log.h"
+#include "absl/synchronization/mutex.h"
 #include "base/clock.h"
 #include "floatype/scorer/protocol.h"
 
@@ -74,7 +75,13 @@ pid_t Spawn(const std::vector<std::string>& command, int child_fd) {
 ScorerClient::ScorerClient(std::vector<std::string> command)
     : command_(std::move(command)) {}
 
-ScorerClient::~ScorerClient() { Stop(); }
+ScorerClient::~ScorerClient() {
+  if (warm_thread_.joinable()) {
+    warm_thread_.join();
+  }
+  absl::MutexLock lock(mutex_);
+  Stop();
+}
 
 bool ScorerClient::Start() {
   const absl::Time now = Clock::GetAbslTime();
@@ -134,6 +141,7 @@ bool ScorerClient::Running() {
 }
 
 void ScorerClient::SetArguments(std::vector<std::string> arguments) {
+  absl::MutexLock lock(mutex_);
   if (arguments != arguments_) {
     Stop();
     arguments_ = std::move(arguments);
@@ -141,12 +149,27 @@ void ScorerClient::SetArguments(std::vector<std::string> arguments) {
 }
 
 void ScorerClient::Warm() {
-  if (!Running()) {
-    Start();
+  absl::MutexLock lock(mutex_);
+  if (warming_ || Running()) {
+    return;
   }
+  warming_ = true;
+  // The last start's thread has finished (warming_ was false), at most
+  // short of returning.
+  if (warm_thread_.joinable()) {
+    warm_thread_.join();
+  }
+  warm_thread_ = std::thread([this] {
+    absl::MutexLock lock(mutex_);
+    if (!Running()) {
+      Start();
+    }
+    warming_ = false;
+  });
 }
 
 bool ScorerClient::Send(const Request& request) {
+  absl::MutexLock lock(mutex_);
   // A scorer that ended itself after idling takes this request after a new
   // start rather than failing it.
   if (!Running() && !Start()) {
@@ -166,6 +189,7 @@ bool ScorerClient::Send(const Request& request) {
 }
 
 std::optional<Response> ScorerClient::Poll() {
+  absl::MutexLock lock(mutex_);
   char chunk[4096];
   while (fd_ >= 0) {
     const ssize_t n = recv(fd_, chunk, sizeof(chunk), 0);
