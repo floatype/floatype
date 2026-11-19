@@ -98,6 +98,7 @@ mozc_dataset(
         "//data/emoticon:categorized.tsv"
     ),
     emoticon_src = "//data/emoticon:emoticon.tsv",
+    extra_data = ["msug:32::mozc_suggestion_filter"],
     id_def = "//data/dictionary_oss:id.def",
     magic = MOZC_DATASET_MAGIC_NUMBER,
     pos_group_def = (
@@ -129,7 +130,6 @@ mozc_dataset(
     use_1byte_cost = "false",
     user_pos_def = "//data/rules:user_pos.def",
     variant_rule = "//data/single_kanji:variant_rule.txt",
-    extra_data = ["msug:32::mozc_suggestion_filter"],
     varname = "kOssMozcDataSet",
     zero_query_def = "//data/zero_query:zero_query.def",
     zero_query_number_def = (

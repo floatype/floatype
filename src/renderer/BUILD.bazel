@@ -338,8 +338,6 @@ mozc_objc_library(
         "Foundation",
     ],
     deps = [
-        "//floatype/candidate:candidate_style",
-        "//floatype/indicator:indicator_layout",
         ":renderer_interface",
         ":renderer_server",
         ":renderer_style_handler",
@@ -350,6 +348,8 @@ mozc_objc_library(
         "//base:util",
         "//base/mac:mac_util",
         "//client:client_interface",
+        "//floatype/candidate:candidate_style",
+        "//floatype/indicator:indicator_layout",
         "//mac:common",
         "//protocol:candidate_window_cc_proto",
         "//protocol:commands_cc_proto",
