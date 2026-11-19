@@ -259,6 +259,58 @@ void RestoreOverlaidFields(const config::Config& overlay,
   config.GetReflection()->SwapFields(&config, &copy, fields);
 }
 
+namespace {
+
+// Clears the fields of `message` that print the same as in `defaults`.
+void ClearDefaults(Message& message, const Message& defaults) {
+  const Reflection& reflection = *message.GetReflection();
+  std::vector<const FieldDescriptor*> fields;
+  reflection.ListFields(message, &fields);
+  for (const FieldDescriptor* field : fields) {
+    if (field->is_repeated()) {
+      const int size = reflection.FieldSize(message, field);
+      bool same = size == defaults.GetReflection()->FieldSize(defaults, field);
+      for (int i = 0; same && i < size; ++i) {
+        std::string value, default_value;
+        TextFormat::PrintFieldValueToString(message, field, i, &value);
+        TextFormat::PrintFieldValueToString(defaults, field, i,
+                                            &default_value);
+        same = value == default_value;
+      }
+      if (same) {
+        reflection.ClearField(&message, field);
+      }
+    } else if (field->cpp_type() == FieldDescriptor::CPPTYPE_MESSAGE) {
+      Message* nested = reflection.MutableMessage(&message, field);
+      ClearDefaults(*nested,
+                    defaults.GetReflection()->GetMessage(defaults, field));
+      if (nested->ByteSizeLong() == 0) {
+        reflection.ClearField(&message, field);
+      }
+    } else {
+      std::string value, default_value;
+      TextFormat::PrintFieldValueToString(message, field, -1, &value);
+      TextFormat::PrintFieldValueToString(defaults, field, -1,
+                                          &default_value);
+      if (value == default_value) {
+        reflection.ClearField(&message, field);
+      }
+    }
+  }
+}
+
+}  // namespace
+
+std::string ExportTextConfig(const config::Config& config,
+                             const config::Config& defaults) {
+  config::Config changed = config;
+  changed.clear_general_config();
+  ClearDefaults(changed, defaults);
+  std::string text;
+  TextFormat::PrintToString(changed, &text);
+  return text;
+}
+
 void SetTextConfigPath(std::string path, bool report_errors) {
   State& state = GetState();
   {

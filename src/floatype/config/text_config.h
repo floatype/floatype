@@ -31,6 +31,12 @@ void RestoreOverlaidFields(const config::Config& overlay,
                            const config::Config& stored,
                            config::Config& config);
 
+// The fields of `config` whose values differ from `defaults`, as text to
+// paste into the file. Leaves out general_config (the settings file's own
+// bookkeeping) and nested fields that equal their defaults.
+std::string ExportTextConfig(const config::Config& config,
+                             const config::Config& defaults);
+
 // The process-wide file. Its path is empty, and the file is never read, until
 // one of floatype's main()s sets it, so tests never read the user's file.
 // With `report_errors`, errors are also shown as a macOS notification.

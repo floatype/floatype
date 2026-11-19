@@ -31,12 +31,15 @@
 #include "gui/config_dialog/config_dialog.h"
 
 #include <QCheckBox>
+#include <QClipboard>
 #include <QComboBox>
 #include <QFont>
 #include <QFormLayout>
 #include <QGridLayout>
+#include <QGuiApplication>
 #include <QLabel>
 #include <QMessageBox>
+#include <QPushButton>
 #include <QSpinBox>
 #include <QWidget>
 #include <algorithm>
@@ -57,6 +60,7 @@
 #include "base/run_level.h"
 #include "client/client.h"
 #include "config/config_handler.h"
+#include "floatype/config/text_config.h"
 #include "gui/base/stats_config_util.h"
 #include "gui/base/util.h"
 #include "gui/config_dialog/keymap_editor.h"
@@ -608,6 +612,21 @@ void ConfigDialog::SetUpFloatypeTab() {
       tab);
   note->setWordWrap(true);
   form->addRow(note);
+  QPushButton* exportButton =
+      new QPushButton(text("設定ファイルの形でコピー"), tab);
+  connect(exportButton, &QPushButton::clicked, this, [this, text] {
+    config::Config config;
+    ConvertToProto(&config);
+    QGuiApplication::clipboard()->setText(
+        QString::fromStdString(floatype::ExportTextConfig(
+            config, config::ConfigHandler::DefaultConfig())));
+    QMessageBox::information(
+        this, windowTitle(),
+        text("既定と違う設定をコピーしました。"
+             "~/.config/floatype/config.txtpb に貼り付けると、"
+             "ファイルで管理できます。"));
+  });
+  form->addRow(exportButton);
 
   // Settings that only matter while their switch is on follow it.
   for (QWidget* widget : std::initializer_list<QWidget*>{

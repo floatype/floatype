@@ -163,6 +163,25 @@ void ExpectListed(const google::protobuf::Message& example, int first) {
   }
 }
 
+TEST(ExportTextConfigTest, WritesWhatDiffersFromTheDefaults) {
+  config::Config defaults;
+  defaults.set_use_zenz(true);
+  config::Config config = defaults;
+  config.set_use_zenz(true);              // Set, but the default: left out.
+  config.set_zenz_timeout_millisec(300);  // Unset in defaults, but its default.
+  config.set_mixed_english(true);
+  config.mutable_indicator_style()->set_width(56);
+  config.mutable_indicator_style()->set_gap(9);
+  config.mutable_general_config()->set_last_modified_time(1);
+  const std::string text = ExportTextConfig(config, defaults);
+  EXPECT_EQ(text, "indicator_style {\n  gap: 9\n}\nmixed_english: true\n");
+  // What it writes reads back.
+  const absl::StatusOr<config::Config> parsed = ParseTextConfig(text);
+  ASSERT_TRUE(parsed.ok()) << parsed.status();
+  EXPECT_TRUE(parsed->mixed_english());
+  EXPECT_EQ(parsed->indicator_style().gap(), 9);
+}
+
 TEST(ExampleTest, ListsEveryFloatypeFieldWithItsDefault) {
   const absl::StatusOr<Config> example = ParseTextConfig(ExampleTurnedOn());
   ASSERT_TRUE(example.ok()) << example.status();

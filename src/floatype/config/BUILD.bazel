@@ -10,6 +10,7 @@ mozc_cc_library(
     hdrs = ["text_config.h"],
     visibility = [
         "//config:__pkg__",
+        "//gui/config_dialog:__pkg__",
         "//mac:__pkg__",
         "//server:__pkg__",
         "//session:__pkg__",
