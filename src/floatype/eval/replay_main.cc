@@ -26,6 +26,7 @@
 #include "absl/flags/flag.h"
 #include "absl/log/check.h"
 #include "absl/strings/ascii.h"
+#include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
@@ -63,6 +64,9 @@ ABSL_FLAG(int, pause_every, 0,
           "and the end)");
 ABSL_FLAG(int, wait_for_zenz, 0,
           "live mode: live_conversion_waits_for_zenz_millisec");
+ABSL_FLAG(bool, suggest, false,
+          "type each reading key by key and print the suggestions shown "
+          "after the last key, separated by |");
 ABSL_FLAG(bool, mixed_english, false, "live mode: turn mixed English input on");
 ABSL_FLAG(bool, display_ambiguous, false,
           "live mode: show ambiguous romaji as kana");
@@ -140,6 +144,35 @@ class Replayer {
 
     return mozc + '\t' + final + '\t' + std::to_string(space_ms) + '\t' +
            std::to_string(final_ms) + '\t' + std::to_string(polls);
+  }
+
+  // Types `reading` key by key as romaji and lists what the suggestion window
+  // shows after the last key; Escape then drops the composition unlearned.
+  std::string Suggest(absl::string_view reading) {
+    const std::optional<std::vector<std::pair<char, bool>>> keys =
+        Keys(reading);
+    if (!keys.has_value()) {
+      return "SKIP";
+    }
+    commands::Output output;
+    for (const auto& [key_code, pause] : *keys) {
+      commands::Input input;
+      input.set_type(commands::Input::SEND_KEY);
+      input.mutable_key()->set_key_code(key_code);
+      output = Eval(std::move(input));
+    }
+    std::vector<std::string> values;
+    for (const commands::CandidateWindow::Candidate& candidate :
+         output.candidate_window().candidate()) {
+      values.push_back(candidate.value());
+    }
+    for (int i = 0; i < 2; ++i) {
+      commands::Input escape;
+      escape.set_type(commands::Input::SEND_KEY);
+      escape.mutable_key()->set_special_key(commands::KeyEvent::ESCAPE);
+      Eval(std::move(escape));
+    }
+    return absl::StrJoin(values, "|");
   }
 
   // Types `reading` key by key as romaji after `left_context`, lets the timer
@@ -329,8 +362,9 @@ int main(int argc, char** argv) {
     const absl::string_view reading =
         tab == std::string::npos ? absl::string_view(line)
                                  : absl::string_view(line).substr(tab + 1);
-    std::cout << (live ? replayer.ReplayLive(context, reading)
-                       : replayer.Replay(context, reading))
+    std::cout << (absl::GetFlag(FLAGS_suggest) ? replayer.Suggest(reading)
+                  : live ? replayer.ReplayLive(context, reading)
+                         : replayer.Replay(context, reading))
               << std::endl;
   }
   mozc::floatype::ZenzCorrector::SetDefaultClientForTesting(nullptr);
