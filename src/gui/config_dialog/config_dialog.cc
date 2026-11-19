@@ -364,6 +364,9 @@ ConfigDialog::ConfigDialog()
   }
   connect(characterFormEditor, &QTableWidget::itemChanged, this,
           &ConfigDialog::EnableApplyButton);
+  // floatype: made after loading, when the table's rows are whole.
+  connect(characterFormEditor, &QTableWidget::itemChanged, this,
+          &ConfigDialog::RefreshNumberForm);
   // 'Apply' button is disabled on launching.
   configDialogButtonBox->button(QDialogButtonBox::Apply)->setEnabled(false);
   // In scroll areas, a wheel turned over a control scrolls the page unless
@@ -786,9 +789,6 @@ void ConfigDialog::SetUpFloatypeSettings() {
     }
     RefreshNumberForm();
   });
-  connect(characterFormEditor, &QTableWidget::itemChanged, this,
-          &ConfigDialog::RefreshNumberForm);
-
   // サジェスト
   suggestAddedWordsCheckBox_ = new QCheckBox(
       Text("足した辞書（人名、地名、SudachiDict、ニコニコ・pixiv）の語も出す"
