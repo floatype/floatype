@@ -98,7 +98,7 @@ def main():
     product_name = 'Google Japanese Input'
   else:
     domain_prefix = 'io.github.floatype'
-    product_name = 'floatype'
+    product_name = 'Floatype'
 
   variables = {
       'GOOGLE_VERSIONINFO_LONG': long_version,

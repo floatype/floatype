@@ -83,10 +83,10 @@ def main():
         }
   else:
     variables = {
-        'CF_BUNDLE_NAME_EN': 'floatype',
-        'CF_BUNDLE_NAME_JA': 'floatype',
+        'CF_BUNDLE_NAME_EN': 'Floatype',
+        'CF_BUNDLE_NAME_JA': 'Floatype',
         'NS_HUMAN_READABLE_COPYRIGHT': copyright_message,
-        'INPUT_MODE_ANNOTATION': 'floatype',
+        'INPUT_MODE_ANNOTATION': 'Floatype',
         }
 
   codecs.open(options.output, 'w', encoding='utf-8').write(

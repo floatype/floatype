@@ -662,7 +662,7 @@ void ConfigDialog::SetUpFloatypeTab() {
     connect(showIndicatorCheckBox_, &QCheckBox::toggled, widget,
             &QWidget::setEnabled);
   }
-  configDialogTabWidget->insertTab(1, tab, text("floatype"));
+  configDialogTabWidget->insertTab(1, tab, text("Floatype"));
 }
 
 // TODO(taku)
