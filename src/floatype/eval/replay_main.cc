@@ -373,6 +373,8 @@ int main(int argc, char** argv) {
   }
   // Sessions take the scorer when they are created, so set it first.
   mozc::floatype::ZenzCorrector::SetDefaultClientForTesting(client.get());
+  // A locked screen turns secure input on; the measurement asks zenz anyway.
+  mozc::floatype::ZenzCorrector::IgnoreSecureInputForTesting(true);
 
   absl::StatusOr<std::unique_ptr<mozc::Engine>> engine = mozc::CreateEvalEngine(
       absl::GetFlag(FLAGS_data_file), absl::GetFlag(FLAGS_data_type));

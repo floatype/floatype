@@ -96,6 +96,9 @@ class ZenzCorrector {
   // Called by the converter process at startup.
   static void EnableDefaultClient();
   static void SetDefaultClientForTesting(ScorerClient* client);
+  // Tests and the evaluation tools ask zenz whether or not macOS has secure
+  // input on (the lock screen turns it on).
+  static void IgnoreSecureInputForTesting(bool ignore);
 
  private:
   struct Pending {

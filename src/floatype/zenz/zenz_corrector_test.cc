@@ -119,6 +119,8 @@ class ZenzCorrectorTest : public testing::TestWithTempUserProfile {
  protected:
   void SetUp() override {
     Clock::SetClockForUnitTest(&clock_);
+    // The lock screen turns secure input on, which keeps zenz out.
+    ZenzCorrector::IgnoreSecureInputForTesting(true);
     answers_ = FileUtil::JoinPath(SystemUtil::GetUserProfileDirectory(),
                                   "answers.tsv");
     ASSERT_OK(
@@ -132,6 +134,7 @@ class ZenzCorrectorTest : public testing::TestWithTempUserProfile {
   void TearDown() override {
     client_.reset();
     Clock::SetClockForUnitTest(nullptr);
+    ZenzCorrector::IgnoreSecureInputForTesting(false);
   }
 
   // Polls until the result is no longer kWait, for up to two seconds.

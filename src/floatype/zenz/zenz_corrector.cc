@@ -36,6 +36,7 @@ using ::floatype::scorer::Response;
 
 bool default_client_enabled = false;
 ScorerClient* default_client_for_testing = nullptr;
+bool ignore_secure_input_for_testing = false;
 
 bool KeepsTopCandidate(const Segment& segment) {
   return segment.candidates_size() > 0 &&
@@ -231,7 +232,7 @@ bool ZenzCorrector::Request(const Segments& segments,
   }
 #ifdef __APPLE__
   // What is typed while secure input is on stays out of zenz (spec section 4).
-  if (IsSecureEventInputEnabled()) {
+  if (!ignore_secure_input_for_testing && IsSecureEventInputEnabled()) {
     return false;
   }
 #endif  // __APPLE__
@@ -391,6 +392,10 @@ void ZenzCorrector::EnableDefaultClient() { default_client_enabled = true; }
 
 void ZenzCorrector::SetDefaultClientForTesting(ScorerClient* client) {
   default_client_for_testing = client;
+}
+
+void ZenzCorrector::IgnoreSecureInputForTesting(bool ignore) {
+  ignore_secure_input_for_testing = ignore;
 }
 
 }  // namespace mozc::floatype

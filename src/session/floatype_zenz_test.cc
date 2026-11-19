@@ -66,6 +66,8 @@ class FloatypeZenzTest : public testing::SessionHandlerTestBase {
  protected:
   void SetUp() override {
     SessionHandlerTestBase::SetUp();
+    // The lock screen turns secure input on, which keeps zenz out.
+    floatype::ZenzCorrector::IgnoreSecureInputForTesting(true);
     answers_ = FileUtil::JoinPath(SystemUtil::GetUserProfileDirectory(),
                                   "answers.tsv");
     ASSERT_OK(FileUtil::SetContents(answers_, "キカイ\t機械\n"));
@@ -83,6 +85,7 @@ class FloatypeZenzTest : public testing::SessionHandlerTestBase {
     floatype::EnableSessionFeatures(false);
     handler_.reset();
     floatype::ZenzCorrector::SetDefaultClientForTesting(nullptr);
+    floatype::ZenzCorrector::IgnoreSecureInputForTesting(false);
     client_.reset();
     SessionHandlerTestBase::TearDown();
   }
