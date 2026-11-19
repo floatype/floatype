@@ -121,7 +121,8 @@ class ZenzCorrectorTest : public testing::TestWithTempUserProfile {
     const std::string answers = FileUtil::JoinPath(
         SystemUtil::GetUserProfileDirectory(), "answers.tsv");
     ASSERT_OK(FileUtil::SetContents(
-        answers, "キョウハ\t京歯\nアメ\t雨\nカップ\t河童\n"));
+        answers, "キョウハ\t京歯\nアメ\t雨\nカップ\t河童\n"
+                 "３カイ\t三回\nサンカイ\t3回\n"));
     client_ = std::make_unique<ScorerClient>(std::vector<std::string>{
         testing::GetSourceFileOrDie({"floatype", "zenz", "fake_scorer"}),
         answers});
@@ -173,6 +174,23 @@ TEST_F(ZenzCorrectorTest, IgnoresTheReadingHandedBackUnconverted) {
   ASSERT_TRUE(corrector.Request(segments, ""));  // The fake answers イヌ.
   EXPECT_EQ(PollUntilDone(corrector, segments).kind,
             ZenzCorrector::PollResult::kDone);
+}
+
+TEST_F(ZenzCorrectorTest, KeepsTheDigitsTheUserTyped) {
+  ZenzCorrector corrector(client_.get());
+  Segments typed;
+  AddSegment(typed, "３かい", {"3回", "三回"});
+  ASSERT_TRUE(corrector.Request(typed, ""));  // The fake answers 三回.
+  EXPECT_EQ(PollUntilDone(corrector, typed).kind,
+            ZenzCorrector::PollResult::kDone);
+
+  // Digits zenz writes from kana are its to choose.
+  Segments spoken;
+  AddSegment(spoken, "さんかい", {"三回", "3回"});
+  ASSERT_TRUE(corrector.Request(spoken, ""));
+  const ZenzCorrector::PollResult result = PollUntilDone(corrector, spoken);
+  EXPECT_EQ(result.kind, ZenzCorrector::PollResult::kApply);
+  EXPECT_THAT(result.candidate_indices, ElementsAre(1));
 }
 
 TEST_F(ZenzCorrectorTest, DropsAnUnfinishedAnswer) {

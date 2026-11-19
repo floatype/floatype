@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "absl/container/flat_hash_set.h"
+#include "absl/strings/ascii.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
@@ -79,6 +80,47 @@ std::string Reading(const Segments& segments) {
     reading += segment.key();
   }
   return reading;
+}
+
+// Runs of digits and letters, half width, as in 2026, gpt-5 or 3.14.
+std::vector<std::string> AsciiTokens(absl::string_view text) {
+  const std::string folded = japanese::FullWidthAsciiToHalfWidthAscii(text);
+  std::vector<std::string> tokens;
+  std::string token;
+  for (const char c : folded) {
+    if (absl::ascii_isalnum(static_cast<unsigned char>(c)) ||
+        (!token.empty() && absl::StrContains("._+#-", c))) {
+      token += c;
+    } else if (!token.empty()) {
+      tokens.push_back(std::move(token));
+      token.clear();
+    }
+  }
+  if (!token.empty()) {
+    tokens.push_back(std::move(token));
+  }
+  return tokens;
+}
+
+// Whether zenz keeps the digits and letters the user typed as Mozc wrote
+// them, as Mozkey requires. Numbers zenz writes from kana (さんがつ/３月) are
+// its to choose.
+bool KeepsTypedAscii(const Segments& segments, absl::string_view conversion) {
+  std::string mozc;
+  for (const Segment& segment : segments.conversion_segments()) {
+    if (segment.candidates_size() > 0) {
+      mozc += segment.candidate(0).value;
+    }
+  }
+  const std::vector<std::string> mozc_tokens = AsciiTokens(mozc);
+  const std::vector<std::string> zenz_tokens = AsciiTokens(conversion);
+  for (const std::string& typed : AsciiTokens(Reading(segments))) {
+    if (std::count(mozc_tokens.begin(), mozc_tokens.end(), typed) !=
+        std::count(zenz_tokens.begin(), zenz_tokens.end(), typed)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 // Identifies the conversion an answer is for: its segment keys and the
@@ -199,6 +241,9 @@ ZenzCorrector::PollResult ZenzCorrector::Poll(const Segments& segments) {
   if (japanese::FullWidthAsciiToHalfWidthAscii(
           japanese::KatakanaToHiragana(response->conversion)) ==
       japanese::FullWidthAsciiToHalfWidthAscii(Reading(segments))) {
+    return {PollResult::kDone, {}};
+  }
+  if (!KeepsTypedAscii(segments, response->conversion)) {
     return {PollResult::kDone, {}};
   }
   // Rules measured and left out (floatype/eval/regression.py on Mozc's
