@@ -46,7 +46,7 @@
 @property(nonatomic) CGFloat cornerRadius;
 @property(nonatomic) CGFloat blurRadius;
 @property(nonatomic) CGFloat offsetY;
-@property(nonatomic) CGFloat opacity;
+@property(nonatomic) NSColor* color;
 @end
 
 @implementation FloatypeShadowView
@@ -65,7 +65,7 @@
   NSShadow* shadow = [[NSShadow alloc] init];
   shadow.shadowBlurRadius = self.blurRadius;
   shadow.shadowOffset = NSMakeSize(0, -self.offsetY);
-  shadow.shadowColor = [NSColor colorWithWhite:0 alpha:self.opacity];
+  shadow.shadowColor = self.color;
   [shadow set];
   [[NSColor blackColor] set];
   [shape fill];
@@ -126,18 +126,14 @@ void CandidateWindow::ApplyWindowLook() {
   [window_ setOpaque:opaque];
   [window_ setBackgroundColor:opaque ? NSColor.whiteColor : NSColor.clearColor];
   [window_ setAlphaValue:look.opacity];
-  [window_ setHasShadow:look.shadow != config::Config::CandidateStyle::NONE];
-  if (!opaque) {
-    // The system's shadow follows the rounded shape once drawn.
-    [window_ display];
-    [window_ invalidateShadow];
-  }
+  // The look's shadow is drawn behind; the system's would add a second one.
+  [window_ setHasShadow:NO];
   PlaceShadow();
 }
 
 void CandidateWindow::PlaceShadow() {
   const floatype::WindowLook& look = [(CandidateView*)view_ look];
-  if (look.shadow != config::Config::CandidateStyle::STRONG || !IsVisible()) {
+  if (look.shadow == config::Config::CandidateStyle::NONE || !IsVisible()) {
     [shadow_window_ orderOut:nil];
     return;
   }
@@ -156,15 +152,27 @@ void CandidateWindow::PlaceShadow() {
   }
   FloatypeShadowView* shadow = (FloatypeShadowView*)shadow_window_.contentView;
   const CGFloat inset = look.shadow_radius + look.shadow_offset_y;
+  NSColor* color = [NSColor colorWithSRGBRed:((look.shadow_color >> 16) & 0xff) / 255.0
+                                       green:((look.shadow_color >> 8) & 0xff) / 255.0
+                                        blue:(look.shadow_color & 0xff) / 255.0
+                                       alpha:look.shadow_opacity];
+  const NSRect frame = NSInsetRect(window_.frame, -inset, -inset);
+  // The blur is costly to draw; a window that only moves keeps it.
+  const bool changed = shadow.inset != inset || shadow.cornerRadius != look.corner_radius ||
+                       shadow.blurRadius != look.shadow_radius ||
+                       shadow.offsetY != look.shadow_offset_y || ![shadow.color isEqual:color] ||
+                       !NSEqualSizes(shadow_window_.frame.size, frame.size);
   shadow.inset = inset;
   shadow.cornerRadius = look.corner_radius;
   shadow.blurRadius = look.shadow_radius;
   shadow.offsetY = look.shadow_offset_y;
-  shadow.opacity = look.shadow_opacity;
+  shadow.color = color;
   [shadow_window_ setAlphaValue:look.opacity];
   [shadow_window_ setLevel:window_.level];
-  [shadow_window_ setFrame:NSInsetRect(window_.frame, -inset, -inset) display:NO];
-  [shadow setNeedsDisplay:YES];
+  [shadow_window_ setFrame:frame display:NO];
+  if (changed) {
+    [shadow setNeedsDisplay:YES];
+  }
   [shadow_window_ orderWindow:NSWindowBelow relativeTo:window_.windowNumber];
 }
 

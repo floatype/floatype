@@ -164,18 +164,19 @@
 ##   配色: AUTO（システムのライトとダークに合わせる）、LIGHT、DARK、CUSTOM（下の色を使う）
 # theme = "AUTO"
 ##   CUSTOM の色（0xRRGGBB）。書かない色は LIGHT の色（背景を暗い色にしたときは DARK の色）。値は LIGHT の色。
-##   候補の文字、窓の背景、選んでいる行の背景と枠、窓の枠
-# text_color = 0x000000
+##   候補の文字、窓の背景、選んでいる行の背景（DARK でも同じ青）
+# text_color = 0x17191e
 # background_color = 0xffffff
-# focused_background_color = 0xd1eaff
-# focused_border_color = 0x7facdd
-# border_color = 0x969696
-##   文字と行の大きさ（Mozc の大きさに対する %、50〜300）
+# focused_background_color = 0xc4d0e1
+##   選んでいる行の枠と窓の枠。書かなければ、選んでいる行は枠なし、窓は薄い線。値は例
+# focused_border_color = 0x8a9bb5
+# border_color = 0xd0d3d9
+##   文字と行と余白の大きさ（既定の大きさに対する %、50〜300）
 # size_percent = 100
 ##   角の丸み（0〜24）と不透明度（30〜100）
-# corner_radius = 0
+# corner_radius = 11
 # opacity_percent = 100
-##   影: SOFT（システムの影）、NONE（なし）、STRONG（濃い影）
+##   影: SOFT（大きく淡い影）、NONE（なし）、STRONG（濃く大きい影）
 # shadow = "SOFT"
 ##   書体のファミリー名（例 "Hiragino Sans"）。空かないものはシステムの書体
 # font_family = ""

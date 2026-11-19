@@ -431,7 +431,9 @@ message Config {
   message CandidateStyle {
     optional uint32 text_color = 1;
     optional uint32 focused_background_color = 2;
+    // Unset, the focused row has no border.
     optional uint32 focused_border_color = 3;
+    // Unset, the outline is the palette's faint hairline.
     optional uint32 border_color = 4;
     // AUTO follows the system's light or dark appearance.
     enum Theme {
@@ -442,11 +444,11 @@ message Config {
     }
     optional Theme theme = 5 [default = AUTO];
     optional uint32 background_color = 6;
-    // The font and row sizes, in percent of Mozc's.
+    // The font, row and padding sizes, in percent of the default ones.
     optional uint32 size_percent = 7 [default = 100];
-    optional uint32 corner_radius = 8 [default = 0];
+    optional uint32 corner_radius = 8 [default = 11];
     optional uint32 opacity_percent = 9 [default = 100];
-    // SOFT is the system's window shadow.
+    // SOFT is a large, light shadow; STRONG a darker, larger one.
     enum Shadow {
       SOFT = 0;
       NONE = 1;

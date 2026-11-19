@@ -76,14 +76,14 @@ class CandidateWindow : public RendererBaseWindow {
  private:
   void InitWindow();
   void ResetView();
-  // floatype: puts the window's part of the look (corners, opacity, shadow)
-  // on it, and the strong shadow's window behind it.
+  // floatype: puts the window's part of the look (corners, opacity) on it,
+  // and the shadow's window behind it.
   void ApplyWindowLook();
   void PlaceShadow();
   mozc::client::SendCommandInterface *command_sender_;
   config::Config::CandidateStyle conversion_style_;
   config::Config::CandidateStyle suggest_style_;
-  // Draws the strong shadow, which the system's window shadow cannot.
+  // Draws the look's shadow, larger than the system's window shadow.
   NSPanel *shadow_window_ = nil;
 };
 

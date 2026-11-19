@@ -32,11 +32,6 @@ QColor Rgb(uint32_t rgb, double alpha = 1) {
   return color;
 }
 
-QColor Rgb(const RendererStyle::RGBAColor& color) {
-  return QColor(std::lround(color.r()), std::lround(color.g()),
-                std::lround(color.b()));
-}
-
 QFont Font(const RendererStyle::TextStyle& style) {
   QFont font = style.font_name().empty()
                    ? QApplication::font()
@@ -63,8 +58,8 @@ void PaintShadow(QPainter& painter, const QRectF& window, double corner,
   painter.setPen(Qt::NoPen);
   for (int i = radius; i >= 1; --i) {
     const double fade = 1.0 - static_cast<double>(i) / (radius + 1);
-    painter.setBrush(QColor(
-        0, 0, 0, std::lround(255 * look.shadow_opacity * fade * 2.0 / radius)));
+    painter.setBrush(
+        Rgb(look.shadow_color, look.shadow_opacity * fade * 2.0 / radius));
     const QRectF ring =
         window.adjusted(-i, -i, i, i).translated(0, look.shadow_offset_y);
     painter.drawRoundedRect(ring, corner + i, corner + i);
@@ -115,37 +110,45 @@ void PaintCandidateWindow(QPainter& painter, const QRectF& area,
   const QString candidates[] = {QString::fromUtf8("今日はいい天気です"),
                                 QString::fromUtf8("今日もいい天気です"),
                                 QString::fromUtf8("今日は良い天気")};
+  const QString descriptions[] = {QString(), QString(),
+                                  QString::fromUtf8("丁寧")};
   const QFont candidate_font = Font(style.candidate_style());
   const QFont number_font = Font(style.shortcut_style());
+  const QFont description_font = Font(style.description_style());
   const QFont footer_font = Font(style.footer_style());
   const QFontMetricsF candidate_metrics(candidate_font);
   const QFontMetricsF number_metrics(number_font);
+  const QFontMetricsF description_metrics(description_font);
   const QFontMetricsF footer_metrics(footer_font);
 
-  // Sizes in the manner of Mozc's table layout.
-  const double padding = style.row_rect_padding();
-  const double border = style.window_border();
-  const double row_height =
-      std::max(candidate_metrics.height(),
-               suggestion ? 0.0 : number_metrics.height()) +
-      2 * padding + 2;
+  // Sizes as CandidateView.mm lays the rows out.
+  const double padding = look.window_padding;
+  const double row_height = look.row_height;
   const double number_width =
-      suggestion ? 0
-                 : style.shortcut_style().left_padding() +
-                       number_metrics.horizontalAdvance(QStringLiteral("9")) +
-                       style.shortcut_style().right_padding();
+      suggestion
+          ? 0
+          : look.row_padding +
+                std::max(look.number_width,
+                         number_metrics.horizontalAdvance(QStringLiteral("9")));
+  const double gap = look.row_padding;
+  // The candidates end in two spaces, as the renderer appends them.
+  const QString spaces = QStringLiteral("  ");
   double text_width = candidate_metrics.horizontalAdvance(
-      QString::fromStdString(style.column_minimum_width_string()));
+      QString::fromStdString(style.column_minimum_width_string()) + spaces);
   for (const QString& candidate : candidates) {
-    text_width =
-        std::max(text_width, candidate_metrics.horizontalAdvance(candidate));
+    text_width = std::max(
+        text_width, candidate_metrics.horizontalAdvance(candidate + spaces));
   }
-  const double gap = candidate_metrics.horizontalAdvance(QStringLiteral(" "));
-  const double candidate_width = gap + text_width + gap;
-  const double scrollbar = style.scrollbar_width();
-  const double footer_height = footer_metrics.height() + 4;
-  const double width = border * 2 + number_width + candidate_width + scrollbar;
-  const double height = border * 2 + row_height * 3 + footer_height;
+  const double description_width =
+      description_metrics.horizontalAdvance(descriptions[2]) + look.row_padding;
+  const double row_width = number_width + gap + text_width + description_width;
+  const QString footer_text =
+      suggestion ? QString::fromUtf8("予測候補") : QStringLiteral("1 / 3");
+  const double footer_height = footer_metrics.height() +
+                               look.footer_top_padding +
+                               look.footer_bottom_padding;
+  const double width = padding * 2 + row_width;
+  const double height = padding * 2 + row_height * 3 + footer_height;
   const QRectF window(area.center().x() - width / 2,
                       area.center().y() - height / 2, width, height);
   const double corner = std::min(look.corner_radius, height / 2);
@@ -164,61 +167,53 @@ void PaintCandidateWindow(QPainter& painter, const QRectF& area,
   QPainterPath shape;
   shape.addRoundedRect(window, corner, corner);
   p.setClipPath(shape);
-  p.fillRect(window, Rgb(style.candidate_style().background_color()));
-  const QRectF inner = window.adjusted(border, border, -border, -border);
-  if (!suggestion) {
-    p.fillRect(QRectF(inner.left(), inner.top(), number_width, row_height * 3),
-               Rgb(style.shortcut_style().background_color()));
-  }
+  p.fillRect(window, Rgb(look.background));
+  const QRectF inner = window.adjusted(padding, padding, -padding, -padding);
   for (int row = 0; row < 3; ++row) {
-    const QRectF cells(inner.left(), inner.top() + row * row_height,
-                       number_width + candidate_width, row_height);
-    if (row == 0) {
-      p.setPen(Rgb(style.focused_border_color()));
-      p.setBrush(Rgb(style.focused_background_color()));
-      p.drawRect(cells.adjusted(0.5, 0.5, -0.5, -0.5));
+    const QRectF cells(inner.left(), inner.top() + row * row_height, row_width,
+                       row_height);
+    const bool focused = row == 0;
+    if (focused) {
+      p.setPen(look.focused_border_alpha > 0
+                   ? QPen(Rgb(look.focused_border, look.focused_border_alpha))
+                   : QPen(Qt::NoPen));
+      p.setBrush(Rgb(look.focused_background));
+      p.drawRoundedRect(cells.adjusted(0.5, 0.5, -0.5, -0.5),
+                        look.row_corner_radius, look.row_corner_radius);
     }
+    const QColor secondary =
+        Rgb(focused ? look.focused_secondary_text : look.secondary_text);
     if (!suggestion) {
       p.setFont(number_font);
-      p.setPen(Rgb(style.shortcut_style().foreground_color()));
-      p.drawText(QRectF(cells.left(), cells.top(), number_width, row_height),
-                 Qt::AlignCenter, QString::number(row + 1));
+      p.setPen(secondary);
+      p.drawText(QRectF(cells.left() + look.row_padding, cells.top(),
+                        number_width - look.row_padding, row_height),
+                 Qt::AlignLeft | Qt::AlignVCenter, QString::number(row + 1));
     }
     p.setFont(candidate_font);
-    p.setPen(Rgb(style.candidate_style().foreground_color()));
+    p.setPen(Rgb(focused ? look.focused_text : look.text));
     p.drawText(QRectF(cells.left() + number_width + gap, cells.top(),
                       text_width, row_height),
                Qt::AlignLeft | Qt::AlignVCenter, candidates[row]);
+    if (!descriptions[row].isEmpty()) {
+      p.setFont(description_font);
+      p.setPen(secondary);
+      p.drawText(cells.adjusted(0, 0, -look.row_padding, 0),
+                 Qt::AlignRight | Qt::AlignVCenter, descriptions[row]);
+    }
   }
-  // The scrollbar, all of it the thumb: every candidate fits.
-  const QRectF bar(inner.right() - scrollbar, inner.top(), scrollbar,
-                   row_height * 3);
-  p.fillRect(bar, Rgb(style.scrollbar_background_color()));
-  p.fillRect(bar.adjusted(0, 0, 0, -row_height),
-             Rgb(style.scrollbar_indicator_color()));
   const QRectF footer(inner.left(), inner.top() + row_height * 3, inner.width(),
                       footer_height);
-  QLinearGradient gradient(footer.topLeft(), footer.bottomLeft());
-  gradient.setColorAt(0, Rgb(style.footer_top_color()));
-  gradient.setColorAt(1, Rgb(style.footer_bottom_color()));
-  p.fillRect(footer, gradient);
-  if (style.footer_border_colors_size() > 0) {
-    p.setPen(Rgb(style.footer_border_colors(0)));
-    p.drawLine(footer.topLeft(), footer.topRight());
-  }
   p.setFont(footer_font);
-  p.setPen(Rgb(style.footer_style().foreground_color()));
-  p.drawText(
-      footer.adjusted(style.footer_style().left_padding(), 0,
-                      -style.footer_style().right_padding(), 0),
-      Qt::AlignRight | Qt::AlignVCenter,
-      suggestion ? QString::fromUtf8("予測候補") : QStringLiteral("1 / 3"));
+  p.setPen(Rgb(look.secondary_text));
+  p.drawText(footer.adjusted(0, look.footer_top_padding, -look.row_padding,
+                             -look.footer_bottom_padding),
+             Qt::AlignRight | Qt::AlignTop, footer_text);
   p.setClipping(false);
-  p.setPen(QPen(Rgb(style.border_color()), border));
+  p.setPen(QPen(Rgb(look.border, look.border_alpha), 1));
   p.setBrush(Qt::NoBrush);
-  p.drawRoundedRect(
-      window.adjusted(border / 2, border / 2, -border / 2, -border / 2), corner,
-      corner);
+  p.drawRoundedRect(window.adjusted(0.5, 0.5, -0.5, -0.5),
+                    std::max(0.0, corner - 0.5), std::max(0.0, corner - 0.5));
   p.end();
   painter.save();
   painter.setOpacity(look.opacity);

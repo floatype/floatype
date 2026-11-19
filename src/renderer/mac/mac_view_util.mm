@@ -61,10 +61,11 @@ NSSize MacViewUtil::applyTheme(const NSSize &size, const RendererStyle::TextStyl
 
 NSColor *MacViewUtil::MacViewUtil::ToNSColor(
     const mozc::renderer::RendererStyle::RGBAColor &color) {
-  return [NSColor colorWithCalibratedRed:color.r() / 255.0
-                                   green:color.g() / 255.0
-                                    blue:color.b() / 255.0
-                                   alpha:color.a()];
+  // floatype: sRGB, so that the colors come out as the settings write them.
+  return [NSColor colorWithSRGBRed:color.r() / 255.0
+                             green:color.g() / 255.0
+                              blue:color.b() / 255.0
+                             alpha:color.a()];
 }
 
 NSAttributedString *MacViewUtil::ToNSAttributedString(const std::string &str,

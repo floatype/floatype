@@ -5,6 +5,7 @@
 #import <Cocoa/Cocoa.h>
 
 #include <algorithm>
+#include <cstdlib>
 #include <string>
 
 #include "floatype/look/window_look.h"
@@ -89,8 +90,7 @@ uint32_t ColorAt(NSView *view, double x, double y, double *alpha = nullptr) {
          byte(color.blueComponent);
 }
 
-// Color spaces shift the values a little (calibrated RGB to sRGB lifts the
-// darks by up to about 17).
+// Color spaces and antialiasing shift the values a little.
 void ExpectNear(uint32_t color, uint32_t expected, const char *what) {
   for (int shift : {16, 8, 0}) {
     EXPECT_NEAR(static_cast<int>((color >> shift) & 0xff),
@@ -104,6 +104,39 @@ void ExpectNear(uint32_t color, uint32_t expected, const char *what) {
 uint32_t BackgroundOf(CandidateView *view) {
   const mozc::Rect row = [view tableLayout]->GetRowRect(1);
   return ColorAt(view, row.Right() - 4, row.Top() + row.Height() / 2.0);
+}
+
+// A spot in the focused (first) row, left of its number.
+uint32_t FocusedOf(CandidateView *view) {
+  const mozc::Rect row = [view tableLayout]->GetRowRect(0);
+  return ColorAt(view, row.Left() + 4, row.Top() + row.Height() / 2.0);
+}
+
+// The color in `column` of `row` farthest from the background: the text's.
+uint32_t TextIn(CandidateView *view, int row, renderer::ColumnType column) {
+  const mozc::Rect cell = [view tableLayout]->GetCellRect(row, column);
+  const uint32_t background = row == 0 ? FocusedOf(view) : BackgroundOf(view);
+  NSBitmapImageRep *image = [view bitmapImageRepForCachingDisplayInRect:view.bounds];
+  [view cacheDisplayInRect:view.bounds toBitmapImageRep:image];
+  const double scale = image.pixelsWide / NSWidth(view.bounds);
+  const auto byte = [](CGFloat c) { return static_cast<int>(c * 255 + 0.5); };
+  uint32_t text = background;
+  int farthest = -1;
+  for (int x = cell.Left() * scale; x < cell.Right() * scale; ++x) {
+    for (int y = cell.Top() * scale; y < cell.Bottom() * scale; ++y) {
+      NSColor *color = [[image colorAtX:x y:y] colorUsingColorSpace:NSColorSpace.sRGBColorSpace];
+      const int r = byte(color.redComponent), g = byte(color.greenComponent),
+                b = byte(color.blueComponent);
+      const int distance = std::abs(r - static_cast<int>((background >> 16) & 0xff)) +
+                           std::abs(g - static_cast<int>((background >> 8) & 0xff)) +
+                           std::abs(b - static_cast<int>(background & 0xff));
+      if (distance > farthest) {
+        farthest = distance;
+        text = r << 16 | g << 8 | b;
+      }
+    }
+  }
+  return text;
 }
 
 TEST(FloatypeLookTest, TheCandidateWindowGrowsWithItsFonts) {
@@ -134,16 +167,15 @@ TEST(FloatypeLookTest, TheCandidateWindowTakesItsColors) {
   style.set_focused_border_color(0xd08a00);
   CandidateView *view = ViewFor(style);
   Draw(view, "candidates_colors");
-  // A spot in the focused (first) row's background, left of its text; Mozc's
-  // own, 0xd1eaff, is far off in red and blue.
-  ExpectNear(ColorAt(view, 2, 3), 0xffe4b0, "focused");
+  // The default's 0xc4d0e1 is far off in red and blue.
+  ExpectNear(FocusedOf(view), 0xffe4b0, "focused");
   ExpectNear(BackgroundOf(view), 0xffffff, "the light background");
 
   // Without CUSTOM the colors wait.
   style.set_theme(Style::LIGHT);
   [view setLookStyle:style];
   Draw(view, "candidates_light");
-  ExpectNear(ColorAt(view, 2, 3), 0xd1eaff, "light's focused");
+  ExpectNear(FocusedOf(view), 0xc4d0e1, "light's focused");
 
   style.set_theme(Style::CUSTOM);
   style.set_background_color(0x203040);
@@ -156,7 +188,11 @@ TEST(FloatypeLookTest, AutoFollowsTheAppearance) {
   CandidateView *view = ViewFor(Style(), /*dark=*/true);
   Draw(view, "candidates_dark");
   EXPECT_TRUE([view look].dark);
-  ExpectNear(BackgroundOf(view), 0x2c2c2c, "dark background");
+  ExpectNear(BackgroundOf(view), 0x26272b, "dark background");
+  ExpectNear(FocusedOf(view), 0xc4d0e1, "the focused row's blue in the dark too");
+  ExpectNear(TextIn(view, 0, renderer::kColumnCandidate), 0x111318, "ink on it");
+  ExpectNear(TextIn(view, 1, renderer::kColumnCandidate), 0xeceef2, "dark's text");
+  ExpectNear(TextIn(view, 1, renderer::kColumnShortcut), 0x80848d, "dark's numbers");
 
   // The appearance changes while it is shown: the text turns dark too,
   // without a new layout.
@@ -184,7 +220,7 @@ TEST(FloatypeLookTest, AutoFollowsTheAppearance) {
   dark.set_theme(Style::DARK);
   [view setLookStyle:dark];
   Draw(view, "candidates_dark_theme");
-  ExpectNear(BackgroundOf(view), 0x2c2c2c, "DARK in the light");
+  ExpectNear(BackgroundOf(view), 0x26272b, "DARK in the light");
 }
 
 TEST(FloatypeLookTest, AFontFamilyMissingIsTheSystemFont) {
@@ -202,9 +238,45 @@ TEST(FloatypeLookTest, AFontFamilyMissingIsTheSystemFont) {
   EXPECT_NE(mincho.width, system.width) << "a font of its own";
 }
 
+TEST(FloatypeLookTest, TheLightLook) {
+  CandidateView *view = ViewFor(Style());
+  Draw(view, "candidates_light_look");
+  ExpectNear(BackgroundOf(view), 0xffffff, "background");
+  ExpectNear(FocusedOf(view), 0xc4d0e1, "focused row");
+  ExpectNear(TextIn(view, 0, renderer::kColumnCandidate), 0x111318, "focused text");
+  ExpectNear(TextIn(view, 1, renderer::kColumnCandidate), 0x17191e, "text");
+  ExpectNear(TextIn(view, 1, renderer::kColumnShortcut), 0x989ca5, "number");
+  ExpectNear(TextIn(view, 0, renderer::kColumnShortcut), 0x555b64, "number on the focus");
+  ExpectNear(TextIn(view, 2, renderer::kColumnDescription), 0x989ca5, "description");
+  // No column behind the numbers.
+  const mozc::Rect number = [view tableLayout]->GetCellRect(1, renderer::kColumnShortcut);
+  ExpectNear(ColorAt(view, number.Left() + 2, number.Top() + 2), 0xffffff, "no number column");
+  // Rows of 28pt inside 6pt of padding.
+  EXPECT_EQ([view tableLayout]->GetRowRect(0).Height(), 28);
+  EXPECT_EQ([view tableLayout]->GetRowRect(0).Top(), 6);
+  // The focused row's corners are round: its corner shows the background.
+  const mozc::Rect row = [view tableLayout]->GetRowRect(0);
+  ExpectNear(ColorAt(view, row.Left() + 0.5, row.Top() + 0.5), 0xffffff, "rounded focus");
+}
+
+TEST(FloatypeLookTest, TheScrollbarIsAThumbWithoutATrack) {
+  commands::CandidateWindow candidates = Candidates();
+  candidates.set_size(9);
+  CandidateView *view = ViewFor(Style());
+  [view setCandidateWindow:&candidates];
+  Draw(view, "candidates_scrollbar");
+  const renderer::TableLayout *layout = [view tableLayout];
+  const mozc::Rect bar = layout->GetVScrollBarRect();
+  ASSERT_GT(bar.Width(), 0);
+  const mozc::Rect thumb = layout->GetVScrollIndicatorRect(0, 2, 9);
+  ExpectNear(ColorAt(view, thumb.Left() + thumb.Width() / 2.0, thumb.Top() + thumb.Height() / 2.0),
+             0x989ca5, "the thumb");
+  ExpectNear(ColorAt(view, bar.Left() + bar.Width() / 2.0, bar.Bottom() - 3), 0xffffff,
+             "no track below it");
+}
+
 TEST(FloatypeLookTest, RoundedCornersAreSeeThrough) {
   Style style;
-  style.set_corner_radius(10);
   CandidateView *view = ViewFor(style);
   Draw(view, "candidates_rounded");
   double alpha = 1;
@@ -212,8 +284,9 @@ TEST(FloatypeLookTest, RoundedCornersAreSeeThrough) {
   EXPECT_LT(alpha, 0.1) << "the corner";
   ExpectNear(BackgroundOf(view), 0xffffff, "inside");
 
-  // Square ones are Mozc's.
-  view = ViewFor(Style());
+  // Square ones at 0.
+  style.set_corner_radius(0);
+  view = ViewFor(style);
   Draw(view, "candidates_square");
   ColorAt(view, 0.5, 0.5, &alpha);
   EXPECT_EQ(alpha, 1);
@@ -233,13 +306,13 @@ class CandidateWindowTest : public ::testing::Test {
   renderer::mac::CandidateWindow window_;
 };
 
-TEST_F(CandidateWindowTest, TheDefaultIsMozcsWindow) {
+TEST_F(CandidateWindowTest, TheDefaultIsRoundedWithASoftShadow) {
   Update(Style(), Style());
   NSWindow *window = window_.WindowForTesting();
-  EXPECT_TRUE(window.opaque);
+  EXPECT_FALSE(window.opaque);
   EXPECT_EQ(window.alphaValue, 1);
-  EXPECT_TRUE(window.hasShadow) << "the system's";
-  EXPECT_FALSE(window_.ShadowWindowForTesting().visible);
+  EXPECT_FALSE(window.hasShadow) << "the look's own, not the system's";
+  EXPECT_TRUE(window_.ShadowWindowForTesting().visible);
   window_.Hide();
 }
 
@@ -257,7 +330,7 @@ TEST_F(CandidateWindowTest, TakesItsCornersOpacityAndShadow) {
 
   style.set_shadow(Style::STRONG);
   Update(style, Style());
-  EXPECT_TRUE(window.hasShadow) << "the system's, and the strong one under it";
+  EXPECT_FALSE(window.hasShadow);
   NSWindow *shadow = window_.ShadowWindowForTesting();
   ASSERT_NE(shadow, nil);
   EXPECT_TRUE(shadow.visible);
@@ -272,11 +345,14 @@ TEST_F(CandidateWindowTest, TakesItsCornersOpacityAndShadow) {
   window_.Show();
   EXPECT_TRUE(shadow.visible);
 
-  // SOFT is the system's shadow alone.
+  // SOFT's is smaller.
+  const double strong = NSWidth(shadow.frame);
   style.set_shadow(Style::SOFT);
   Update(style, Style());
-  EXPECT_TRUE(window.hasShadow);
-  EXPECT_FALSE(shadow.visible);
+  EXPECT_FALSE(window.hasShadow);
+  EXPECT_TRUE(shadow.visible);
+  EXPECT_LT(NSWidth(shadow.frame), strong);
+  Save(shadow.contentView, "window_soft_shadow");
   window_.Hide();
 }
 
@@ -415,6 +491,104 @@ TEST(FloatypeLookTest, TheReadingSitsAboveTheIndicator) {
   window.Update(command, 1000);
   EXPECT_FALSE(ruby.window.isVisible);
   window.Hide();
+}
+
+// The conversion and suggestion windows of the mock, on a backdrop with the
+// window's own shadow, saved as sheet_<theme>_<window>.png.
+commands::CandidateWindow SheetCandidates(bool suggestion) {
+  commands::CandidateWindow window;
+  window.set_category(suggestion ? commands::SUGGESTION : commands::CONVERSION);
+  window.set_size(3);
+  window.set_focused_index(0);
+  window.set_position(0);
+  const char *values[] = {"今日はいい天気です", "今日もいい天気です", "今日は良い天気"};
+  const char *descriptions[] = {"", "", "丁寧"};
+  for (int i = 0; i < 3; ++i) {
+    commands::CandidateWindow::Candidate *candidate = window.add_candidate();
+    candidate->set_index(i);
+    candidate->set_value(values[i]);
+    if (!suggestion) {
+      candidate->mutable_annotation()->set_shortcut(std::to_string(i + 1));
+    }
+    candidate->mutable_annotation()->set_description(descriptions[i]);
+  }
+  if (suggestion) {
+    window.mutable_footer()->set_label("予測候補");
+  } else {
+    window.mutable_footer()->set_index_visible(true);
+  }
+  return window;
+}
+
+NSImage *Capture(NSView *view) {
+  NSBitmapImageRep *rep = [view bitmapImageRepForCachingDisplayInRect:view.bounds];
+  [view cacheDisplayInRect:view.bounds toBitmapImageRep:rep];
+  NSImage *image = [[NSImage alloc] initWithSize:view.bounds.size];
+  [image addRepresentation:rep];
+  return image;
+}
+
+TEST(FloatypeLookSheet, SavesTheWindows) {
+  for (const bool dark : {false, true}) {
+    for (const bool suggestion : {false, true}) {
+      renderer::mac::CandidateWindow window;
+      const commands::CandidateWindow candidates = SheetCandidates(suggestion);
+      window.SetLook(Style(), Style());
+      window.SetCandidateWindow(candidates);
+      window.WindowForTesting().appearance =
+          [NSAppearance appearanceNamed:dark ? NSAppearanceNameDarkAqua : NSAppearanceNameAqua];
+      window.SetCandidateWindow(candidates);
+      window.MoveWindow(NSMakePoint(200, 400));
+      window.Show();
+      NSView *view = window.ViewForTesting();
+      NSWindow *shadow = window.ShadowWindowForTesting();
+      const CGFloat margin = 60;
+      const NSSize size =
+          NSMakeSize(NSWidth(view.bounds) + 2 * margin, NSHeight(view.bounds) + 2 * margin);
+      NSBitmapImageRep *out =
+          [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:nullptr
+                                                  pixelsWide:size.width * 2
+                                                  pixelsHigh:size.height * 2
+                                               bitsPerSample:8
+                                             samplesPerPixel:4
+                                                    hasAlpha:YES
+                                                    isPlanar:NO
+                                              colorSpaceName:NSDeviceRGBColorSpace
+                                                 bytesPerRow:0
+                                                bitsPerPixel:0];
+      out.size = size;
+      [NSGraphicsContext saveGraphicsState];
+      [NSGraphicsContext
+          setCurrentContext:[NSGraphicsContext graphicsContextWithBitmapImageRep:out]];
+      [(dark ? [NSColor colorWithSRGBRed:0x1d / 255.0 green:0x1e / 255.0 blue:0x23 / 255.0 alpha:1]
+             : [NSColor colorWithSRGBRed:0xe9 / 255.0 green:0xeb / 255.0 blue:0xf0 / 255.0
+                                   alpha:1]) set];
+      NSRectFill(NSMakeRect(0, 0, size.width, size.height));
+      const NSRect frame = window.WindowForTesting().frame;
+      if (shadow != nil && shadow.visible) {
+        const NSRect around = shadow.frame;
+        [Capture(shadow.contentView) drawInRect:NSMakeRect(margin + NSMinX(around) - NSMinX(frame),
+                                                           margin + NSMinY(around) - NSMinY(frame),
+                                                           NSWidth(around), NSHeight(around))];
+      }
+      [Capture(view) drawInRect:NSMakeRect(margin, margin, NSWidth(frame), NSHeight(frame))
+                       fromRect:NSZeroRect
+                      operation:NSCompositingOperationSourceOver
+                       fraction:window.WindowForTesting().alphaValue];
+      [NSGraphicsContext restoreGraphicsState];
+      NSString *dir = [NSTemporaryDirectory() stringByAppendingPathComponent:@"floatype-look"];
+      [[NSFileManager defaultManager] createDirectoryAtPath:dir
+                                withIntermediateDirectories:YES
+                                                 attributes:nil
+                                                      error:nil];
+      [[out representationUsingType:NSBitmapImageFileTypePNG properties:@{}]
+          writeToFile:[NSString stringWithFormat:@"%@/sheet_%s_%s.png", dir,
+                                                 dark ? "dark" : "light",
+                                                 suggestion ? "suggestion" : "conversion"]
+           atomically:YES];
+      window.Hide();
+    }
+  }
 }
 
 }  // namespace

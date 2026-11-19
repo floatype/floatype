@@ -14,29 +14,41 @@
 namespace mozc::floatype {
 
 struct WindowLook {
-  // Mozc's dark palette under the colors below, else its light one.
+  // The dark palette, else the light one.
   bool dark = false;
   // Colors are 0xRRGGBB.
-  uint32_t background = 0;  // The window and the candidates' cells.
+  uint32_t background = 0;
   uint32_t text = 0;
-  uint32_t secondary_text = 0;     // The shortcut numbers.
-  uint32_t number_background = 0;  // The shortcut numbers' column.
-  uint32_t focused_background = 0;
+  // The numbers, descriptions, footer and scrollbar.
+  uint32_t secondary_text = 0;
+  uint32_t focused_background = 0;  // The focused row, a rounded rectangle.
+  uint32_t focused_text = 0;
+  uint32_t focused_secondary_text = 0;  // Numbers and descriptions on it.
+  // The focused row's border, drawn only with an alpha above 0.
   uint32_t focused_border = 0;
+  double focused_border_alpha = 0;
+  // The window's outline, a hairline.
   uint32_t border = 0;
-  uint32_t footer_top = 0;  // The footer's gradient.
-  uint32_t footer_bottom = 0;
-  uint32_t scrollbar_background = 0;
-  uint32_t size_percent = 100;  // Fonts and rows, in percent of Mozc's.
+  double border_alpha = 1;
+  uint32_t size_percent = 100;  // Fonts and measures, in percent.
+  // Measures in points, at size_percent.
+  double window_padding = 0;  // Around the rows and the footer.
+  double row_height = 0;
+  double row_padding = 0;  // Left and right in a row, and after the number.
+  double row_corner_radius = 0;
+  double number_width = 0;  // At least, for the shortcut numbers.
+  double footer_top_padding = 0;
+  double footer_bottom_padding = 0;
+  double scrollbar_width = 0;
   double corner_radius = 0;
   double opacity = 1;  // Of the whole window, 0 to 1.
   config::Config::CandidateStyle::Shadow shadow =
       config::Config::CandidateStyle::SOFT;
-  // The shadow to draw. SOFT's numbers come near the system's window shadow,
-  // which the macOS renderer uses instead; STRONG's are drawn on top of it.
+  // The shadow, as CSS's box-shadow: 0 offset_y radius color/opacity.
   double shadow_radius = 0;
   double shadow_offset_y = 0;  // Downward.
   double shadow_opacity = 0;
+  uint32_t shadow_color = 0;
   std::string font_family;  // Empty for the system font.
 };
 
@@ -44,9 +56,9 @@ struct WindowLook {
 WindowLook ResolveWindowLook(const config::Config::CandidateStyle& style,
                              bool system_dark);
 
-// Mozc's style for the look's palette with its colors, sizes and font family
+// Mozc's style with the look's colors, font sizes, paddings and font family
 // in (font_name, which a renderer must fall back from if it is not
-// installed).
+// installed), for the parts Mozc's table layout and drawing read.
 renderer::RendererStyle RendererStyleFor(const WindowLook& look);
 
 // Scales every font size in `style` (candidates, shortcuts, descriptions,
