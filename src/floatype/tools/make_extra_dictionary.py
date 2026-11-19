@@ -72,12 +72,22 @@ NOUN = "名詞,一般,*,*,*,*,*"
 PROPER = "名詞,固有名詞,一般,*,*,*,*"
 # Net words and titles rank after dictionary words of the same fame.
 NICO_EXTRA_COST = 300
+# For a reading Mozc already knows, an added word comes as a candidate
+# without pushing Mozc's answer aside: 1 in 7 readings Mozc shares with the
+# added words changed their first answer, mostly for the worse (山本恵 to
+# 山本芽, アリーマイラブ to アリーｍｙラブ).
+KNOWN_READING_COST = 1000
+# Letters rank after katakana (ウルフズレイン before WOLF'S RAIN).
+LETTERS_COST = 1000
 # Above most of Mozc's names (5000 to 8000), so a name never pushes an
 # ordinary word aside; it shows when nothing else spells the reading.
 NAME_COST = 9000
 
 KANA = r"ぁ-ゖァ-ヺー"
 KANJI = r"々一-鿿"
+# What an added word may be written with: no digits (Mozc writes numbers) and
+# no symbols (LOVE STAGE!!).
+WRITING = f"[{KANA}{KANJI}A-Za-z・]+"
 
 
 def fetch(url: str, sha256: str) -> bytes:
@@ -109,19 +119,21 @@ def pos_ids() -> dict[str, int]:
 
 
 def base_entries(ids: dict[str, int]):
-  """(reading, value) pairs Mozc has, and its surnames and given names."""
-  pairs, surnames, given = set(), set(), set()
+  """(reading, value) pairs Mozc has, its readings, and its surnames and
+  given names."""
+  pairs, readings, surnames, given = set(), set(), set(), set()
   for path in sorted(OUT_DIR.glob("dictionary*.txt")):
     if path.name.startswith("dictionary_floatype_ut_"):
       continue
     for line in path.read_text().splitlines():
       reading, left, _, _, value = line.split("\t")[:5]
       pairs.add((reading, value))
+      readings.add(reading)
       if int(left) == ids[SURNAME]:
         surnames.add((reading, value))
       elif int(left) == ids[GIVEN]:
         given.add((reading, value))
-  return pairs, surnames, given
+  return pairs, readings, surnames, given
 
 
 def composable(reading: str, value: str, surnames, given) -> bool:
@@ -159,33 +171,52 @@ def known_cost(hits: int) -> int:
   return 9500 if hits == 0 else max(7500, 8800 - 50 * hits)
 
 
+def kana_over_mozc(reading: str, value: str, readings) -> bool:
+  """Kana as typed for a reading Mozc converts beats its kanji (こばやし for
+  小林); for a reading Mozc lacks it is the answer (ありよりのあり)."""
+  return value == reading and reading in readings
+
+
+def adjusted(cost: int, reading: str, value: str, readings) -> int:
+  if reading in readings:
+    cost += KNOWN_READING_COST
+  if re.search("[A-Za-z]", value):
+    cost += LETTERS_COST
+  return cost
+
+
 def keeps_name(reading: str, value: str) -> bool:
   return (re.fullmatch(f"[ぁ-ゖー]{{2,}}", reading) is not None
           and re.fullmatch(f"[{KANA}{KANJI}]{{2,}}", value) is not None
           and re.search(f"[{KANJI}]", value) is not None)
 
 
-def personal_names(ids, pairs, surnames, given) -> list[str]:
+def personal_names(ids, pairs, readings, seen, surnames,
+                   given) -> list[str]:
   text = bz2.decompress(fetch(*PERSONAL_NAMES)).decode("utf-8")
   rows = set()
   for line in text.splitlines():
     reading, _, _, _, value = line.split("\t")
     if (keeps_name(reading, value) and (reading, value) not in pairs
         and not composable(reading, value, surnames, given)):
-      rows.add(f"{reading}\t{ids[NAME]}\t{ids[NAME]}\t{NAME_COST}\t{value}")
+      cost = adjusted(NAME_COST, reading, value, readings)
+      seen.add((reading, value))
+      rows.add(f"{reading}\t{ids[NAME]}\t{ids[NAME]}\t{cost}\t{value}")
   return sorted(rows)
 
 
-def ut_rows(source, ids, pairs, seen, pos, keep) -> list[str]:
+def ut_rows(source, ids, pairs, readings, seen, pos, keep) -> list[str]:
   """Rows of a merge-ut child dictionary Mozc and earlier sources lack."""
   rows = []
   text = bz2.decompress(fetch(*source)).decode("utf-8")
   for line in text.splitlines():
     reading, _, _, _, value = line.split("\t")
-    if (reading, value) in pairs or (reading, value) in seen:
+    if ((reading, value) in pairs or (reading, value) in seen
+        or kana_over_mozc(reading, value, readings)):
       continue
     cost = keep(reading, value)
     if cost is not None:
+      cost = adjusted(cost, reading, value, readings)
       seen.add((reading, value))
       rows.append(f"{reading}\t{ids[pos]}\t{ids[pos]}\t{cost}\t{value}")
   return sorted(rows)
@@ -193,14 +224,26 @@ def ut_rows(source, ids, pairs, seen, pos, keep) -> list[str]:
 
 def plain(reading: str, value: str) -> bool:
   return (re.fullmatch("[\u3041-\u3096\u30fc]+", reading) is not None
-          and 2 <= len(value) <= 25)
+          and 2 <= len(value) <= 25 and re.fullmatch(WRITING, value) is not None)
 
 
-def sudachi_cost(titles: Titles, surnames, given, reading: str, value: str):
+def name_like(reading: str, value: str, surname_readings,
+              given_readings) -> bool:
+  """A full name in kanji whose reading splits into one of Mozc's surname
+  readings and one of its given-name readings, however it is written."""
+  if not re.fullmatch(f"[{KANJI}]{{3,5}}", value):
+    return False
+  return any(reading[:i] in surname_readings and reading[i:] in given_readings
+             for i in range(2, len(reading) - 1))
+
+
+def sudachi_cost(titles: Titles, surnames, given, name_readings,
+                 reading: str, value: str):
   """Words of letters alone only when Wikipedia knows them, as merge-ut does.
-  Names Mozc writes from a surname and a given name stay out: as plain nouns
-  they beat phrases (はやまるな became 葉山瑠菜)."""
-  if not plain(reading, value) or composable(reading, value, surnames, given):
+  Full names stay out: as plain nouns they beat phrases (はやまるな became
+  葉山瑠菜) and Mozc's own names (近藤宏 became 近藤巨士)."""
+  if (not plain(reading, value) or composable(reading, value, surnames, given)
+      or name_like(reading, value, *name_readings)):
     return None
   hits = titles.hits(value)
   if hits == 0 and value.isascii():
@@ -208,23 +251,25 @@ def sudachi_cost(titles: Titles, surnames, given, reading: str, value: str):
   return known_cost(hits)
 
 
-def nico_pixiv(titles, ids, pairs, seen, surnames, given) -> list[str]:
+def nico_pixiv(titles, ids, pairs, readings, seen, surnames,
+               given) -> list[str]:
   rows = []
   for line in fetch(*NICO_PIXIV).decode("utf-8").splitlines():
     if not line or line.startswith("#"):
       continue
     reading, value = line.split("\t")[:2]
     if ((reading, value) in pairs or (reading, value) in seen
-        or value == reading or not plain(reading, value)
-        # Titles that are sentences (…どこですか?) and symbols stay out.
-        or not re.fullmatch(f"[{KANA}{KANJI}A-Za-z0-9・]+", value)
+        # Titles that are sentences (…どこですか?) fail plain().
+        or not plain(reading, value)
+        or kana_over_mozc(reading, value, readings)
         or composable(reading, value, surnames, given)):
       continue
     hits = titles.hits(value)
     if hits == 0 and value.isascii():
       continue
     seen.add((reading, value))
-    cost = known_cost(hits) + NICO_EXTRA_COST
+    cost = adjusted(known_cost(hits) + NICO_EXTRA_COST, reading, value,
+                    readings)
     rows.append(f"{reading}\t{ids[PROPER]}\t{ids[PROPER]}\t{cost}\t{value}")
   return sorted(rows)
 
@@ -240,23 +285,34 @@ def self_check() -> None:
   titles = Titles("1:2:高尾山\n1:3:高尾山口駅\n1:4:高尾 (曖昧さ回避)\n1:5:Category:高尾\n")
   assert titles.hits("高尾山") == 2 and titles.hits("高尾") == 3
   assert titles.hits("低尾") == 0
+  assert name_like("こんどうひろし", "近藤巨士", {"こんどう"}, {"ひろし"})
+  assert not name_like("こんどうひろし", "近藤ひろし", {"こんどう"}, {"ひろし"})
+  assert kana_over_mozc("こばやし", "こばやし", {"こばやし"})
+  assert not kana_over_mozc("ありよりのあり", "ありよりのあり", {"こばやし"})
+  assert adjusted(8000, "やま", "山", {"やま"}) == 9000
+  assert adjusted(8000, "あい", "AI", set()) == 9000
+  assert plain("らぶすてーじ", "ラブステージ")
+  assert not plain("らぶすてーじ", "LOVE STAGE!!") and not plain("ひがし", "東１４")
   assert known_cost(0) == 9500 and known_cost(1) == 8750 and known_cost(30) == 7500
 
 
 def main() -> None:
   self_check()
   ids = pos_ids()
-  pairs, surnames, given = base_entries(ids)
+  pairs, readings, surnames, given = base_entries(ids)
+  name_readings = ({r for r, _ in surnames}, {r for r, _ in given})
   titles = Titles(bz2.decompress(fetch(*JAWIKI_TITLES)).decode("utf-8"))
   seen = set()
   outputs = {
-      "names": personal_names(ids, pairs, surnames, given),
+      "names": personal_names(ids, pairs, readings, seen, surnames, given),
       "places": ut_rows(
-          PLACE_NAMES, ids, pairs, seen, PLACE,
+          PLACE_NAMES, ids, pairs, readings, seen, PLACE,
           lambda r, v: known_cost(titles.hits(v)) if plain(r, v) else None),
-      "sudachi": ut_rows(SUDACHIDICT, ids, pairs, seen, NOUN,
-                         lambda r, v: sudachi_cost(titles, surnames, given, r, v)),
-      "nico_pixiv": nico_pixiv(titles, ids, pairs, seen, surnames, given),
+      "sudachi": ut_rows(SUDACHIDICT, ids, pairs, readings, seen, NOUN,
+                         lambda r, v: sudachi_cost(titles, surnames, given,
+                                                   name_readings, r, v)),
+      "nico_pixiv": nico_pixiv(titles, ids, pairs, readings, seen, surnames,
+                               given),
   }
   for name, rows in outputs.items():
     out = OUT_DIR / f"dictionary_floatype_ut_{name}.txt"
