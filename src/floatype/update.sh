@@ -25,7 +25,7 @@ if ! nix develop .. --command bash -c '
   bazelisk build --config release_build --define=floatype_zenz=bundle \
     --output_filter=DONT_MATCH_ANYTHING package
 ' >"$log" 2>&1; then
-  errors="$(rg -N "error:|ERROR:|Error|Traceback" "$log" | tail -20 || true)"
+  errors="$(grep -E "error:|ERROR:|Error|Traceback" "$log" | tail -20 || true)"
   echo "${errors:-$(tail -30 "$log")}"
   echo "floatype: ビルドに失敗しました。全体は ${log} にあります。"
   exit 1
