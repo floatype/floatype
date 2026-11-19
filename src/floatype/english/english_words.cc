@@ -5,22 +5,20 @@
 #include <vector>
 
 #include "absl/base/no_destructor.h"
-#include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
-#include "base/file_util.h"
 #include "base/strings/unicode.h"
 
 namespace mozc::floatype {
 
-EnglishWords::EnglishWords(const std::string& path) {
-  const absl::StatusOr<std::string> contents = FileUtil::GetContents(path);
-  if (!contents.ok()) {
-    return;
-  }
+namespace {
+#include "floatype/english/english_words.inc"
+}  // namespace
+
+EnglishWords::EnglishWords(absl::string_view text) {
   for (const absl::string_view line :
-       absl::StrSplit(*contents, '\n', absl::SkipEmpty())) {
+       absl::StrSplit(text, '\n', absl::SkipEmpty())) {
     words_.push_back(absl::AsciiStrToLower(line));
   }
   std::sort(words_.begin(), words_.end());
@@ -33,7 +31,7 @@ bool EnglishWords::Contains(absl::string_view word) const {
 }
 
 const EnglishWords& EnglishWords::Default() {
-  static absl::NoDestructor<EnglishWords> words("/usr/share/dict/words");
+  static absl::NoDestructor<EnglishWords> words(kEnglishWords);
   return *words;
 }
 

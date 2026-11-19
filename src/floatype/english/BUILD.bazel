@@ -1,20 +1,32 @@
 load("//:build_defs.bzl", "mozc_cc_library", "mozc_cc_test")
+load("//build_tools:embed_file.bzl", "mozc_embed_file")
 
 package(default_visibility = ["//visibility:private"])
 
+exports_files(["SCOWL-Copyright"])
+
+mozc_embed_file(
+    name = "english_words_data",
+    srcs = ["english_words.txt"],
+    out = "english_words.inc",
+    as_string_view = True,
+    var_name = "kEnglishWords",
+)
+
 mozc_cc_library(
     name = "english_words",
-    srcs = ["english_words.cc"],
+    srcs = [
+        "english_words.cc",
+        ":english_words_data",
+    ],
     hdrs = ["english_words.h"],
     visibility = [
         "//floatype/eval:__pkg__",
         "//session:__pkg__",
     ],
     deps = [
-        "//base:file_util",
         "//base/strings:unicode",
         "@com_google_absl//absl/base:no_destructor",
-        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
     ],
 )
@@ -24,9 +36,6 @@ mozc_cc_test(
     srcs = ["english_words_test.cc"],
     deps = [
         ":english_words",
-        "//base:file_util",
-        "//base:system_util",
         "//testing:gunit_main",
-        "//testing:mozctest",
     ],
 )

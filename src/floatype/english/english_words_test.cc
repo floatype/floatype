@@ -1,23 +1,14 @@
 #include "floatype/english/english_words.h"
 
-#include <string>
-
-#include "base/file_util.h"
-#include "base/system_util.h"
-#include "testing/gmock.h"
 #include "testing/gunit.h"
-#include "testing/mozctest.h"
 
 namespace mozc::floatype {
 namespace {
 
-class EnglishWordsTest : public testing::TestWithTempUserProfile {
+class EnglishWordsTest : public testing::Test {
  protected:
-  EnglishWords Words() {
-    const std::string path =
-        FileUtil::JoinPath(SystemUtil::GetUserProfileDirectory(), "words");
-    EXPECT_OK(FileUtil::SetContents(path, "Macbook\nhello\nupdate\nkoto\n"));
-    return EnglishWords(path);
+  static EnglishWords Words() {
+    return EnglishWords("Macbook\nhello\nupdate\nkoto\n");
   }
 };
 
@@ -39,9 +30,11 @@ TEST_F(EnglishWordsTest, ATypoIsNotAWord) {
   EXPECT_FALSE(LooksEnglish("ab", "あb", words)) << "too short";
 }
 
-TEST(EnglishWordsDefaultTest, ReadsTheSystemList) {
-  EXPECT_GT(EnglishWords::Default().size(), 100000);
+TEST(EnglishWordsDefaultTest, HasSCOWLsWords) {
+  EXPECT_GT(EnglishWords::Default().size(), 80000);
   EXPECT_TRUE(EnglishWords::Default().Contains("keyboard"));
+  EXPECT_TRUE(EnglishWords::Default().Contains("email"))
+      << "newer than macOS's 1934 list";
 }
 
 }  // namespace

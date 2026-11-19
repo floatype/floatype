@@ -11,15 +11,16 @@
 
 namespace mozc::floatype {
 
-// A word list, one word a line, compared without case.
+// A word list, compared without case.
 class EnglishWords {
  public:
-  explicit EnglishWords(const std::string& path);
+  // `text` has one word a line.
+  explicit EnglishWords(absl::string_view text);
   bool Contains(absl::string_view word) const;
   size_t size() const { return words_.size(); }
 
-  // macOS's own list (/usr/share/dict/words, Webster's Second International,
-  // in the public domain), read on first use.
+  // SCOWL's size-60 American list (english_words.txt, made by
+  // floatype/tools/make_english_words.py), built into the binary.
   static const EnglishWords& Default();
 
  private:
