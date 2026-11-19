@@ -555,9 +555,11 @@ void ConfigDialog::SetUpFloatypeTab() {
       "補正の表示中に Ctrl+Delete "
       "で止めた補正を覚え、同じ読みでは繰り返さない");
   zenzStopWhenIdleCheckBox_ = check(
-      "打っていない間は止める（1 分で止まり、次の 1 文字目で起きる）");
+      "打っていない間は止める（待機中のメモリ 約 145MB → 約 51MB。"
+      "1 分で止まり、次の 1 文字目で起きる）");
   zenzLowMemoryCheckBox_ = check(
-      "軽くする（動いている間のメモリが約 64MB 減り、補正は約 2 倍遅くなる）");
+      "軽くする（動いている間のメモリ 約 145MB → 約 87MB、"
+      "補正にかかる時間 約 26ms → 約 50ms）");
 
   heading("ライブ変換");
   liveConversionCheckBox_ = check("手が止まったら Space を押さずに変換する");
