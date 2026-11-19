@@ -108,6 +108,7 @@ const char* kScenarioFileList[] = {
     DATA_DIR "b7132535_scenario.txt",
     DATA_DIR "b7548679_scenario.txt",
     DATA_DIR "b8690065_scenario.txt",
+    DATA_DIR "floatype_half_width_digits.txt",
     DATA_DIR "b8703702_scenario.txt",
     DATA_DIR "change_request.txt",
     DATA_DIR "clear_user_prediction.txt",

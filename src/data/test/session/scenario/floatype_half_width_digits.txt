@@ -1,0 +1,13 @@
+# floatype: digits are half width by default, typed and converted.
+
+# Enable IME
+SEND_KEY	ON
+RESET_CONTEXT
+
+SEND_KEYS	2026
+EXPECT_PREEDIT	2026
+
+SEND_KEY	SPACE
+EXPECT_PREEDIT	2026
+SEND_KEY	ENTER
+EXPECT_RESULT	2026
