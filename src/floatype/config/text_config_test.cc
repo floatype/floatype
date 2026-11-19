@@ -29,9 +29,11 @@ TEST(ParseTextConfigTest, ReadsTheFieldsWritten) {
   const absl::StatusOr<Config> config = ParseTextConfig(
       "# comment\n"
       "live_conversion_delay_millisec: 300\n"
-      "indicator_style { placement: BELOW zenz_color: 0x112233 }\n");
+      "indicator_style { placement: BELOW zenz_color: 0x112233 }\n"
+      "suggest_added_words: true\n");
   ASSERT_TRUE(config.ok()) << config.status();
   EXPECT_EQ(config->live_conversion_delay_millisec(), 300);
+  EXPECT_TRUE(config->suggest_added_words());
   EXPECT_EQ(config->indicator_style().placement(),
             Config::IndicatorStyle::BELOW);
   EXPECT_EQ(config->indicator_style().zenz_color(), 0x112233u);
