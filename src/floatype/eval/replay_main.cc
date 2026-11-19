@@ -62,6 +62,8 @@ ABSL_FLAG(bool, live, false,
 ABSL_FLAG(int, pause_every, 0,
           "live mode: also pause after every this many kana (0: only at 、, 。 "
           "and the end)");
+ABSL_FLAG(bool, pause_every_key, false,
+          "live mode: pause after every key, inside syllables too");
 ABSL_FLAG(int, wait_for_zenz, 0,
           "live mode: live_conversion_waits_for_zenz_millisec");
 ABSL_FLAG(bool, suggest, false,
@@ -282,6 +284,9 @@ class Replayer {
     }
     if (!flush() || keys.empty()) return std::nullopt;
     keys.back().second = true;
+    if (absl::GetFlag(FLAGS_pause_every_key)) {
+      for (auto& key : keys) key.second = true;
+    }
     return keys;
   }
 
