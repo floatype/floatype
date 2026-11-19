@@ -69,6 +69,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "floatype/config/settings_file.h"
 #include "protocol/user_dictionary_storage.pb.h"
 
 namespace mozc {
@@ -181,9 +182,16 @@ class UserDictionaryStorage {
   // Load the data from filename actually.
   absl::Status LoadInternal();
 
+  // floatype: the text file (user_dictionary_util's IsTextUserDictionary).
+  absl::Status LoadText();
+  absl::Status SaveText() const;
+
   user_dictionary::UserDictionaryStorage proto_;
   const std::string filename_;
   std::unique_ptr<ProcessMutex> process_mutex_;
+  // floatype: the text file as last loaded or saved, so that a save does not
+  // overwrite an edit made in between.
+  mutable floatype::FileStamp text_stamp_;
 };
 
 }  // namespace mozc

@@ -65,6 +65,7 @@
 #include "base/strings/unicode.h"
 #include "base/thread.h"
 #include "base/vlog.h"
+#include "client/user_dictionary/user_dictionary_storage.h"
 #include "dictionary/dictionary_interface.h"
 #include "dictionary/dictionary_token.h"
 #include "dictionary/pos_matcher.h"
@@ -617,22 +618,27 @@ bool UserDictionary::HasSuppressedEntries() const {
 }
 
 bool UserDictionary::Reload() {
-  absl::StatusOr<FileTimeStamp> modification_time =
-      FileUtil::GetModificationTime(filename_);
-  if (!modification_time.ok()) {
-    // If the file doesn't exist, return doing nothing.
-    // Therefore if the file is deleted after first reload,
-    // second reload does nothing so the content loaded by first reload
-    // is kept as is.
-    LOG(WARNING) << "Cannot get modification time of the user dictionary: "
-                 << modification_time.status();
-    LOG(INFO) << "MaybeStartReload() didn't start reloading";
-    return true;
-  }
+  // floatype: a text file is read whenever asked. An edit may keep its time
+  // (a dotfiles manager swapping in a file), and a missing one is made from
+  // the binary file.
+  if (!user_dictionary::IsTextUserDictionary(filename_)) {
+    absl::StatusOr<FileTimeStamp> modification_time =
+        FileUtil::GetModificationTime(filename_);
+    if (!modification_time.ok()) {
+      // If the file doesn't exist, return doing nothing.
+      // Therefore if the file is deleted after first reload,
+      // second reload does nothing so the content loaded by first reload
+      // is kept as is.
+      LOG(WARNING) << "Cannot get modification time of the user dictionary: "
+                   << modification_time.status();
+      LOG(INFO) << "MaybeStartReload() didn't start reloading";
+      return true;
+    }
 
-  if (modified_at_.exchange(*modification_time) == *modification_time) {
-    LOG(INFO) << "MaybeStartReload() didn't start reloading";
-    return true;
+    if (modified_at_.exchange(*modification_time) == *modification_time) {
+      LOG(INFO) << "MaybeStartReload() didn't start reloading";
+      return true;
+    }
   }
   if (reload_state_.exchange(ReloadState::kRunningWithPending) ==
       ReloadState::kIdle) {
@@ -648,8 +654,14 @@ void UserDictionary::ReloadThreadMain() {
   while (!canceled_signal_.load()) {
     reload_state_.store(ReloadState::kRunning);
 
-    InputFileStream ifs(filename_, std::ios::binary);
-    if (!ifs) {
+    // floatype: the text file, through the dictionary tool's storage. A
+    // broken one keeps the words loaded before.
+    if (user_dictionary::IsTextUserDictionary(filename_)) {
+      mozc::UserDictionaryStorage storage(filename_);
+      if (storage.Load().ok()) {
+        Load(storage.GetProto());
+      }
+    } else if (InputFileStream ifs(filename_, std::ios::binary); !ifs) {
       LOG(ERROR) << "Failed to open the user dictionary: " << filename_;
     } else if (!Load(ifs)) {
       LOG(ERROR) << "Failed to load the user dictionary: " << filename_;

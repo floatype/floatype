@@ -25,9 +25,14 @@ mozc_cc_library(
         "//session:__pkg__",
     ],
     deps = [
+        "//base:file_util",
         "//base/strings:unicode",
+        "//floatype/config:settings_file",
         "@com_google_absl//absl/base:no_destructor",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/synchronization",
     ],
 )
 
@@ -36,6 +41,12 @@ mozc_cc_test(
     srcs = ["english_words_test.cc"],
     deps = [
         ":english_words",
+        "//base:clock",
+        "//base:clock_mock",
+        "//base:file_util",
+        "//base/file:temp_dir",
+        "//floatype/config:settings_file",
         "//testing:gunit_main",
+        "@com_google_absl//absl/time",
     ],
 )

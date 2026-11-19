@@ -41,6 +41,7 @@
 #include "absl/log/log.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
@@ -51,6 +52,8 @@
 #include "base/protobuf/zero_copy_stream_impl.h"
 #include "dictionary/user_dictionary_util.h"
 #include "dictionary/user_pos.h"
+#include "floatype/config/settings_file.h"
+#include "floatype/config/user_dictionary_text.h"
 #include "protocol/user_dictionary_storage.pb.h"
 
 namespace mozc {
@@ -68,6 +71,9 @@ constexpr size_t kDefaultWarningTotalBytesLimit = 256 << 20;
 // The limits of dictionary/entry size.
 constexpr size_t kMaxDictionarySize = 100;
 constexpr size_t kMaxEntrySize = 1000000;
+
+constexpr absl::string_view kTextErrorTitle =
+    "floatype のユーザー辞書に誤りがあります";
 
 }  // namespace
 
@@ -134,7 +140,9 @@ absl::Status UserDictionaryStorage::LoadInternal() {
 }
 
 absl::Status UserDictionaryStorage::Load() {
-  absl::Status status = LoadInternal();
+  absl::Status status = user_dictionary::IsTextUserDictionary(filename_)
+                            ? LoadText()
+                            : LoadInternal();
 
   // Check dictionary id here. if id is 0, assign random ID.
   for (int i = 0; i < proto_.dictionaries_size(); ++i) {
@@ -151,6 +159,9 @@ absl::Status UserDictionaryStorage::Save() const {
   if (!process_mutex_->locked()) {
     return absl::FailedPreconditionError(
         "Must be locked before saving the dictionary (SYNC_FAILURE)");
+  }
+  if (user_dictionary::IsTextUserDictionary(filename_)) {
+    return SaveText();
   }
 
   const std::string tmp_filename = absl::StrCat(filename_, ".tmp");
@@ -203,6 +214,87 @@ absl::Status UserDictionaryStorage::Save() const {
         size_error_msg));
   }
 
+  return absl::OkStatus();
+}
+
+absl::Status UserDictionaryStorage::LoadText() {
+  text_stamp_ = floatype::StampOf(filename_);
+  absl::StatusOr<std::string> text = FileUtil::GetContents(filename_);
+  if (!text.ok() && text_stamp_.size < 0) {
+    // No text file yet: made from Mozc's binary one, which stays.
+    UserDictionaryStorage binary(
+        user_dictionary::GetBinaryUserDictionaryFileName());
+    if (absl::Status status = binary.Load(); !status.ok()) {
+      return status;  // Not found: used for the first time.
+    }
+    proto_ = binary.proto_;
+    const std::string converted = floatype::FormatUserDictionary(proto_, "");
+    absl::Status status = floatype::ParseUserDictionary(
+                              converted, kMaxDictionarySize, kMaxEntrySize)
+                              .status();
+    if (status.ok()) {
+      status = floatype::WriteAtomically(filename_, converted);
+    }
+    if (status.ok()) {
+      text_stamp_ = floatype::StampOf(filename_);
+    } else {
+      LOG(ERROR) << "Cannot write " << filename_ << ": " << status;
+    }
+    return absl::OkStatus();
+  }
+  absl::StatusOr<user_dictionary::UserDictionaryStorage> parsed =
+      text.ok() ? floatype::ParseUserDictionary(*text, kMaxDictionarySize,
+                                                kMaxEntrySize)
+                : text.status();
+  if (!parsed.ok()) {
+    floatype::ReportUserFileError(
+        kTextErrorTitle, absl::StrCat(FileUtil::Basename(filename_), " の ",
+                                      parsed.status().message()));
+    return parsed.status();
+  }
+  proto_ = *std::move(parsed);
+  return absl::OkStatus();
+}
+
+absl::Status UserDictionaryStorage::SaveText() const {
+  absl::StatusOr<std::string> old_text = FileUtil::GetContents(filename_);
+  const floatype::FileStamp stamp = floatype::StampOf(filename_);
+  if (!old_text.ok() && stamp.size < 0) {
+    old_text = "";
+  }
+  absl::Status status = old_text.status();
+  if (status.ok() && !(stamp == text_stamp_)) {
+    status = absl::FailedPreconditionError(
+        "開いた後にファイルが書き換えられました。開き直してください");
+  }
+  if (status.ok()) {
+    status = floatype::ParseUserDictionary(*old_text, kMaxDictionarySize,
+                                           kMaxEntrySize)
+                 .status();
+  }
+  std::string text;
+  if (status.ok()) {
+    text = floatype::FormatUserDictionary(proto_, *old_text);
+    status =
+        floatype::ParseUserDictionary(text, kMaxDictionarySize, kMaxEntrySize)
+            .status();
+  }
+  if (status.ok() && text != *old_text) {
+    status = floatype::WriteAtomically(filename_, text);
+  }
+  if (!status.ok()) {
+    floatype::ReportUserFileError(
+        "floatype のユーザー辞書を保存できませんでした",
+        absl::StrCat(FileUtil::Basename(filename_), " の ", status.message(),
+                     "（ファイルは書き換えていません）"));
+    return status;
+  }
+  text_stamp_ = floatype::StampOf(filename_);
+  if (text.size() >= kDefaultWarningTotalBytesLimit) {
+    return absl::ResourceExhaustedError(absl::StrFormat(
+        "Save was successful with error (TOO_BIG_FILE_BYTES): size = %d",
+        text.size()));
+  }
   return absl::OkStatus();
 }
 

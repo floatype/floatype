@@ -35,8 +35,10 @@
 #include "absl/flags/declare.h"
 #include "absl/flags/flag.h"
 #include "absl/log/log.h"
+#include "base/file_util.h"
 #include "base/init_mozc.h"
 #include "base/run_level.h"
+#include "floatype/config/settings_file.h"
 #include "gui/base/debug_util.h"
 
 #ifdef __APPLE__
@@ -47,7 +49,6 @@
 
 #include "base/const.h"
 #include "base/environ.h"
-#include "base/file_util.h"
 #endif  // __APPLE__
 
 #ifdef _WIN32
@@ -101,6 +102,11 @@ int RunMozcTool(int argc, char *argv[]) {
   SetFlagsFromEnv();
 #endif  // __APPLE__
   mozc::InitMozc(argv[0], &argc, &argv);
+  // floatype: the dictionary tool and the word register dialog keep the user
+  // dictionary as a text file next to config.toml.
+  mozc::floatype::SetUserFilesDir(
+      mozc::FileUtil::Dirname(mozc::floatype::DefaultSettingsPath()),
+      /*report_errors=*/true);
 
 #ifdef __APPLE__
   // In Mac, we shares the same binary but changes the application

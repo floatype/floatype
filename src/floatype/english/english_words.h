@@ -4,6 +4,7 @@
 #ifndef MOZC_FLOATYPE_ENGLISH_ENGLISH_WORDS_H_
 #define MOZC_FLOATYPE_ENGLISH_ENGLISH_WORDS_H_
 
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -27,6 +28,20 @@ class EnglishWords {
  private:
   std::vector<std::string> words_;  // Lower case, sorted.
 };
+
+// The words a user's english_words.txt adds, one a line, and the lines left
+// out ("N 行目「go」"): those not 3 to 32 ASCII letters, which no span takes.
+// Lines starting with # and blank lines are comments.
+struct UserEnglishWords {
+  std::string words;  // One a line.
+  std::vector<std::string> left_out;
+};
+UserEnglishWords ParseUserEnglishWords(absl::string_view text);
+
+// The words that count as English: Default(), and while the user has an
+// english_words.txt next to config.toml, its words too, read again a second
+// after it changes. Lines left out are reported.
+std::shared_ptr<const EnglishWords> CurrentEnglishWords();
 
 // Whether the keys `raw` typed into the composition queried as `preedit` (with
 // a trailing n already ん, so ten stays てん) were an

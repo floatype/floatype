@@ -333,6 +333,12 @@ bool SessionHandler::EvalCommand(commands::Command* command) {
     config::ConfigHandler::Reload();
     UpdateSessions();
   }
+  // floatype: the user dictionary file was edited. Reloading reads the
+  // learning back from disk too, so it is saved first.
+  if (user_dictionary_watch_.Changed()) {
+    engine_->Sync();
+    engine_->Reload();
+  }
   if (!is_available_) {
     LOG(ERROR) << "SessionHandler is not available.";
     return false;

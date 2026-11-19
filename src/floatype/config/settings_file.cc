@@ -35,48 +35,23 @@ namespace {
 constexpr absl::string_view kErrorTitle =
     "floatype の設定ファイルに誤りがあります";
 
-// What tells a changed file apart. Nix and other dotfile managers swap in a
-// new file with the same modification time; its inode differs. All -1 when
-// the file is missing.
-struct Stamp {
-  int64_t mtime_ns = -1;
-  int64_t size = -1;
-  int64_t inode = -1;
-  int64_t device = -1;
-  bool operator==(const Stamp&) const = default;
-};
-
 struct State {
   absl::Mutex mutex;
   std::string path;
   bool report_errors = false;
   bool writable = false;
   // The file as last read or written.
-  Stamp stamp;
+  FileStamp stamp;
   absl::Time last_check = absl::InfinitePast();
   std::string last_error;
   bool loaded = false;
+  std::string user_files_dir;
+  bool report_user_file_errors = false;
 };
 
 State& GetState() {
   static absl::NoDestructor<State> state;
   return *state;
-}
-
-Stamp FileStamp(const std::string& path) {
-  struct stat info;
-  if (stat(path.c_str(), &info) != 0) {
-    return Stamp();
-  }
-#ifdef __APPLE__
-  const int64_t mtime_ns =
-      info.st_mtimespec.tv_sec * 1'000'000'000LL + info.st_mtimespec.tv_nsec;
-#else   // __APPLE__
-  const int64_t mtime_ns =
-      info.st_mtim.tv_sec * 1'000'000'000LL + info.st_mtim.tv_nsec;
-#endif  // __APPLE__
-  return {mtime_ns, static_cast<int64_t>(info.st_size),
-          static_cast<int64_t>(info.st_ino), static_cast<int64_t>(info.st_dev)};
 }
 
 void Notify(absl::string_view title, absl::string_view message) {
@@ -96,26 +71,6 @@ void Notify(absl::string_view title, absl::string_view message) {
     std::thread([pid] { waitpid(pid, nullptr, 0); }).detach();
   }
 #endif  // __APPLE__
-}
-
-// Writes through a temporary file next to `path`, so readers never see half a
-// file. Creates ~/.config/floatype on the first write. A symbolic link (a
-// dotfiles manager's) stays one: the file it points to is written.
-absl::Status WriteAtomically(std::string path, absl::string_view text) {
-  if (char resolved[PATH_MAX]; realpath(path.c_str(), resolved) != nullptr) {
-    path = resolved;
-  }
-  const std::string dir = FileUtil::Dirname(path);
-  for (const std::string& d : {FileUtil::Dirname(dir), dir}) {
-    if (absl::Status status = FileUtil::CreateDirectory(d); !status.ok()) {
-      return status;
-    }
-  }
-  const std::string temp = absl::StrCat(path, ".tmp");
-  if (absl::Status status = FileUtil::SetContents(temp, text); !status.ok()) {
-    return status;
-  }
-  return FileUtil::AtomicRename(temp, path);
 }
 
 // The settings in `text` over `defaults`.
@@ -149,6 +104,39 @@ config::Config Migrate(const std::string& path, const config::Config& stored) {
 
 }  // namespace
 
+FileStamp StampOf(const std::string& path) {
+  struct stat info;
+  if (stat(path.c_str(), &info) != 0) {
+    return FileStamp();
+  }
+#ifdef __APPLE__
+  const int64_t mtime_ns =
+      info.st_mtimespec.tv_sec * 1'000'000'000LL + info.st_mtimespec.tv_nsec;
+#else   // __APPLE__
+  const int64_t mtime_ns =
+      info.st_mtim.tv_sec * 1'000'000'000LL + info.st_mtim.tv_nsec;
+#endif  // __APPLE__
+  return {mtime_ns, static_cast<int64_t>(info.st_size),
+          static_cast<int64_t>(info.st_ino), static_cast<int64_t>(info.st_dev)};
+}
+
+absl::Status WriteAtomically(std::string path, absl::string_view text) {
+  if (char resolved[PATH_MAX]; realpath(path.c_str(), resolved) != nullptr) {
+    path = resolved;
+  }
+  const std::string dir = FileUtil::Dirname(path);
+  for (const std::string& d : {FileUtil::Dirname(dir), dir}) {
+    if (absl::Status status = FileUtil::CreateDirectory(d); !status.ok()) {
+      return status;
+    }
+  }
+  const std::string temp = absl::StrCat(path, ".tmp");
+  if (absl::Status status = FileUtil::SetContents(temp, text); !status.ok()) {
+    return status;
+  }
+  return FileUtil::AtomicRename(temp, path);
+}
+
 std::string DefaultSettingsPath() {
   const char* home = std::getenv("HOME");
   return FileUtil::JoinPath(
@@ -161,10 +149,60 @@ void SetSettingsPath(std::string path, bool report_errors, bool writable) {
   state.path = std::move(path);
   state.report_errors = report_errors;
   state.writable = writable;
-  state.stamp = Stamp();
+  state.stamp = FileStamp();
   state.last_check = absl::InfinitePast();
   state.last_error.clear();
   state.loaded = false;
+  state.user_files_dir =
+      state.path.empty() ? "" : FileUtil::Dirname(state.path);
+  state.report_user_file_errors = report_errors;
+}
+
+void SetUserFilesDir(std::string dir, bool report_errors) {
+  State& state = GetState();
+  absl::MutexLock lock(state.mutex);
+  state.user_files_dir = std::move(dir);
+  state.report_user_file_errors = report_errors;
+}
+
+std::string UserFilePath(absl::string_view name) {
+  State& state = GetState();
+  absl::MutexLock lock(state.mutex);
+  return state.user_files_dir.empty()
+             ? ""
+             : FileUtil::JoinPath(state.user_files_dir, name);
+}
+
+void ReportUserFileError(absl::string_view title, absl::string_view message) {
+  LOG(ERROR) << title << ": " << message;
+  State& state = GetState();
+  bool report = false;
+  {
+    absl::MutexLock lock(state.mutex);
+    report = state.report_user_file_errors;
+  }
+  if (report) {
+    Notify(title, message);
+  }
+}
+
+FileWatch::FileWatch(std::string path)
+    : path_(std::move(path)),
+      stamp_(StampOf(path_)),
+      last_check_(Clock::GetAbslTime()) {}
+
+bool FileWatch::Changed() {
+  const absl::Time now = Clock::GetAbslTime();
+  if (path_.empty() || now - last_check_ < absl::Seconds(1)) {
+    return false;
+  }
+  last_check_ = now;
+  const FileStamp stamp = StampOf(path_);
+  if (stamp == stamp_) {
+    return false;
+  }
+  stamp_ = stamp;
+  return true;
 }
 
 bool SettingsFileEnabled() {
@@ -193,7 +231,7 @@ bool SettingsFileChanged() {
     return false;
   }
   state.last_check = now;
-  return !(FileStamp(state.path) == state.stamp);
+  return !(StampOf(state.path) == state.stamp);
 }
 
 absl::StatusOr<config::Config> ReadSettingsFile(const config::Config& defaults,
@@ -206,7 +244,7 @@ absl::StatusOr<config::Config> ReadSettingsFile(const config::Config& defaults,
   {
     absl::MutexLock lock(state.mutex);
     state.last_check = Clock::GetAbslTime();
-    state.stamp = FileStamp(state.path);
+    state.stamp = StampOf(state.path);
     if (state.stamp.size < 0) {
       migrated = true;
       state.last_error.clear();
@@ -218,7 +256,7 @@ absl::StatusOr<config::Config> ReadSettingsFile(const config::Config& defaults,
         const absl::Status status =
             text.ok() ? WriteAtomically(state.path, *text) : text.status();
         if (status.ok()) {
-          state.stamp = FileStamp(state.path);
+          state.stamp = StampOf(state.path);
         } else {
           LOG(ERROR) << "Cannot write " << state.path << ": " << status;
         }
@@ -255,7 +293,7 @@ absl::StatusOr<config::Config> WriteSettingsFile(
       return absl::FailedPreconditionError("This process does not write");
     }
     absl::StatusOr<std::string> text = FileUtil::GetContents(state.path);
-    if (!text.ok() && FileStamp(state.path).size < 0) {
+    if (!text.ok() && StampOf(state.path).size < 0) {
       text = "";
     }
     absl::StatusOr<std::string> updated =
@@ -269,7 +307,7 @@ absl::StatusOr<config::Config> WriteSettingsFile(
     }
     if (status.ok()) {
       // Our own write is not a change to read back.
-      state.stamp = FileStamp(state.path);
+      state.stamp = StampOf(state.path);
       state.last_check = Clock::GetAbslTime();
       state.last_error.clear();
       state.loaded = true;

@@ -44,6 +44,7 @@
 #include "absl/types/span.h"
 #include "composer/table.h"
 #include "engine/engine_interface.h"
+#include "floatype/config/settings_file.h"
 #include "protocol/commands.pb.h"
 #include "protocol/config.pb.h"
 #include "session/common.h"
@@ -156,6 +157,9 @@ class SessionHandler {
 
   std::unique_ptr<EngineInterface> engine_;
   std::unique_ptr<composer::TableManager> table_manager_;
+  // floatype: hand edits of the user dictionary file.
+  floatype::FileWatch user_dictionary_watch_{
+      floatype::UserFilePath(floatype::kUserDictionaryFile)};
 
   // Uses shared_ptr for the following reason.
   // 1. config_ is shared across multiple sub-components whose life cycle is

@@ -47,7 +47,9 @@
 #include "absl/time/time.h"
 #include "base/clock.h"
 #include "base/clock_mock.h"
+#include "base/file_util.h"
 #include "base/port.h"
+#include "base/system_util.h"
 #include "config/config_handler.h"
 #include "data_manager/data_manager.h"
 #include "data_manager/testing/mock_data_manager.h"
@@ -55,6 +57,7 @@
 #include "engine/engine_interface.h"
 #include "engine/engine_mock.h"
 #include "engine/mock_data_engine_factory.h"
+#include "floatype/config/settings_file.h"
 #include "protocol/commands.pb.h"
 #include "protocol/config.pb.h"
 #include "protocol/engine_builder.pb.h"
@@ -628,6 +631,38 @@ TEST_F(SessionHandlerTest, SyncDataTest) {
   command.mutable_input()->set_type(commands::Input::SYNC_DATA);
 
   handler.EvalCommand(&command);
+}
+
+// floatype: a hand edit of the user dictionary file reloads it, after the
+// learning is saved.
+TEST_F(SessionHandlerTest, ReloadsAnEditedUserDictionaryFile) {
+  ClockMock clock(absl::FromUnixSeconds(1000));
+  Clock::SetClockForUnitTest(&clock);
+  const std::string dir = SystemUtil::GetUserProfileDirectory();
+  floatype::SetUserFilesDir(dir, /*report_errors=*/false);
+  const std::string path =
+      FileUtil::JoinPath(dir, floatype::kUserDictionaryFile);
+  ASSERT_OK(FileUtil::SetContents(path, "[d]\n"));
+
+  auto engine = std::make_unique<MockEngine>();
+  {
+    ::testing::InSequence sequence;
+    EXPECT_CALL(*engine, Sync()).WillOnce(Return(true));
+    EXPECT_CALL(*engine, Reload()).WillOnce(Return(true));
+  }
+  SessionHandler handler(std::move(engine));
+  commands::Command command;
+  command.mutable_input()->set_type(commands::Input::NO_OPERATION);
+  clock.Advance(absl::Seconds(1));
+  handler.EvalCommand(&command);  // Unchanged.
+
+  ASSERT_OK(FileUtil::SetContents(path, "[d]\nあ\tア\t名詞\n"));
+  handler.EvalCommand(&command);  // Within the second.
+  clock.Advance(absl::Seconds(1));
+  handler.EvalCommand(&command);
+
+  floatype::SetUserFilesDir("", false);
+  Clock::SetClockForUnitTest(nullptr);
 }
 
 // Tests the interaction with DataLoader for successful Engine reload event.

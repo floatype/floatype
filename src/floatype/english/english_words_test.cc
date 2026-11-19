@@ -1,9 +1,17 @@
 #include "floatype/english/english_words.h"
 
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "absl/time/time.h"
+#include "base/clock.h"
+#include "base/clock_mock.h"
+#include "base/file/temp_dir.h"
+#include "base/file_util.h"
+#include "floatype/config/settings_file.h"
+#include "testing/gmock.h"
 #include "testing/gunit.h"
 
 namespace mozc::floatype {
@@ -136,6 +144,65 @@ TEST(EnglishWordsDefaultTest, HasSCOWLsWords) {
   EXPECT_TRUE(EnglishWords::Default().Contains("keyboard"));
   EXPECT_TRUE(EnglishWords::Default().Contains("email"))
       << "newer than macOS's 1934 list";
+}
+
+TEST(UserEnglishWordsTest, LeavesOutWhatNoSpanTakes) {
+  const UserEnglishWords user = ParseUserEnglishWords(
+      "# mine\r\n"
+      "Figma\r\n"
+      "\n"
+      "  json  \n"
+      "go\n"
+      "e-mail\n"
+      "abcdefghijklmnopqrstuvwxyzabcdefg\n");
+  EXPECT_EQ(user.words, "Figma\njson\n");
+  EXPECT_EQ(user.left_out, (std::vector<std::string>{
+                               "5 行目「go」", "6 行目「e-mail」",
+                               "7 行目「abcdefghijklmnopqrstuvwxyzabcdefg」"}));
+}
+
+class CurrentEnglishWordsTest : public testing::Test {
+ protected:
+  void SetUp() override {
+    Clock::SetClockForUnitTest(&clock_);
+    SetUserFilesDir(dir_.path(), /*report_errors=*/false);
+  }
+  void TearDown() override {
+    SetUserFilesDir("", false);
+    Clock::SetClockForUnitTest(nullptr);
+  }
+
+  void Write(const std::string& text) {
+    ASSERT_OK(FileUtil::SetContents(
+        FileUtil::JoinPath(dir_.path(), kEnglishWordsFile), text));
+  }
+
+  ClockMock clock_{absl::FromUnixSeconds(1000)};
+  TempDirectory dir_ = TempDirectory::Default().CreateTempDirectory().value();
+};
+
+TEST_F(CurrentEnglishWordsTest, WithoutAFileIsTheBuiltInList) {
+  EXPECT_EQ(CurrentEnglishWords().get(), &EnglishWords::Default());
+}
+
+TEST_F(CurrentEnglishWordsTest, AddsTheUsersWordsAndReadsEdits) {
+  Write("figma\n");
+  std::shared_ptr<const EnglishWords> words = CurrentEnglishWords();
+  EXPECT_TRUE(words->Contains("Figma"));
+  EXPECT_TRUE(words->Contains("keyboard"));
+  EXPECT_FALSE(words->Contains("backend"));
+
+  Write("backend\nmore\n");
+  EXPECT_FALSE(CurrentEnglishWords()->Contains("backend"))
+      << "looks once a second";
+  clock_.Advance(absl::Seconds(1));
+  EXPECT_TRUE(CurrentEnglishWords()->Contains("backend"));
+  EXPECT_FALSE(CurrentEnglishWords()->Contains("figma"));
+
+  ASSERT_OK(
+      FileUtil::Unlink(FileUtil::JoinPath(dir_.path(), kEnglishWordsFile)));
+  clock_.Advance(absl::Seconds(1));
+  EXPECT_EQ(CurrentEnglishWords().get(), &EnglishWords::Default());
 }
 
 }  // namespace

@@ -2741,7 +2741,7 @@ bool Session::MaybeConvertAsEnglish(commands::Command* command) {
   const composer::Composer& composer = context_->composer();
   if (!floatype::LooksEnglish(composer.GetRawString(),
                               composer.GetQueryForConversion(),
-                              floatype::EnglishWords::Default())) {
+                              *floatype::CurrentEnglishWords())) {
     return false;
   }
   return ConvertToHalfASCII(command);
@@ -2771,7 +2771,7 @@ struct EnglishView {
       preedit.emplace_back(c);
     }
     spans = floatype::EnglishSpans(raws, query, preedit,
-                                   floatype::EnglishWords::Default());
+                                   *floatype::CurrentEnglishWords());
   }
   // Whether the word before `position` is English: one found, or letters kept
   // as typed.

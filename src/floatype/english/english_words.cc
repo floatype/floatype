@@ -1,16 +1,24 @@
 #include "floatype/english/english_words.h"
 
 #include <algorithm>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
 
 #include "absl/base/no_destructor.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
 #include "absl/strings/match.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/str_join.h"
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
+#include "absl/synchronization/mutex.h"
+#include "base/file_util.h"
 #include "base/strings/unicode.h"
+#include "floatype/config/settings_file.h"
 
 namespace mozc::floatype {
 
@@ -35,6 +43,64 @@ bool EnglishWords::Contains(absl::string_view word) const {
 const EnglishWords& EnglishWords::Default() {
   static absl::NoDestructor<EnglishWords> words(kEnglishWords);
   return *words;
+}
+
+UserEnglishWords ParseUserEnglishWords(absl::string_view text) {
+  UserEnglishWords user;
+  const std::vector<absl::string_view> lines = absl::StrSplit(text, '\n');
+  for (size_t i = 0; i < lines.size(); ++i) {
+    const absl::string_view word = absl::StripAsciiWhitespace(lines[i]);
+    if (word.empty() || word.starts_with('#')) {
+      continue;
+    }
+    // EnglishSpans takes 3 to 32 letters, LooksEnglish 3 or more.
+    if (word.size() < 3 || word.size() > 32 ||
+        !std::all_of(word.begin(), word.end(), [](char c) {
+          return absl::ascii_isalpha(static_cast<unsigned char>(c));
+        })) {
+      user.left_out.push_back(absl::StrCat(i + 1, " 行目「", word, "」"));
+      continue;
+    }
+    absl::StrAppend(&user.words, word, "\n");
+  }
+  return user;
+}
+
+std::shared_ptr<const EnglishWords> CurrentEnglishWords() {
+  struct State {
+    absl::Mutex mutex;
+    std::string path;
+    std::optional<FileWatch> watch;
+    std::shared_ptr<const EnglishWords> words;
+  };
+  static absl::NoDestructor<State> state;
+  const std::string path = UserFilePath(kEnglishWordsFile);
+  absl::MutexLock lock(state->mutex);
+  if (state->words != nullptr && path == state->path &&
+      !state->watch->Changed()) {
+    return state->words;
+  }
+  state->path = path;
+  state->watch.emplace(path);
+  // Without the file, the built-in list itself.
+  state->words = std::shared_ptr<const EnglishWords>(
+      &EnglishWords::Default(), [](const EnglishWords*) {});
+  absl::StatusOr<std::string> text =
+      path.empty() ? absl::NotFoundError("") : FileUtil::GetContents(path);
+  if (!text.ok()) {
+    return state->words;
+  }
+  const UserEnglishWords user = ParseUserEnglishWords(*text);
+  if (!user.left_out.empty()) {
+    ReportUserFileError(
+        "floatype の英単語ファイルで使えない行があります",
+        absl::StrCat(kEnglishWordsFile, " の ",
+                     absl::StrJoin(user.left_out, "、"),
+                     "：英字だけの 3〜32 文字の語が使えます"));
+  }
+  state->words = std::make_shared<const EnglishWords>(
+      absl::StrCat(kEnglishWords, "\n", user.words));
+  return state->words;
 }
 
 bool LooksEnglish(absl::string_view raw, absl::string_view preedit,

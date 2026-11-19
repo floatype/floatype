@@ -66,12 +66,14 @@ mozc_cc_qt_library(
     ],
     deps = [
         "//base:const",
+        "//base:file_util",
         "//base:init_mozc",
         "//base:process",
         "//base:run_level",
         "//base:system_util",
         "//base:util",
         "//base:version",
+        "//floatype/config:settings_file",
         "//gui/about_dialog",
         "//gui/administration_dialog",
         "//gui/base:gui_base",
@@ -87,7 +89,6 @@ mozc_cc_qt_library(
         macos = [
             ":prelauncher_lib",
             "//base:environ",
-            "//base:file_util",
         ],
         windows = [
             "//gui/base:win_util",

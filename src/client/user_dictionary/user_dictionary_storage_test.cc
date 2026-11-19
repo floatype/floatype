@@ -29,6 +29,9 @@
 
 #include "client/user_dictionary/user_dictionary_storage.h"
 
+#include <sys/stat.h>
+#include <unistd.h>
+
 #include <cstddef>
 #include <cstdint>
 #include <ios>
@@ -37,6 +40,7 @@
 
 #include "absl/log/check.h"
 #include "absl/random/random.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "base/file/temp_dir.h"
@@ -48,6 +52,7 @@
 #include "base/system_util.h"
 #include "client/user_dictionary/user_dictionary_importer.h"
 #include "dictionary/user_dictionary_util.h"
+#include "floatype/config/settings_file.h"
 #include "protocol/user_dictionary_storage.pb.h"
 #include "testing/gmock.h"
 #include "testing/gunit.h"
@@ -408,6 +413,145 @@ TEST_F(UserDictionaryStorageTest, Export) {
       port::IsWindows() ? "\r\n" : "\n";
   EXPECT_EQ(std::string(mapped_data->begin(), mapped_data->size()),
             absl::StrCat("key\tvalue\t名詞\tcomment", expected_newline));
+}
+
+// floatype: the dictionary as a text file.
+class TextFileTest : public UserDictionaryStorageTest {
+ protected:
+  void SetUp() override {
+    UserDictionaryStorageTest::SetUp();
+    dir_ = FileUtil::JoinPath(SystemUtil::GetUserProfileDirectory(), "ft");
+    ASSERT_OK(FileUtil::CreateDirectory(dir_));
+    floatype::SetUserFilesDir(dir_, /*report_errors=*/false);
+    path_ = user_dictionary::GetUserDictionaryFileName();
+  }
+  void TearDown() override {
+    floatype::SetUserFilesDir("", false);
+    UserDictionaryStorageTest::TearDown();
+  }
+
+  std::string Read() {
+    absl::StatusOr<std::string> text = FileUtil::GetContents(path_);
+    EXPECT_OK(text);
+    return text.value_or("");
+  }
+
+  static void AddWord(UserDictionaryStorage& storage, uint64_t id,
+                      const std::string& key) {
+    UserDictionary::Entry* entry = storage.GetUserDictionary(id)->add_entries();
+    entry->set_key(key);
+    entry->set_value("V");
+    entry->set_pos(UserDictionary::NOUN);
+  }
+
+  std::string dir_;
+  std::string path_;
+};
+
+TEST_F(TextFileTest, IsNextToConfigToml) {
+  EXPECT_EQ(path_, FileUtil::JoinPath(dir_, "user_dictionary.tsv"));
+  floatype::SetUserFilesDir("", false);
+  EXPECT_EQ(user_dictionary::GetUserDictionaryFileName(),
+            user_dictionary::GetBinaryUserDictionaryFileName())
+      << "Mozc's file until a main() sets the directory";
+}
+
+TEST_F(TextFileTest, MadeOnceFromTheBinaryFile) {
+  const std::string binary = user_dictionary::GetBinaryUserDictionaryFileName();
+  {
+    UserDictionaryStorage storage(binary);
+    ASSERT_TRUE(storage.Lock());
+    ASSERT_OK_AND_ASSIGN(const uint64_t id, storage.CreateDictionary("old"));
+    AddWord(storage, id, "よみ");
+    ASSERT_OK(storage.Save());
+  }
+  ASSERT_OK_AND_ASSIGN(const std::string db, FileUtil::GetContents(binary));
+
+  UserDictionaryStorage storage(path_);
+  ASSERT_OK(storage.Load());
+  ASSERT_EQ(storage.dictionaries_size(), 1);
+  EXPECT_EQ(storage.dictionaries(0).entries(0).key(), "よみ");
+  EXPECT_EQ(Read(), "[old]\nよみ\tV\t名詞\n");
+  EXPECT_EQ(FileUtil::GetContents(binary).value_or(""), db) << "left in place";
+
+  // A text file, even an empty one, is never made again.
+  ASSERT_OK(FileUtil::SetContents(path_, ""));
+  UserDictionaryStorage again(path_);
+  ASSERT_OK(again.Load());
+  EXPECT_EQ(again.dictionaries_size(), 0);
+  EXPECT_EQ(Read(), "");
+}
+
+TEST_F(TextFileTest, WithNeitherFileIsUsedForTheFirstTime) {
+  UserDictionaryStorage storage(path_);
+  EXPECT_TRUE(absl::IsNotFound(storage.Load()));
+  EXPECT_NOT_OK(storage.Exists());
+  ASSERT_TRUE(storage.Lock());
+  ASSERT_OK(storage.CreateDictionary("new").status());
+  ASSERT_OK(storage.Save());
+  EXPECT_EQ(Read(), "[new]\n");
+}
+
+TEST_F(TextFileTest, SavingKeepsTheHandWrittenComments) {
+  ASSERT_OK(FileUtil::SetContents(path_,
+                                  "# my words\n"
+                                  "[d]\n"
+                                  "# a note\n"
+                                  "あ\tア\t名詞\n"));
+  UserDictionaryStorage storage(path_);
+  ASSERT_OK(storage.Load());
+  ASSERT_TRUE(storage.Lock());
+  AddWord(storage, storage.dictionaries(0).id(), "い");
+  ASSERT_OK(storage.Save());
+  EXPECT_EQ(Read(),
+            "# my words\n"
+            "[d]\n"
+            "# a note\n"
+            "あ\tア\t名詞\n"
+            "い\tV\t名詞\n");
+  AddWord(storage, storage.dictionaries(0).id(), "う");
+  EXPECT_OK(storage.Save()) << "our own write is no edit";
+}
+
+TEST_F(TextFileTest, ABrokenFileIsNeverOverwritten) {
+  constexpr char kBroken[] = "[d]\nあ\tア\tめいし\n";
+  ASSERT_OK(FileUtil::SetContents(path_, kBroken));
+  UserDictionaryStorage storage(path_);
+  const absl::Status status = storage.Load();
+  EXPECT_THAT(status.message(), ::testing::HasSubstr("2 行目"));
+  EXPECT_EQ(storage.dictionaries_size(), 0);
+
+  // The word register dialog goes on with an empty storage.
+  ASSERT_TRUE(storage.Lock());
+  ASSERT_OK(storage.CreateDictionary("User Dictionary 1").status());
+  EXPECT_NOT_OK(storage.Save());
+  EXPECT_EQ(Read(), kBroken);
+}
+
+TEST_F(TextFileTest, AnEditAfterLoadingIsNeverOverwritten) {
+  ASSERT_OK(FileUtil::SetContents(path_, "[d]\n"));
+  UserDictionaryStorage storage(path_);
+  ASSERT_OK(storage.Load());
+  ASSERT_TRUE(storage.Lock());
+  ASSERT_OK(FileUtil::SetContents(path_, "[d]\nあ\tア\t名詞\n"));
+  AddWord(storage, storage.dictionaries(0).id(), "い");
+  EXPECT_NOT_OK(storage.Save());
+  EXPECT_EQ(Read(), "[d]\nあ\tア\t名詞\n");
+}
+
+TEST_F(TextFileTest, ASymbolicLinkStaysOne) {
+  const std::string target = FileUtil::JoinPath(dir_, "dotfiles.tsv");
+  ASSERT_OK(FileUtil::SetContents(target, "[d]\n"));
+  ASSERT_EQ(symlink(target.c_str(), path_.c_str()), 0);
+  UserDictionaryStorage storage(path_);
+  ASSERT_OK(storage.Load());
+  ASSERT_TRUE(storage.Lock());
+  AddWord(storage, storage.dictionaries(0).id(), "い");
+  ASSERT_OK(storage.Save());
+  struct stat info;
+  ASSERT_EQ(lstat(path_.c_str(), &info), 0);
+  EXPECT_TRUE(S_ISLNK(info.st_mode));
+  EXPECT_EQ(FileUtil::GetContents(target).value_or(""), "[d]\nい\tV\t名詞\n");
 }
 
 }  // namespace

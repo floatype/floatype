@@ -58,6 +58,7 @@
 #include "dictionary/dictionary_test_util.h"
 #include "dictionary/dictionary_token.h"
 #include "dictionary/pos_matcher.h"
+#include "dictionary/user_dictionary_util.h"
 #include "dictionary/user_pos.h"
 #include "protocol/user_dictionary_storage.pb.h"
 #include "testing/gmock.h"
@@ -782,6 +783,53 @@ TEST_F(UserDictionaryTest, ConsecutiveReloadTest) {
   for (int i = 0; i < kNumUpdates; ++i) {
     EXPECT_FALSE(LookupExact(absl::StrFormat("key_%d_0", i), *dic).empty());
   }
+}
+
+// floatype: a text file, read each time asked; a broken one keeps the words.
+TEST_F(UserDictionaryTest, TextFile) {
+  TempDirectory temp_dir = testing::MakeTempDirectoryOrDie();
+  const std::string filename =
+      FileUtil::JoinPath(temp_dir.path(), "user_dictionary.tsv");
+  ASSERT_OK(FileUtil::SetContents(filename, "[d]\nふろーと\tfloatype\t名詞\n"));
+  std::unique_ptr<UserDictionary> dic(CreateDictionaryWithFilename(filename));
+  dic->WaitForReloader();
+  EXPECT_FALSE(LookupExact("ふろーと", *dic).empty());
+
+  ASSERT_OK(
+      FileUtil::SetContents(filename, "[d]\nふろーと\tfloatype\tめいし\n"));
+  EXPECT_TRUE(dic->Reload());
+  dic->WaitForReloader();
+  EXPECT_FALSE(LookupExact("ふろーと", *dic).empty());
+
+  ASSERT_OK(FileUtil::SetContents(filename, "[d]\nほか\t他\t名詞\n"));
+  EXPECT_TRUE(dic->Reload());
+  dic->WaitForReloader();
+  EXPECT_TRUE(LookupExact("ふろーと", *dic).empty());
+  EXPECT_FALSE(LookupExact("ほか", *dic).empty());
+}
+
+// floatype: without the text file, the converter makes it from the binary one.
+TEST_F(UserDictionaryTest, TextFileMadeFromTheBinaryFile) {
+  {
+    user_dictionary::UserDictionaryStorage storage;
+    user_dictionary::UserDictionary* dic = storage.add_dictionaries();
+    dic->set_name("old");
+    user_dictionary::UserDictionary::Entry* entry = dic->add_entries();
+    entry->set_key("ふろーと");
+    entry->set_value("floatype");
+    entry->set_pos(user_dictionary::UserDictionary::NOUN);
+    ASSERT_OK(FileUtil::SetContents(
+        user_dictionary::GetBinaryUserDictionaryFileName(),
+        storage.SerializeAsString()));
+  }
+  TempDirectory temp_dir = testing::MakeTempDirectoryOrDie();
+  const std::string filename =
+      FileUtil::JoinPath(temp_dir.path(), "user_dictionary.tsv");
+  std::unique_ptr<UserDictionary> dic(CreateDictionaryWithFilename(filename));
+  dic->WaitForReloader();
+  EXPECT_FALSE(LookupExact("ふろーと", *dic).empty());
+  EXPECT_EQ(FileUtil::GetContents(filename).value_or(""),
+            "[old]\nふろーと\tfloatype\t名詞\n");
 }
 
 TEST_F(UserDictionaryTest, TestSuppressionDictionary) {

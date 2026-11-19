@@ -43,6 +43,7 @@
 #include "base/strings/unicode.h"
 #include "base/text_normalizer.h"
 #include "base/vlog.h"
+#include "floatype/config/settings_file.h"
 #include "protocol/user_dictionary_storage.pb.h"
 
 namespace mozc {
@@ -193,7 +194,19 @@ absl::Status ValidateDictionaryName(const absl::string_view dictionary_name) {
 }
 
 std::string GetUserDictionaryFileName() {
+  if (std::string path = floatype::UserFilePath(floatype::kUserDictionaryFile);
+      !path.empty()) {
+    return path;
+  }
+  return GetBinaryUserDictionaryFileName();
+}
+
+std::string GetBinaryUserDictionaryFileName() {
   return ConfigFileStream::GetFileName(kUserDictionaryFile);
+}
+
+bool IsTextUserDictionary(absl::string_view filename) {
+  return filename.ends_with(".tsv");
 }
 
 }  // namespace user_dictionary

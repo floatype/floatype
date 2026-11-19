@@ -35,7 +35,11 @@ mozc_cc_library(
     srcs = ["settings_file.cc"],
     hdrs = ["settings_file.h"],
     visibility = [
+        "//client/user_dictionary:__pkg__",
         "//config:__pkg__",
+        "//dictionary:__pkg__",
+        "//floatype/english:__pkg__",
+        "//gui/tool:__pkg__",
         "//mac:__pkg__",
         "//server:__pkg__",
         "//session:__pkg__",
@@ -72,6 +76,34 @@ mozc_cc_test(
         "//testing:mozctest",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/time",
+    ],
+)
+
+mozc_cc_library(
+    name = "user_dictionary_text",
+    srcs = ["user_dictionary_text.cc"],
+    hdrs = ["user_dictionary_text.h"],
+    visibility = ["//client/user_dictionary:__pkg__"],
+    deps = [
+        "//dictionary:user_dictionary_util",
+        "//dictionary:user_pos",
+        "//protocol:user_dictionary_storage_cc_proto",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+mozc_cc_test(
+    name = "user_dictionary_text_test",
+    srcs = ["user_dictionary_text_test.cc"],
+    deps = [
+        ":user_dictionary_text",
+        "//protocol:user_dictionary_storage_cc_proto",
+        "//testing:gunit_main",
+        "@com_google_absl//absl/status:statusor",
     ],
 )
 

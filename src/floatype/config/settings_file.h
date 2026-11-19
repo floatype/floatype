@@ -7,9 +7,13 @@
 #ifndef MOZC_FLOATYPE_CONFIG_SETTINGS_FILE_H_
 #define MOZC_FLOATYPE_CONFIG_SETTINGS_FILE_H_
 
+#include <cstdint>
 #include <string>
 
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
+#include "absl/time/time.h"
 #include "protocol/config.pb.h"
 
 namespace mozc::floatype {
@@ -47,6 +51,48 @@ absl::StatusOr<config::Config> ReadSettingsFile(const config::Config& defaults,
 // file as it was: a broken file, a failed write, or a read-only process.
 absl::StatusOr<config::Config> WriteSettingsFile(
     const config::Config& config, const config::Config& defaults);
+
+// floatype's other files the user edits (the user dictionary, the English
+// words) live in the settings file's directory. Empty, so Mozc's own files
+// are used, until SetSettingsPath or this sets it; `report_errors` as there.
+void SetUserFilesDir(std::string dir, bool report_errors);
+// `name` in that directory, or empty.
+std::string UserFilePath(absl::string_view name);
+inline constexpr absl::string_view kUserDictionaryFile = "user_dictionary.tsv";
+inline constexpr absl::string_view kEnglishWordsFile = "english_words.txt";
+// Shows an error in one of those files as a notification, if reported.
+void ReportUserFileError(absl::string_view title, absl::string_view message);
+
+// What tells a changed file apart. Nix and other dotfile managers swap in a
+// new file with the same modification time; its inode differs. All -1 when
+// the file is missing.
+struct FileStamp {
+  int64_t mtime_ns = -1;
+  int64_t size = -1;
+  int64_t inode = -1;
+  int64_t device = -1;
+  bool operator==(const FileStamp&) const = default;
+};
+FileStamp StampOf(const std::string& path);
+
+// Notices edits to a file, looking at most once a second. Not thread safe.
+class FileWatch {
+ public:
+  // Takes note of the file as it is now.
+  explicit FileWatch(std::string path);
+  // Whether the file changed since the last call that said so.
+  bool Changed();
+
+ private:
+  std::string path_;
+  FileStamp stamp_;
+  absl::Time last_check_;
+};
+
+// Writes through a temporary file next to `path`, so readers never see half a
+// file. Creates ~/.config/floatype on the first write. A symbolic link (a
+// dotfiles manager's) stays one: the file it points to is written.
+absl::Status WriteAtomically(std::string path, absl::string_view text);
 
 }  // namespace mozc::floatype
 

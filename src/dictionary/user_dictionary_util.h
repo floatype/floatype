@@ -129,8 +129,15 @@ bool SanitizeEntry(user_dictionary::UserDictionary::Entry* entry);
 // Returns the error status of the validity for the given dictionary name.
 absl::Status ValidateDictionaryName(absl::string_view dictionary_name);
 
-// Returns the file name of UserDictionary.
+// Returns the file name of UserDictionary. floatype: the text file
+// user_dictionary.tsv in floatype's directory once a main() sets it.
 std::string GetUserDictionaryFileName();
+
+// floatype: Mozc's binary file, which the text file is first made from.
+std::string GetBinaryUserDictionaryFileName();
+
+// floatype: whether `filename` is read and written as text.
+bool IsTextUserDictionary(absl::string_view filename);
 
 }  // namespace user_dictionary
 }  // namespace mozc
