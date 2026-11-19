@@ -37,6 +37,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "client/client_interface.h"
 #include "gui/config_dialog/ui_config_dialog.h"
@@ -114,7 +115,9 @@ class ConfigDialog : public QDialog, private Ui::ConfigDialog {
   QSpinBox* zenzDelaySpinBox_;
   QCheckBox* liveConversionRubyCheckBox_;
   QSpinBox* liveConversionWaitSpinBox_;
-  QLineEdit* directCommitLineEdit_;
+  QCheckBox* useDirectCommitCheckBox_;
+  // One per character Mozkey offers, in kDirectCommitCharacters' order.
+  std::vector<QCheckBox*> directCommitCheckBoxes_;
   QCheckBox* mixedEnglishCheckBox_;
   QCheckBox* displayAmbiguousCheckBox_;
   QSpinBox* candidateFontScaleSpinBox_;

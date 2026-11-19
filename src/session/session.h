@@ -308,8 +308,8 @@ class Session {
   commands::Preedit ShownPreedit() const;
   // A key or command during the wait meets the composition the user sees.
   void StopWaitingForZenz();
-  // The setting direct_commit_characters: a conversion that commits as soon
-  // as zenz answers.
+  // The settings use_direct_commit and direct_commit_characters: a
+  // conversion that commits as soon as zenz answers.
   bool commit_after_zenz_ = false;
   // After a typed character: when it is one of the direct commit characters,
   // converts, asks zenz, and commits once it answers. Returns whether it did.

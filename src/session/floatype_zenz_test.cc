@@ -641,6 +641,7 @@ class DirectCommitTest : public FloatypeZenzTest {
     floatype::EnableSessionFeatures(true);
     ASSERT_OK(FileUtil::SetContents(answers_, "キカイ。\t機会。\n"));
     config::Config config = config::ConfigHandler::DefaultConfig();
+    config.set_use_direct_commit(true);
     config.set_direct_commit_characters("、。");
     config.set_use_live_conversion(false);
     commands::Input input;
@@ -674,6 +675,7 @@ TEST_F(DirectCommitTest, EnterBeforeZenzAnswersOnlyCommits) {
 
 TEST_F(DirectCommitTest, APeriodAfterALiveConversionCommitsToo) {
   config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_use_direct_commit(true);
   config.set_direct_commit_characters("、。");
   commands::Input input;
   input.set_type(commands::Input::SET_CONFIG);

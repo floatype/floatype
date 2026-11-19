@@ -2706,7 +2706,8 @@ bool Session::MaybeConvertAsEnglish(commands::Command* command) {
 bool Session::MaybeCommitOnCharacter(commands::Command* command) {
   const std::string& characters =
       context_->GetConfig().direct_commit_characters();
-  if (!floatype::SessionFeaturesEnabled() || characters.empty() ||
+  if (!floatype::SessionFeaturesEnabled() ||
+      !context_->GetConfig().use_direct_commit() || characters.empty() ||
       context_->state() != ImeContext::COMPOSITION) {
     return false;
   }

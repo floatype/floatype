@@ -34,8 +34,8 @@
 #include <QComboBox>
 #include <QFont>
 #include <QFormLayout>
+#include <QGridLayout>
 #include <QLabel>
-#include <QLineEdit>
 #include <QMessageBox>
 #include <QSpinBox>
 #include <QWidget>
@@ -50,6 +50,7 @@
 
 #include "absl/log/check.h"
 #include "absl/log/log.h"
+#include "absl/strings/match.h"
 #include "absl/strings/string_view.h"
 #include "base/config_file_stream.h"
 #include "base/port.h"
@@ -505,6 +506,10 @@ void GetComboboxForPreeditMethod(const QComboBox* combobox,
 }
 }  // namespace
 
+// The characters Mozkey offers for committing on a typed character.
+constexpr const char* kDirectCommitCharacters[] = {"。", "、", "？", "！", "（",
+                                                   "）", "「", "」", "・"};
+
 void ConfigDialog::SetUpFloatypeTab() {
   QWidget* tab = new QWidget();
   QFormLayout* form = new QFormLayout(tab);
@@ -555,14 +560,24 @@ void ConfigDialog::SetUpFloatypeTab() {
   zenzDelaySpinBox_ = spin(0, 5000, 10, " ms");
   form->addRow(text("zenz に頼むまでの待ち時間"), zenzDelaySpinBox_);
   liveConversionRubyCheckBox_ = check("変換の上に読みを小さく出す");
-  directCommitLineEdit_ = new QLineEdit(tab);
-  directCommitLineEdit_->setPlaceholderText(
-      text("例: 、。？！（空なら使わない）"));
   liveConversionWaitSpinBox_ = spin(0, 1000, 10, " ms");
   liveConversionWaitSpinBox_->setSpecialValueText(text("待たない"));
   form->addRow(text("zenz の答えを待ってから出す上限"),
                liveConversionWaitSpinBox_);
-  form->addRow(text("打つと zenz を待って確定する文字"), directCommitLineEdit_);
+  useDirectCommitCheckBox_ =
+      check("句読点・記号を打ったら、zenz を待ってその場で確定する");
+  QWidget* characters = new QWidget(tab);
+  QGridLayout* grid = new QGridLayout(characters);
+  grid->setContentsMargins(0, 0, 0, 0);
+  for (const char* character : kDirectCommitCharacters) {
+    QCheckBox* box = new QCheckBox(text(character), characters);
+    const int i = static_cast<int>(directCommitCheckBoxes_.size());
+    grid->addWidget(box, i / 5, i % 5);
+    directCommitCheckBoxes_.push_back(box);
+    connect(useDirectCommitCheckBox_, &QCheckBox::toggled, box,
+            &QWidget::setEnabled);
+  }
+  form->addRow(text("確定する文字"), characters);
 
   heading("ローマ字");
   displayAmbiguousCheckBox_ =
@@ -699,8 +714,12 @@ void ConfigDialog::ConvertFromProto(const config::Config& config) {
   SET_CHECKBOX(liveConversionRubyCheckBox_, live_conversion_ruby);
   liveConversionWaitSpinBox_->setValue(
       config.live_conversion_waits_for_zenz_millisec());
-  directCommitLineEdit_->setText(
-      QString::fromStdString(config.direct_commit_characters()));
+  SET_CHECKBOX(useDirectCommitCheckBox_, use_direct_commit);
+  for (size_t i = 0; i < directCommitCheckBoxes_.size(); ++i) {
+    directCommitCheckBoxes_[i]->setChecked(absl::StrContains(
+        config.direct_commit_characters(), kDirectCommitCharacters[i]));
+    directCommitCheckBoxes_[i]->setEnabled(config.use_direct_commit());
+  }
   SET_CHECKBOX(mixedEnglishCheckBox_, mixed_english);
   SET_CHECKBOX(displayAmbiguousCheckBox_, display_ambiguous_romaji);
   candidateFontScaleSpinBox_->setValue(config.candidate_font_scale_percent());
@@ -817,8 +836,14 @@ void ConfigDialog::ConvertToProto(config::Config* config) const {
   GET_CHECKBOX(liveConversionRubyCheckBox_, live_conversion_ruby);
   config->set_live_conversion_waits_for_zenz_millisec(
       liveConversionWaitSpinBox_->value());
-  config->set_direct_commit_characters(
-      directCommitLineEdit_->text().trimmed().toStdString());
+  GET_CHECKBOX(useDirectCommitCheckBox_, use_direct_commit);
+  std::string characters;
+  for (size_t i = 0; i < directCommitCheckBoxes_.size(); ++i) {
+    if (directCommitCheckBoxes_[i]->isChecked()) {
+      characters += kDirectCommitCharacters[i];
+    }
+  }
+  config->set_direct_commit_characters(characters);
   GET_CHECKBOX(mixedEnglishCheckBox_, mixed_english);
   GET_CHECKBOX(displayAmbiguousCheckBox_, display_ambiguous_romaji);
   config->set_candidate_font_scale_percent(candidateFontScaleSpinBox_->value());

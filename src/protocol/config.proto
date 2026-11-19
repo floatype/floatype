@@ -434,10 +434,11 @@ message Config {
     optional uint32 border_color = 4;
   }
   optional CandidateStyle candidate_style = 1014;
-  // floatype: typing one of these characters (for example "、。？！") at the end
-  // of the composition converts it, waits for zenz, and commits it. Empty
-  // turns it off.
-  optional string direct_commit_characters = 1015 [default = ""];
+  // floatype: with use_direct_commit on, typing one of these characters at
+  // the end of the composition converts it, waits for zenz, and commits it.
+  // Mozkey's characters and first choice.
+  optional bool use_direct_commit = 1020 [default = false];
+  optional string direct_commit_characters = 1015 [default = "、。？！「」"];
   // floatype: the reading above a live conversion, in small type.
   optional bool live_conversion_ruby = 1016 [default = false];
   // floatype: the look of that reading. Colors are 0xRRGGBB.
