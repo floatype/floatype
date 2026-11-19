@@ -122,7 +122,7 @@ class ZenzCorrectorTest : public testing::TestWithTempUserProfile {
         SystemUtil::GetUserProfileDirectory(), "answers.tsv");
     ASSERT_OK(FileUtil::SetContents(
         answers, "キョウハ\t京歯\nアメ\t雨\nカップ\t河童\n"
-                 "３カイ\t三回\nサンカイ\t3回\n"));
+                 "３カイ\t三回\nサンカイ\t3回\n５カイ\t5回\n"));
     client_ = std::make_unique<ScorerClient>(std::vector<std::string>{
         testing::GetSourceFileOrDie({"floatype", "zenz", "fake_scorer"}),
         answers});
@@ -191,6 +191,13 @@ TEST_F(ZenzCorrectorTest, KeepsTheDigitsTheUserTyped) {
   const ZenzCorrector::PollResult result = PollUntilDone(corrector, spoken);
   EXPECT_EQ(result.kind, ZenzCorrector::PollResult::kApply);
   EXPECT_THAT(result.candidate_indices, ElementsAre(1));
+
+  // Where Mozc lost a typed digit, zenz may bring it back.
+  Segments lost;
+  AddSegment(lost, "５かい", {"五回", "5回"});
+  ASSERT_TRUE(corrector.Request(lost, ""));
+  EXPECT_EQ(PollUntilDone(corrector, lost).kind,
+            ZenzCorrector::PollResult::kApply);
 }
 
 TEST_F(ZenzCorrectorTest, DropsAnUnfinishedAnswer) {

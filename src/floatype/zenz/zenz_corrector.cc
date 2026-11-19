@@ -102,9 +102,9 @@ std::vector<std::string> AsciiTokens(absl::string_view text) {
   return tokens;
 }
 
-// Whether zenz keeps the digits and letters the user typed as Mozc wrote
-// them, as Mozkey requires. Numbers zenz writes from kana (さんがつ/３月) are
-// its to choose.
+// Whether zenz keeps the digits and letters the user typed where Mozc wrote
+// them, as Mozkey requires; where Mozc lost them, zenz may bring them back.
+// Numbers zenz writes from kana (さんがつ/３月) are its to choose.
 bool KeepsTypedAscii(const Segments& segments, absl::string_view conversion) {
   std::string mozc;
   for (const Segment& segment : segments.conversion_segments()) {
@@ -115,8 +115,11 @@ bool KeepsTypedAscii(const Segments& segments, absl::string_view conversion) {
   const std::vector<std::string> mozc_tokens = AsciiTokens(mozc);
   const std::vector<std::string> zenz_tokens = AsciiTokens(conversion);
   for (const std::string& typed : AsciiTokens(Reading(segments))) {
-    if (std::count(mozc_tokens.begin(), mozc_tokens.end(), typed) !=
-        std::count(zenz_tokens.begin(), zenz_tokens.end(), typed)) {
+    const auto mozc_count =
+        std::count(mozc_tokens.begin(), mozc_tokens.end(), typed);
+    if (mozc_count > 0 &&
+        mozc_count !=
+            std::count(zenz_tokens.begin(), zenz_tokens.end(), typed)) {
       return false;
     }
   }
