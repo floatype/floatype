@@ -32,12 +32,19 @@
 
 #include <QCheckBox>
 #include <QComboBox>
-#include <QFont>
+#include <QDesktopServices>
+#include <QDir>
+#include <QFileInfo>
 #include <QFormLayout>
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMessageBox>
+#include <QProcess>
+#include <QPushButton>
 #include <QSpinBox>
+#include <QUrl>
+#include <QVBoxLayout>
 #include <QWidget>
 #include <algorithm>
 #include <cstdint>
@@ -81,17 +88,6 @@
 #include "base/mac/mac_util.h"
 #endif  // __APPLE__
 
-namespace {
-template <typename T>
-void Connect(const QList<T*>& objects, const char* signal,
-             const QObject* receiver, const char* slot) {
-  for (typename QList<T*>::const_iterator itr = objects.begin();
-       itr != objects.end(); ++itr) {
-    QObject::connect(*itr, signal, receiver, slot);
-  }
-}
-}  // namespace
-
 namespace mozc {
 namespace gui {
 
@@ -127,7 +123,9 @@ ConfigDialog::ConfigDialog()
   } else if constexpr (port::IsAppleBase()) {
     miscDefaultIMEWidget->setVisible(false);
     miscAdministrationWidget->setVisible(false);
-    setWindowTitle(tr("%1 Preferences").arg(GuiUtil::ProductName()));
+    // floatype: set as is; Mozc's translations have no "%1 Preferences".
+    setWindowTitle(
+        QString::fromUtf8("%1 の環境設定").arg(GuiUtil::ProductName()));
   } else if constexpr (port::IsLinuxBase()) {
     miscDefaultIMEWidget->setVisible(false);
     miscAdministrationWidget->setVisible(false);
@@ -146,7 +144,8 @@ ConfigDialog::ConfigDialog()
 #endif  // NDEBUG
 
   suggestionsSizeSpinBox->setRange(1, 9);
-  SetUpFloatypeTab();
+  SetUpFloatypeSettings();
+  SetUpFooter();
 
   punctuationsSettingComboBox->addItem(QString::fromUtf8("、。"));
   punctuationsSettingComboBox->addItem(QString::fromUtf8("，．"));
@@ -217,15 +216,7 @@ ConfigDialog::ConfigDialog()
     useModeIndicator->hide();
   }
 
-  // Reset texts explicitly for translations.
-  configDialogButtonBox->button(QDialogButtonBox::Ok)->setText(tr("  Ok  "));
-  configDialogButtonBox->button(QDialogButtonBox::Cancel)
-      ->setText(tr("Cancel"));
-  configDialogButtonBox->button(QDialogButtonBox::Apply)->setText(tr("Apply"));
-
   // signal/slot
-  QObject::connect(configDialogButtonBox, SIGNAL(clicked(QAbstractButton*)),
-                   this, SLOT(clicked(QAbstractButton*)));
   QObject::connect(clearUserHistoryButton, SIGNAL(clicked()), this,
                    SLOT(ClearUserHistory()));
   QObject::connect(editUserDictionaryButton, SIGNAL(clicked()), this,
@@ -250,18 +241,6 @@ ConfigDialog::ConfigDialog()
                    SLOT(LaunchAdministrationDialog()));
   QObject::connect(launchAdministrationDialogButtonForUsageStats,
                    SIGNAL(clicked()), this, SLOT(LaunchAdministrationDialog()));
-
-  // Event handlers to enable 'Apply' button.
-  Connect(findChildren<QPushButton*>(), SIGNAL(clicked()), this,
-          SLOT(EnableApplyButton()));
-  Connect(findChildren<QCheckBox*>(), SIGNAL(clicked()), this,
-          SLOT(EnableApplyButton()));
-  Connect(findChildren<QComboBox*>(), SIGNAL(activated(int)), this,
-          SLOT(EnableApplyButton()));
-  Connect(findChildren<QSpinBox*>(), SIGNAL(editingFinished()), this,
-          SLOT(EnableApplyButton()));
-  // 'Apply' button is disabled on launching.
-  configDialogButtonBox->button(QDialogButtonBox::Apply)->setEnabled(false);
 
   // When clicking these messages, CheckBoxs corresponding
   // to them should be toggled.
@@ -326,6 +305,38 @@ ConfigDialog::ConfigDialog()
 #ifdef CHANNEL_DEV
   usageStatsCheckBox->setEnabled(false);
 #endif  // CHANNEL_DEV
+
+  // floatype: every change is saved, a moment later so that holding an arrow
+  // on a spin box writes once. Connected after Reload() so loading does not
+  // save.
+  save_timer_.setSingleShot(true);
+  save_timer_.setInterval(300);
+  connect(&save_timer_, &QTimer::timeout, this, [this] { Update(); });
+  const auto schedule_save = [this] { save_timer_.start(); };
+  for (QCheckBox* box : findChildren<QCheckBox*>()) {
+    connect(box, &QCheckBox::toggled, this, schedule_save);
+  }
+  for (QSpinBox* box : findChildren<QSpinBox*>()) {
+    connect(box, &QSpinBox::valueChanged, this, schedule_save);
+  }
+  for (QComboBox* box : findChildren<QComboBox*>()) {
+    connect(box, &QComboBox::currentIndexChanged, this, schedule_save);
+  }
+  connect(characterFormEditor, &QTableWidget::itemChanged, this, schedule_save);
+  // Without OK, Return would press whichever button Qt picks as the default.
+  for (QPushButton* button : findChildren<QPushButton*>()) {
+    button->setAutoDefault(false);
+    button->setDefault(false);
+  }
+}
+
+void ConfigDialog::done(int result) {
+  // Closing saves a change still waiting for the timer.
+  if (save_timer_.isActive()) {
+    save_timer_.stop();
+    Update();
+  }
+  QDialog::done(result);
 }
 
 bool ConfigDialog::SetConfig(const config::Config& config) {
@@ -510,117 +521,175 @@ void GetComboboxForPreeditMethod(const QComboBox* combobox,
 constexpr const char* kDirectCommitCharacters[] = {"。", "、", "？", "！", "（",
                                                    "）", "「", "」", "・"};
 
-void ConfigDialog::SetUpFloatypeTab() {
-  QWidget* tab = new QWidget();
-  QFormLayout* form = new QFormLayout(tab);
-  const auto text = [](const char* utf8) { return QString::fromUtf8(utf8); };
-  const auto heading = [&](const char* utf8) {
-    QLabel* label = new QLabel(text(utf8), tab);
-    QFont font = label->font();
-    font.setBold(true);
-    label->setFont(font);
-    form->addRow(label);
-  };
-  const auto spin = [&](int min, int max, int step, const char* suffix) {
-    QSpinBox* box = new QSpinBox(tab);
-    box->setRange(min, max);
-    box->setSingleStep(step);
-    box->setSuffix(text(suffix));
-    return box;
-  };
-  const auto check = [&](const char* utf8) {
-    QCheckBox* box = new QCheckBox(text(utf8), tab);
-    form->addRow(box);
-    return box;
-  };
-  const auto combo = [&](const char* utf8,
-                         std::initializer_list<const char*> items) {
-    QComboBox* box = new QComboBox(tab);
-    for (const char* item : items) box->addItem(text(item));
-    form->addRow(text(utf8), box);
-    return box;
-  };
+namespace {
+QString Text(const char* utf8) { return QString::fromUtf8(utf8); }
 
-  heading("zenz（AI による補正）");
-  useZenzCheckBox_ = check("zenz で変換を補正する");
-  zenzTimeoutSpinBox_ = spin(50, 5000, 50, " ms");
-  form->addRow(text("答えを待つ上限"), zenzTimeoutSpinBox_);
-  zenzSuggestionLearningCheckBox_ =
-      check("zenz が直した確定を予測候補に覚えさせる");
-  zenzLearningCheckBox_ = check(
-      "補正の表示中に Ctrl+Delete "
-      "で止めた補正を覚え、同じ読みでは繰り返さない");
-  zenzStopWhenIdleCheckBox_ = check(
-      "打っていない間は止める（待機中のメモリ 約 145MB → 約 51MB。"
-      "1 分で止まり、次の 1 文字目で起きる）");
-  zenzLowMemoryCheckBox_ = check(
-      "軽くする（動いている間のメモリ 約 145MB → 約 87MB、"
-      "補正にかかる時間 約 26ms → 約 50ms）");
+// The mark on each setting floatype added to Mozc's.
+QLabel* NewBadge() {
+  QLabel* badge = new QLabel(QStringLiteral("F"));
+  badge->setFixedSize(16, 16);
+  badge->setAlignment(Qt::AlignCenter);
+  badge->setStyleSheet(QStringLiteral(
+      "background-color: black; color: white; border-radius: 4px;"
+      " font-weight: bold; font-size: 11px;"));
+  badge->setToolTip(Text("Floatype の項目"));
+  badge->setAccessibleName(Text("Floatype の項目"));
+  return badge;
+}
 
-  heading("ライブ変換");
-  liveConversionCheckBox_ = check("手が止まったら Space を押さずに変換する");
-  liveConversionDelaySpinBox_ = spin(0, 2000, 10, " ms");
-  form->addRow(text("変換するまでの待ち時間"), liveConversionDelaySpinBox_);
-  liveConversionMinCharsSpinBox_ = spin(1, 10, 1, " 文字");
-  form->addRow(text("変換を始める文字数"), liveConversionMinCharsSpinBox_);
-  zenzDelaySpinBox_ = spin(0, 5000, 10, " ms");
-  form->addRow(text("zenz に頼むまでの待ち時間"), zenzDelaySpinBox_);
-  liveConversionRubyCheckBox_ = check("変換の上に読みを小さく出す");
-  liveConversionWaitSpinBox_ = spin(0, 1000, 10, " ms");
-  liveConversionWaitSpinBox_->setSpecialValueText(text("待たない"));
-  form->addRow(text("zenz の答えを待ってから出す上限"),
+// `widget`, then the badge, packed to the left.
+QWidget* WithBadge(QWidget* widget) {
+  QWidget* row = new QWidget();
+  QHBoxLayout* layout = new QHBoxLayout(row);
+  layout->setContentsMargins(0, 0, 0, 0);
+  layout->addWidget(widget);
+  layout->addWidget(NewBadge());
+  layout->addStretch();
+  return row;
+}
+
+// A group that looks like Mozc's in the .ui file (a title and a line over its
+// settings) with the badge after the title, put into `tab` at `index`.
+QFormLayout* InsertGroup(QVBoxLayout* tab, int index, const char* title) {
+  QFrame* header = new QFrame();
+  header->setProperty("class", QStringLiteral("setting-group-header"));
+  QHBoxLayout* header_layout = new QHBoxLayout(header);
+  header_layout->addWidget(new QLabel(Text(title)));
+  header_layout->addWidget(NewBadge());
+  QFrame* line = new QFrame();
+  line->setFrameShape(QFrame::HLine);
+  line->setFrameShadow(QFrame::Sunken);
+  line->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::Fixed);
+  header_layout->addWidget(line);
+  QFrame* group = new QFrame();
+  group->setProperty("class", QStringLiteral("setting-group-layout"));
+  QFormLayout* form = new QFormLayout(group);
+  // As macOS lays out forms, and as the spin box in Mozc's Suggest tab.
+  form->setFieldGrowthPolicy(QFormLayout::FieldsStayAtSizeHint);
+  tab->insertWidget(index, header);
+  tab->insertWidget(index + 1, group);
+  return form;
+}
+
+QSpinBox* NewSpinBox(int min, int max, int step, const char* suffix) {
+  QSpinBox* box = new QSpinBox();
+  box->setRange(min, max);
+  box->setSingleStep(step);
+  box->setSuffix(Text(suffix));
+  return box;
+}
+
+QCheckBox* AddCheckBox(QFormLayout* form, const char* utf8) {
+  QCheckBox* box = new QCheckBox(Text(utf8));
+  form->addRow(box);
+  return box;
+}
+
+QComboBox* AddComboBox(QFormLayout* form, const char* label,
+                       std::initializer_list<const char*> items) {
+  QComboBox* box = new QComboBox();
+  for (const char* item : items) box->addItem(Text(item));
+  form->addRow(Text(label), box);
+  return box;
+}
+}  // namespace
+
+void ConfigDialog::SetUpFloatypeSettings() {
+  // 一般
+  const int general = basicTabLayout->indexOf(basicTabBottomSpacer);
+  QFormLayout* live = InsertGroup(basicTabLayout, general, "ライブ変換");
+  liveConversionCheckBox_ =
+      AddCheckBox(live, "手が止まったら Space を押さずに変換する");
+  liveConversionDelaySpinBox_ = NewSpinBox(0, 2000, 10, " ms");
+  live->addRow(Text("変換するまでの待ち時間"), liveConversionDelaySpinBox_);
+  liveConversionMinCharsSpinBox_ = NewSpinBox(1, 10, 1, " 文字");
+  live->addRow(Text("変換を始める文字数"), liveConversionMinCharsSpinBox_);
+
+  QFormLayout* zenz = InsertGroup(basicTabLayout, general + 2, "zenz の補正");
+  useZenzCheckBox_ = AddCheckBox(zenz, "zenz で変換を補正する");
+  zenzDelaySpinBox_ = NewSpinBox(0, 5000, 10, " ms");
+  zenz->addRow(Text("zenz に頼むまでの待ち時間"), zenzDelaySpinBox_);
+  zenzTimeoutSpinBox_ = NewSpinBox(50, 5000, 50, " ms");
+  zenz->addRow(Text("答えを待つ上限"), zenzTimeoutSpinBox_);
+  liveConversionWaitSpinBox_ = NewSpinBox(0, 1000, 10, " ms");
+  zenz->addRow(Text("ライブ変換で zenz の答えを待つ上限（0 で待たない）"),
                liveConversionWaitSpinBox_);
-  useDirectCommitCheckBox_ =
-      check("句読点・記号を打ったら、zenz を待ってその場で確定する");
+
+  QFormLayout* assist = InsertGroup(basicTabLayout, general + 4, "入力の補助");
+  useDirectCommitCheckBox_ = AddCheckBox(
+      assist, "句読点・記号を打ったら、zenz を待ってその場で確定する");
   // One row, packed to the left: spread over the form's width they did not
   // read as checkboxes for their characters.
-  QWidget* characters = new QWidget(tab);
+  QWidget* characters = new QWidget();
   QHBoxLayout* row = new QHBoxLayout(characters);
   row->setContentsMargins(0, 0, 0, 0);
   for (const char* character : kDirectCommitCharacters) {
-    QCheckBox* box = new QCheckBox(text(character), characters);
+    QCheckBox* box = new QCheckBox(Text(character), characters);
     row->addWidget(box);
     directCommitCheckBoxes_.push_back(box);
     connect(useDirectCommitCheckBox_, &QCheckBox::toggled, box,
             &QWidget::setEnabled);
   }
   row->addStretch();
-  form->addRow(text("確定する文字"), characters);
-
-  heading("ローマ字");
-  displayAmbiguousCheckBox_ =
-      check("長い規則の途中のローマ字を、いまの かな で見せる（n を ん で）");
-
-  heading("日英混在入力");
-  mixedEnglishCheckBox_ = check(
+  assist->addRow(Text("確定する文字"), characters);
+  mixedEnglishCheckBox_ = AddCheckBox(
+      assist,
       "かなの入力中に打った英単語を英字のままにし、インジケータに あ / A "
       "を出す");
+  displayAmbiguousCheckBox_ = AddCheckBox(
+      assist, "長い規則の途中のローマ字を、いまの かな で見せる（n を ん で）");
 
-  heading("予測候補");
-  suggestAddedWordsCheckBox_ = check(
-      "足した辞書（人名、地名、SudachiDict、ニコニコ・pixiv）の語も出す"
-      "（オフなら、読みを最後まで打って変換したときだけ出る）");
+  // 詳細 (入力補助 in Mozc's Japanese text). It has no spacer at its end.
+  QFormLayout* memory =
+      InsertGroup(inputSupportTabLayout, inputSupportTabLayout->count(),
+                  "zenz のメモリと学習");
+  zenzStopWhenIdleCheckBox_ =
+      AddCheckBox(memory,
+                  "打っていない間は止める（待機中のメモリ 約 145MB → 約 51MB。"
+                  "1 分で止まり、次の 1 文字目で起きる）");
+  zenzLowMemoryCheckBox_ =
+      AddCheckBox(memory,
+                  "軽くする（動いている間のメモリ 約 145MB → 約 87MB、"
+                  "補正にかかる時間 約 26ms → 約 50ms）");
+  zenzLearningCheckBox_ =
+      AddCheckBox(memory,
+                  "補正の表示中に Ctrl+Delete "
+                  "で止めた補正を覚え、同じ読みでは繰り返さない");
+  zenzSuggestionLearningCheckBox_ =
+      AddCheckBox(memory, "zenz が直した確定を予測候補に覚えさせる");
 
-  heading("候補の窓");
-  candidateFontScaleSpinBox_ = spin(50, 300, 10, " %");
-  form->addRow(text("文字の大きさ"), candidateFontScaleSpinBox_);
+  // サジェスト
+  suggestAddedWordsCheckBox_ = new QCheckBox(
+      Text("足した辞書（人名、地名、SudachiDict、ニコニコ・pixiv）の語も出す"
+           "（オフなら、読みを最後まで打って変換したときだけ出る）"));
+  gridLayout_4->addWidget(WithBadge(suggestAddedWordsCheckBox_),
+                          gridLayout_4->rowCount(), 0, 1, 3);
 
-  heading("状態インジケータ");
-  showIndicatorCheckBox_ = check("入力中の文字の近くに出す");
+  // 外観
+  QWidget* look = new QWidget();
+  QVBoxLayout* look_layout = new QVBoxLayout(look);
+  look_layout->setSpacing(0);  // As Mozc's tabs.
+  QFormLayout* candidates = InsertGroup(look_layout, 0, "候補の窓と読み");
+  candidateFontScaleSpinBox_ = NewSpinBox(50, 300, 10, " %");
+  candidates->addRow(Text("文字の大きさ"), candidateFontScaleSpinBox_);
+  liveConversionRubyCheckBox_ =
+      AddCheckBox(candidates, "ライブ変換の上に読みを小さく出す");
+  QFormLayout* indicator = InsertGroup(look_layout, 2, "状態インジケータ");
+  showIndicatorCheckBox_ = AddCheckBox(indicator, "入力中の文字の近くに出す");
   indicatorPlacementComboBox_ =
-      combo("位置", {"入力中の文字の上", "下", "左横"});
-  indicatorLabelComboBox_ =
-      combo("文字", {"入力中 / Mozc / Zenz", "あ / M / Z", "色だけ"});
-  indicatorShapeComboBox_ = combo("形", {"角丸の帯", "角丸の四角", "丸"});
-
+      AddComboBox(indicator, "位置", {"入力中の文字の上", "下", "左横"});
+  indicatorLabelComboBox_ = AddComboBox(
+      indicator, "文字", {"入力中 / Mozc / Zenz", "あ / M / Z", "色だけ"});
+  indicatorShapeComboBox_ =
+      AddComboBox(indicator, "形", {"角丸の帯", "角丸の四角", "丸"});
   QLabel* note = new QLabel(
-      text("設定は ~/.config/floatype/config.toml に保存されます。"
-           "手で書き換えてもよく、ここで変えてもコメントと順番は残ります。"
-           "色や大きさはそのファイルで変えられます（例は floatype.app の "
-           "Resources/config.example.toml）。"),
-      tab);
+      Text("色や大きさは config.toml で変えられます（例は floatype.app の "
+           "Resources/config.example.toml）。"));
   note->setWordWrap(true);
-  form->addRow(note);
+  indicator->addRow(note);
+  look_layout->addStretch();
+  configDialogTabWidget->insertTab(
+      configDialogTabWidget->indexOf(suggestionsTab) + 1, look, Text("外観"));
 
   // Settings that only matter while their switch is on follow it.
   for (QWidget* widget : std::initializer_list<QWidget*>{
@@ -632,8 +701,7 @@ void ConfigDialog::SetUpFloatypeTab() {
   }
   for (QWidget* widget : std::initializer_list<QWidget*>{
            liveConversionDelaySpinBox_, liveConversionMinCharsSpinBox_,
-           liveConversionRubyCheckBox_,
-           liveConversionWaitSpinBox_}) {
+           liveConversionRubyCheckBox_, liveConversionWaitSpinBox_}) {
     connect(liveConversionCheckBox_, &QCheckBox::toggled, widget,
             &QWidget::setEnabled);
   }
@@ -643,7 +711,29 @@ void ConfigDialog::SetUpFloatypeTab() {
     connect(showIndicatorCheckBox_, &QCheckBox::toggled, widget,
             &QWidget::setEnabled);
   }
-  configDialogTabWidget->insertTab(1, tab, text("Floatype"));
+}
+
+// Bottom of the window: what the badge means, where the settings go, and
+// Mozc's reset. Changes are saved as they are made, so no OK / Cancel / Apply.
+void ConfigDialog::SetUpFooter() {
+  configDialogButtonBox->hide();
+  footerLayout->removeWidget(resetToDefaultsButton);
+  footerLayout->insertWidget(0, NewBadge());
+  footerLayout->insertWidget(1, new QLabel(Text("Floatype で足した項目")));
+  footerLayout->addWidget(new QLabel(
+      Text("保存先 ~/.config/floatype/config.toml（変えるとすぐ保存）")));
+  QPushButton* reveal = new QPushButton(Text("Finder で表示"));
+  connect(reveal, &QPushButton::clicked, this, [] {
+    const QString path = QDir::homePath() + "/.config/floatype/config.toml";
+    if (QFileInfo::exists(path)) {
+      QProcess::startDetached(QStringLiteral("open"), {"-R", path});
+    } else {
+      QDesktopServices::openUrl(
+          QUrl::fromLocalFile(QFileInfo(path).absolutePath()));
+    }
+  });
+  footerLayout->addWidget(reveal);
+  footerLayout->addWidget(resetToDefaultsButton);
 }
 
 // TODO(taku)
@@ -739,7 +829,7 @@ void ConfigDialog::ConvertFromProto(const config::Config& config) {
   SET_CHECKBOX(mixedEnglishCheckBox_, mixed_english);
   SET_CHECKBOX(suggestAddedWordsCheckBox_, suggest_added_words);
   SET_CHECKBOX(displayAmbiguousCheckBox_, display_ambiguous_romaji);
-  candidateFontScaleSpinBox_->setValue(config.candidate_font_scale_percent());
+  candidateFontScaleSpinBox_->setValue(config.candidate_style().size_percent());
   SET_CHECKBOX(showIndicatorCheckBox_, show_indicator);
   indicatorPlacementComboBox_->setCurrentIndex(
       config.indicator_style().placement());
@@ -866,7 +956,8 @@ void ConfigDialog::ConvertToProto(config::Config* config) const {
   GET_CHECKBOX(mixedEnglishCheckBox_, mixed_english);
   GET_CHECKBOX(suggestAddedWordsCheckBox_, suggest_added_words);
   GET_CHECKBOX(displayAmbiguousCheckBox_, display_ambiguous_romaji);
-  config->set_candidate_font_scale_percent(candidateFontScaleSpinBox_->value());
+  config->mutable_candidate_style()->set_size_percent(
+      candidateFontScaleSpinBox_->value());
   GET_CHECKBOX(showIndicatorCheckBox_, show_indicator);
   config::Config::IndicatorStyle* style = config->mutable_indicator_style();
   style->set_placement(static_cast<config::Config::IndicatorStyle::Placement>(
@@ -893,24 +984,6 @@ void ConfigDialog::ConvertToProto(config::Config* config) const {
 #undef SET_CHECKBOX
 #undef GET_COMBOBOX
 #undef GET_CHECKBOX
-
-void ConfigDialog::clicked(QAbstractButton* button) {
-  switch (configDialogButtonBox->buttonRole(button)) {
-    case QDialogButtonBox::AcceptRole:
-      if (Update()) {
-        QWidget::close();
-      }
-      break;
-    case QDialogButtonBox::ApplyRole:
-      Update();
-      break;
-    case QDialogButtonBox::RejectRole:
-      QWidget::close();
-      break;
-    default:
-      break;
-  }
-}
 
 void ConfigDialog::ClearUserHistory() {
   if (QMessageBox::Ok !=
@@ -957,6 +1030,7 @@ void ConfigDialog::EditKeymap() {
     custom_keymap_table_ = output;
     // set keymapSettingComboBox to "Custom keymap"
     keymapSettingComboBox->setCurrentIndex(0);
+    save_timer_.start();
   }
 }
 
@@ -964,6 +1038,7 @@ void ConfigDialog::EditRomanTable() {
   std::string output;
   if (gui::RomanTableEditorDialog::Show(this, custom_roman_table_, &output)) {
     custom_roman_table_ = output;
+    save_timer_.start();
   }
 }
 
@@ -1007,6 +1082,7 @@ void ConfigDialog::ResetToDefaults() {
     // TODO(taku): remove the dependency to config::ConfigHandler
     // nice to have GET_DEFAULT_CONFIG command
     ConvertFromProto(config::ConfigHandler::DefaultConfig());
+    save_timer_.start();
   }
 }
 
@@ -1014,10 +1090,6 @@ void ConfigDialog::LaunchAdministrationDialog() {
   if constexpr (port::IsWindows()) {
     client_->LaunchTool("administration_dialog", "");
   }
-}
-
-void ConfigDialog::EnableApplyButton() {
-  configDialogButtonBox->button(QDialogButtonBox::Apply)->setEnabled(true);
 }
 
 // Catch MouseButtonRelease event to toggle the CheckBoxes

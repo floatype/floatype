@@ -52,6 +52,8 @@ class ConfigDialog : public QDialog, private Ui::ConfigDialog {
  public:
   ConfigDialog();
 
+  void done(int result) override;
+
   // Methods defined in the 'slots' section (Qt's extension) will be processed
   // by Qt's moc tool (moc.exe on Windows). Unfortunately, preprocessor macros
   // defined for C/C++ are not automatically passed into the moc tool.
@@ -63,7 +65,6 @@ class ConfigDialog : public QDialog, private Ui::ConfigDialog {
   // by the moc tool and |QObject::connect| against these methods results in
   // failure. See b/5935351 about how we found this issue.
  protected slots:
-  virtual void clicked(QAbstractButton* button);
   virtual void ClearUserHistory();
   virtual void EditUserDictionary();
   virtual void EditKeymap();
@@ -73,7 +74,6 @@ class ConfigDialog : public QDialog, private Ui::ConfigDialog {
   virtual void SelectAutoConversionSetting(int state);
   virtual void SelectSuggestionSetting(int state);
   virtual void LaunchAdministrationDialog();
-  virtual void EnableApplyButton();
 
  protected:
   bool eventFilter(QObject* obj, QEvent* event) override;
@@ -102,9 +102,12 @@ class ConfigDialog : public QDialog, private Ui::ConfigDialog {
   std::map<QString, config::Config::SessionKeymap>
       keymapname_sessionkeymap_map_;
 
-  // floatype: the tab for floatype's settings, built in code so that the
-  // upstream .ui file and its translations stay as they are.
-  void SetUpFloatypeTab();
+  // floatype: its settings, put into Mozc's tabs and an 外観 tab in code so
+  // that the upstream .ui file and its translations stay as they are.
+  void SetUpFloatypeSettings();
+  void SetUpFooter();
+  // Saves the settings a moment after the last change.
+  QTimer save_timer_;
   QCheckBox* useZenzCheckBox_;
   QSpinBox* zenzTimeoutSpinBox_;
   QCheckBox* zenzSuggestionLearningCheckBox_;
