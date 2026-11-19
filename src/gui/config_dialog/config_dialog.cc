@@ -30,21 +30,33 @@
 // Qt component of configure dialog for Mozc
 #include "gui/config_dialog/config_dialog.h"
 
+#include <QAbstractSpinBox>
+#include <QButtonGroup>
 #include <QCheckBox>
+#include <QColor>
+#include <QColorDialog>
 #include <QComboBox>
 #include <QDesktopServices>
 #include <QDir>
 #include <QFileInfo>
+#include <QFontDatabase>
 #include <QFormLayout>
 #include <QFrame>
+#include <QGuiApplication>
 #include <QHBoxLayout>
+#include <QIcon>
 #include <QLabel>
 #include <QMessageBox>
+#include <QPixmap>
 #include <QProcess>
 #include <QPushButton>
+#include <QScrollArea>
+#include <QScrollBar>
 #include <QSpinBox>
+#include <QStyleHints>
 #include <QUrl>
 #include <QVBoxLayout>
+#include <QVariant>
 #include <QWidget>
 #include <algorithm>
 #include <cstdint>
@@ -54,6 +66,8 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "absl/log/check.h"
 #include "absl/log/log.h"
@@ -64,9 +78,11 @@
 #include "base/run_level.h"
 #include "client/client.h"
 #include "config/config_handler.h"
+#include "floatype/look/window_look.h"
 #include "gui/base/stats_config_util.h"
 #include "gui/base/util.h"
 #include "gui/config_dialog/keymap_editor.h"
+#include "gui/config_dialog/look_preview.h"
 #include "gui/config_dialog/roman_table_editor.h"
 #include "protocol/config.pb.h"
 #include "session/keymap.h"
@@ -146,6 +162,7 @@ ConfigDialog::ConfigDialog()
   suggestionsSizeSpinBox->setRange(1, 9);
   SetUpFloatypeSettings();
   SetUpFooter();
+  WrapTabsInScrollAreas();
 
   punctuationsSettingComboBox->addItem(QString::fromUtf8("、。"));
   punctuationsSettingComboBox->addItem(QString::fromUtf8("，．"));
@@ -312,7 +329,10 @@ ConfigDialog::ConfigDialog()
   save_timer_.setSingleShot(true);
   save_timer_.setInterval(300);
   connect(&save_timer_, &QTimer::timeout, this, [this] { Update(); });
-  const auto schedule_save = [this] { save_timer_.start(); };
+  const auto schedule_save = [this] {
+    save_timer_.start();
+    RefreshLook();
+  };
   for (QCheckBox* box : findChildren<QCheckBox*>()) {
     connect(box, &QCheckBox::toggled, this, schedule_save);
   }
@@ -322,12 +342,28 @@ ConfigDialog::ConfigDialog()
   for (QComboBox* box : findChildren<QComboBox*>()) {
     connect(box, &QComboBox::currentIndexChanged, this, schedule_save);
   }
+  for (QSlider* slider : findChildren<QSlider*>()) {
+    connect(slider, &QSlider::valueChanged, this, schedule_save);
+  }
+  // In scroll areas, a wheel turned over a control scrolls the page unless
+  // the control has the focus: otherwise scrolling would change settings.
+  for (QWidget* widget : findChildren<QWidget*>()) {
+    if (qobject_cast<QAbstractSpinBox*>(widget) != nullptr ||
+        qobject_cast<QComboBox*>(widget) != nullptr ||
+        qobject_cast<QSlider*>(widget) != nullptr) {
+      widget->setFocusPolicy(Qt::StrongFocus);
+      widget->installEventFilter(this);
+    }
+  }
   connect(characterFormEditor, &QTableWidget::itemChanged, this, schedule_save);
   // Without OK, Return would press whichever button Qt picks as the default.
   for (QPushButton* button : findChildren<QPushButton*>()) {
     button->setAutoDefault(false);
     button->setDefault(false);
   }
+  // As wide as the widest page, and short enough for a 13" screen; the
+  // pages scroll.
+  resize(minimumSizeHint().width(), 680);
 }
 
 void ConfigDialog::done(int result) {
@@ -592,6 +628,68 @@ QComboBox* AddComboBox(QFormLayout* form, const char* label,
   form->addRow(Text(label), box);
   return box;
 }
+
+// Gives the forms' labels one width, the widest's.
+void AlignLabels(std::initializer_list<QFormLayout*> forms) {
+  std::vector<QWidget*> labels;
+  int width = 0;
+  for (QFormLayout* form : forms) {
+    for (int row = 0; row < form->rowCount(); ++row) {
+      if (QLayoutItem* item = form->itemAt(row, QFormLayout::LabelRole);
+          item != nullptr && item->widget() != nullptr) {
+        labels.push_back(item->widget());
+        width = std::max(width, item->widget()->sizeHint().width());
+      }
+    }
+  }
+  for (QWidget* label : labels) label->setMinimumWidth(width);
+}
+
+QColor Color(uint32_t rgb) {
+  return QColor((rgb >> 16) & 0xff, (rgb >> 8) & 0xff, rgb & 0xff);
+}
+
+const google::protobuf::FieldDescriptor* ColorField(
+    const QPushButton* button, const google::protobuf::Message& style) {
+  return style.GetDescriptor()->FindFieldByName(
+      button->property("field").toString().toStdString());
+}
+
+// The button's color from `style`: set, or unset (no "rgb").
+void LoadColor(QPushButton* button, const google::protobuf::Message& style) {
+  const auto* field = ColorField(button, style);
+  button->setProperty(
+      "rgb", style.GetReflection()->HasField(style, field)
+                 ? QVariant(style.GetReflection()->GetUInt32(style, field))
+                 : QVariant());
+}
+
+void SaveColor(const QPushButton* button, google::protobuf::Message* style) {
+  const auto* field = ColorField(button, *style);
+  if (const QVariant rgb = button->property("rgb"); rgb.isValid()) {
+    style->GetReflection()->SetUInt32(style, field, rgb.toUInt());
+  } else {
+    style->GetReflection()->ClearField(style, field);
+  }
+}
+
+// Shows the color `shown` gives the button's field: a swatch and its hex.
+void ShowColor(QPushButton* button, const google::protobuf::Message& shown) {
+  const uint32_t rgb =
+      shown.GetReflection()->GetUInt32(shown, ColorField(button, shown));
+  QPixmap swatch(28, 28);
+  swatch.setDevicePixelRatio(2);
+  swatch.fill(Qt::transparent);
+  QPainter painter(&swatch);
+  painter.setRenderHint(QPainter::Antialiasing);
+  painter.setPen(QColor(0, 0, 0, 80));
+  painter.setBrush(Color(rgb));
+  painter.drawRoundedRect(QRectF(0.5, 0.5, 13, 13), 3, 3);
+  painter.end();
+  button->setIcon(QIcon(swatch));
+  button->setText(QStringLiteral("#%1").arg(rgb, 6, 16, QChar('0')).toUpper());
+  button->setProperty("shown", rgb);
+}
 }  // namespace
 
 void ConfigDialog::SetUpFloatypeSettings() {
@@ -665,31 +763,12 @@ void ConfigDialog::SetUpFloatypeSettings() {
   gridLayout_4->addWidget(WithBadge(suggestAddedWordsCheckBox_),
                           gridLayout_4->rowCount(), 0, 1, 3);
 
-  // 外観
-  QWidget* look = new QWidget();
-  QVBoxLayout* look_layout = new QVBoxLayout(look);
-  look_layout->setSpacing(0);  // As Mozc's tabs.
-  QFormLayout* candidates = InsertGroup(look_layout, 0, "候補の窓と読み");
-  candidateFontScaleSpinBox_ = NewSpinBox(50, 300, 10, " %");
-  candidates->addRow(Text("文字の大きさ"), candidateFontScaleSpinBox_);
-  liveConversionRubyCheckBox_ =
-      AddCheckBox(candidates, "ライブ変換の上に読みを小さく出す");
-  QFormLayout* indicator = InsertGroup(look_layout, 2, "状態インジケータ");
-  showIndicatorCheckBox_ = AddCheckBox(indicator, "入力中の文字の近くに出す");
-  indicatorPlacementComboBox_ =
-      AddComboBox(indicator, "位置", {"入力中の文字の上", "下", "左横"});
-  indicatorLabelComboBox_ = AddComboBox(
-      indicator, "文字", {"入力中 / Mozc / Zenz", "あ / M / Z", "色だけ"});
-  indicatorShapeComboBox_ =
-      AddComboBox(indicator, "形", {"角丸の帯", "角丸の四角", "丸"});
-  QLabel* note = new QLabel(
-      Text("色や大きさは config.toml で変えられます（例は floatype.app の "
-           "Resources/config.example.toml）。"));
-  note->setWordWrap(true);
-  indicator->addRow(note);
-  look_layout->addStretch();
   configDialogTabWidget->insertTab(
-      configDialogTabWidget->indexOf(suggestionsTab) + 1, look, Text("外観"));
+      configDialogTabWidget->indexOf(suggestionsTab) + 1, SetUpLookTab(),
+      Text("外観"));
+
+  // One label column through 一般's groups, so that their controls line up.
+  AlignLabels({live, zenz, assist});
 
   // Settings that only matter while their switch is on follow it.
   for (QWidget* widget : std::initializer_list<QWidget*>{
@@ -707,7 +786,9 @@ void ConfigDialog::SetUpFloatypeSettings() {
   }
   for (QWidget* widget : std::initializer_list<QWidget*>{
            indicatorPlacementComboBox_, indicatorLabelComboBox_,
-           indicatorShapeComboBox_}) {
+           indicatorShapeComboBox_, indicatorHeightSpinBox_,
+           indicatorFontSizeSpinBox_, indicatorCornerRadiusSpinBox_,
+           indicatorOpacitySpinBox_}) {
     connect(showIndicatorCheckBox_, &QCheckBox::toggled, widget,
             &QWidget::setEnabled);
   }
@@ -734,6 +815,367 @@ void ConfigDialog::SetUpFooter() {
   });
   footerLayout->addWidget(reveal);
   footerLayout->addWidget(resetToDefaultsButton);
+}
+
+QPushButton* ConfigDialog::NewColorButton(const char* field, const char* label,
+                                          QComboBox* theme) {
+  QPushButton* button = new QPushButton();
+  button->setProperty("field", QString::fromUtf8(field));
+  // The native color panel on macOS.
+  connect(button, &QPushButton::clicked, this, [this, button, label, theme] {
+    const QColor color = QColorDialog::getColor(
+        Color(button->property("shown").toUInt()), this, Text(label));
+    if (!color.isValid()) {
+      return;
+    }
+    button->setProperty("rgb", static_cast<uint32_t>(color.rgb() & 0xffffff));
+    if (theme != nullptr) {
+      theme->setCurrentIndex(config::Config::CandidateStyle::CUSTOM);
+    }
+    RefreshLook();
+    save_timer_.start();
+  });
+  return button;
+}
+
+QWidget* ConfigDialog::NewWindowForm(WindowControls& controls) {
+  QWidget* page = new QWidget();
+  QFormLayout* form = new QFormLayout(page);
+  form->setFieldGrowthPolicy(QFormLayout::FieldsStayAtSizeHint);
+  controls.form = form;
+  // In Theme's order.
+  controls.theme =
+      AddComboBox(form, "配色",
+                  {"自動（システムに合わせる）", "明るい", "暗い", "指定する"});
+  for (const auto& [field, label] :
+       std::initializer_list<std::pair<const char*, const char*>>{
+           {"background_color", "背景"},
+           {"text_color", "文字"},
+           {"focused_background_color", "選択中の背景"},
+           {"focused_border_color", "選択中の枠"},
+           {"border_color", "枠線"}}) {
+    QPushButton* button = NewColorButton(field, label, controls.theme);
+    form->addRow(Text(label), button);
+    controls.colors.push_back(button);
+  }
+  QWidget* size = new QWidget();
+  QHBoxLayout* size_layout = new QHBoxLayout(size);
+  size_layout->setContentsMargins(0, 0, 0, 0);
+  controls.size = new QSlider(Qt::Horizontal);
+  controls.size->setRange(50, 300);
+  controls.size->setSingleStep(5);
+  controls.size->setPageStep(10);
+  controls.size->setMinimumWidth(140);
+  controls.size_value = new QLabel();
+  controls.size_value->setMinimumWidth(
+      controls.size_value->fontMetrics().horizontalAdvance("300%"));
+  size_layout->addWidget(controls.size);
+  size_layout->addWidget(controls.size_value);
+  form->addRow(Text("文字の大きさ"), size);
+  controls.corner_radius = NewSpinBox(0, 24, 1, " px");
+  form->addRow(Text("角の丸み"), controls.corner_radius);
+  controls.opacity = NewSpinBox(30, 100, 5, " %");
+  form->addRow(Text("不透明度"), controls.opacity);
+  // Not in Shadow's order, so each item carries its value.
+  controls.shadow = new QComboBox();
+  controls.shadow->addItem(Text("なし"), config::Config::CandidateStyle::NONE);
+  controls.shadow->addItem(Text("弱い"), config::Config::CandidateStyle::SOFT);
+  controls.shadow->addItem(Text("強い"),
+                           config::Config::CandidateStyle::STRONG);
+  form->addRow(Text("影"), controls.shadow);
+  controls.font = new QComboBox();
+  controls.font->setSizeAdjustPolicy(
+      QComboBox::AdjustToMinimumContentsLengthWithIcon);
+  controls.font->setMinimumContentsLength(14);
+  controls.font->addItem(Text("システム（標準）"), QString());
+  for (const QString& family : QFontDatabase::families()) {
+    controls.font->addItem(family, family);
+  }
+  form->addRow(Text("フォント"), controls.font);
+  return page;
+}
+
+QWidget* ConfigDialog::SetUpLookTab() {
+  QWidget* look = new QWidget();
+  QVBoxLayout* layout = new QVBoxLayout(look);
+
+  // Which look the preview and the form are for. Push buttons, so that
+  // switching saves nothing.
+  QHBoxLayout* targets = new QHBoxLayout();
+  targets->setSpacing(0);
+  QButtonGroup* target_group = new QButtonGroup(look);
+  int id = 0;
+  for (const char* name :
+       {"候補の窓", "予測候補の窓", "ルビ", "インジケータ"}) {
+    QPushButton* button = new QPushButton(Text(name));
+    button->setCheckable(true);
+    button->setChecked(id == 0);
+    button->setObjectName(QStringLiteral("lookTarget%1").arg(id));
+    target_group->addButton(button, id++);
+    targets->addWidget(button);
+  }
+  targets->addSpacing(8);
+  targets->addWidget(NewBadge());
+  targets->addStretch();
+  layout->addLayout(targets);
+
+  QHBoxLayout* body = new QHBoxLayout();
+  QVBoxLayout* left = new QVBoxLayout();
+  lookPreview_ = new LookPreview([this](QPainter& painter, const QRectF& area) {
+    PaintPreview(painter, area);
+  });
+  lookPreview_->setFixedSize(380, 330);
+  left->addWidget(lookPreview_);
+  QHBoxLayout* shades = new QHBoxLayout();
+  shades->setSpacing(0);
+  QButtonGroup* shade_group = new QButtonGroup(look);
+  previewDark_ =
+      QGuiApplication::styleHints()->colorScheme() == Qt::ColorScheme::Dark;
+  id = 0;
+  for (const char* name : {"明", "暗"}) {
+    QPushButton* button = new QPushButton(Text(name));
+    button->setCheckable(true);
+    button->setChecked((id == 1) == previewDark_);
+    button->setObjectName(id == 0 ? QStringLiteral("previewLight")
+                                  : QStringLiteral("previewDark"));
+    button->setToolTip(Text("プレビューの背景と、自動の配色が従う明るさ"));
+    shade_group->addButton(button, id++);
+    shades->addWidget(button);
+  }
+  shades->addStretch();
+  left->addLayout(shades);
+  left->addStretch();
+  body->addLayout(left);
+
+  lookStack_ = new QStackedWidget();
+  lookStack_->addWidget(NewWindowForm(candidateControls_));
+  lookStack_->addWidget(NewWindowForm(suggestControls_));
+
+  QWidget* ruby_page = new QWidget();
+  QFormLayout* ruby = new QFormLayout(ruby_page);
+  ruby->setFieldGrowthPolicy(QFormLayout::FieldsStayAtSizeHint);
+  liveConversionRubyCheckBox_ =
+      AddCheckBox(ruby, "ルビを出す（ライブ変換の上に読みを小さく）");
+  rubyFontSizeSpinBox_ = NewSpinBox(6, 72, 1, " pt");
+  ruby->addRow(Text("文字の大きさ"), rubyFontSizeSpinBox_);
+  for (const auto& [field, label] :
+       std::initializer_list<std::pair<const char*, const char*>>{
+           {"text_color", "文字色"}, {"background_color", "背景色"}}) {
+    QPushButton* button = NewColorButton(field, label, nullptr);
+    ruby->addRow(Text(label), button);
+    rubyColorButtons_.push_back(button);
+  }
+  rubyCornerRadiusSpinBox_ = NewSpinBox(0, 24, 1, " px");
+  ruby->addRow(Text("角の丸み"), rubyCornerRadiusSpinBox_);
+  rubyOpacitySpinBox_ = NewSpinBox(30, 100, 5, " %");
+  ruby->addRow(Text("不透明度"), rubyOpacitySpinBox_);
+  lookStack_->addWidget(ruby_page);
+
+  // The ranges are those the settings file takes, so that loading never
+  // changes a value.
+  QWidget* indicator_page = new QWidget();
+  QFormLayout* indicator = new QFormLayout(indicator_page);
+  indicator->setFieldGrowthPolicy(QFormLayout::FieldsStayAtSizeHint);
+  showIndicatorCheckBox_ = AddCheckBox(indicator, "入力中の文字の近くに出す");
+  indicatorShapeComboBox_ =
+      AddComboBox(indicator, "形", {"角丸の帯", "角丸の四角", "丸"});
+  indicatorLabelComboBox_ = AddComboBox(
+      indicator, "文字", {"入力中 / Mozc / Zenz", "あ / M / Z", "色だけ"});
+  indicatorPlacementComboBox_ =
+      AddComboBox(indicator, "位置", {"入力中の文字の上", "下", "左横"});
+  for (const auto& [field, label] :
+       std::initializer_list<std::pair<const char*, const char*>>{
+           {"reading_color", "入力中の色"},
+           {"mozc_color", "Mozc の色"},
+           {"zenz_pending_color", "zenz を待つ間の色"},
+           {"zenz_color", "Zenz の色"},
+           {"text_color", "文字色"}}) {
+    QPushButton* button = NewColorButton(field, label, nullptr);
+    indicator->addRow(Text(label), button);
+    indicatorColorButtons_.push_back(button);
+  }
+  indicatorHeightSpinBox_ = NewSpinBox(8, 200, 1, " px");
+  indicator->addRow(Text("高さ"), indicatorHeightSpinBox_);
+  indicatorFontSizeSpinBox_ = NewSpinBox(6, 72, 1, " pt");
+  indicator->addRow(Text("文字の大きさ"), indicatorFontSizeSpinBox_);
+  indicatorCornerRadiusSpinBox_ = NewSpinBox(0, 100, 1, " px");
+  indicator->addRow(Text("角の丸み（角丸の四角）"),
+                    indicatorCornerRadiusSpinBox_);
+  indicatorOpacitySpinBox_ = NewSpinBox(0, 100, 5, " %");
+  indicator->addRow(Text("不透明度"), indicatorOpacitySpinBox_);
+  lookStack_->addWidget(indicator_page);
+
+  body->addWidget(lookStack_, 1, Qt::AlignTop);
+  layout->addLayout(body);
+  layout->addStretch();
+
+  connect(target_group, &QButtonGroup::idClicked, lookStack_,
+          &QStackedWidget::setCurrentIndex);
+  connect(lookStack_, &QStackedWidget::currentChanged, lookPreview_,
+          [this] { lookPreview_->update(); });
+  connect(shade_group, &QButtonGroup::idClicked, this, [this](int id) {
+    previewDark_ = id == 1;
+    RefreshLook();
+  });
+  return look;
+}
+
+// Each page in a frameless scroll area, so that the window fits a small
+// screen; the page's width is kept.
+void ConfigDialog::WrapTabsInScrollAreas() {
+  const int current = configDialogTabWidget->currentIndex();
+  for (int i = 0; i < configDialogTabWidget->count(); ++i) {
+    QWidget* page = configDialogTabWidget->widget(i);
+    const QString title = configDialogTabWidget->tabText(i);
+    configDialogTabWidget->removeTab(i);
+    QScrollArea* scroll = new QScrollArea();
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setWidgetResizable(true);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll->setWidget(page);
+    scroll->setMinimumWidth(page->minimumSizeHint().width() +
+                            scroll->verticalScrollBar()->sizeHint().width());
+    page->setAutoFillBackground(false);
+    scroll->viewport()->setAutoFillBackground(false);
+    configDialogTabWidget->insertTab(i, scroll, title);
+  }
+  configDialogTabWidget->setCurrentIndex(current);
+}
+
+void ConfigDialog::LoadLookControls(const config::Config& config) {
+  for (const auto& [controls, style] :
+       {std::pair{&candidateControls_, &config.candidate_style()},
+        std::pair{&suggestControls_, &config.suggest_style()}}) {
+    controls->theme->setCurrentIndex(style->theme());
+    for (QPushButton* button : controls->colors) LoadColor(button, *style);
+    controls->size->setValue(style->size_percent());
+    controls->corner_radius->setValue(style->corner_radius());
+    controls->opacity->setValue(style->opacity_percent());
+    controls->shadow->setCurrentIndex(
+        controls->shadow->findData(style->shadow()));
+    // A family not installed stays as it is.
+    const QString family = QString::fromStdString(style->font_family());
+    if (controls->font->findData(family) < 0) {
+      controls->font->addItem(family, family);
+    }
+    controls->font->setCurrentIndex(controls->font->findData(family));
+  }
+  const config::Config::RubyStyle& ruby = config.ruby_style();
+  rubyFontSizeSpinBox_->setValue(ruby.font_size());
+  rubyCornerRadiusSpinBox_->setValue(ruby.corner_radius());
+  rubyOpacitySpinBox_->setValue(ruby.opacity_percent());
+  for (QPushButton* button : rubyColorButtons_) LoadColor(button, ruby);
+  const config::Config::IndicatorStyle& indicator = config.indicator_style();
+  indicatorShapeComboBox_->setCurrentIndex(indicator.shape());
+  indicatorLabelComboBox_->setCurrentIndex(indicator.label());
+  indicatorPlacementComboBox_->setCurrentIndex(indicator.placement());
+  indicatorHeightSpinBox_->setValue(indicator.height());
+  indicatorFontSizeSpinBox_->setValue(indicator.font_size());
+  indicatorCornerRadiusSpinBox_->setValue(indicator.corner_radius());
+  indicatorOpacitySpinBox_->setValue(indicator.opacity_percent());
+  for (QPushButton* button : indicatorColorButtons_) {
+    LoadColor(button, indicator);
+  }
+  RefreshLook();
+}
+
+// Into the styles `config` has, keeping the fields without a control.
+void ConfigDialog::SaveLookControls(config::Config* config) const {
+  for (const auto& [controls, style] :
+       {std::pair{&candidateControls_, config->mutable_candidate_style()},
+        std::pair{&suggestControls_, config->mutable_suggest_style()}}) {
+    style->set_theme(static_cast<config::Config::CandidateStyle::Theme>(
+        controls->theme->currentIndex()));
+    for (const QPushButton* button : controls->colors) {
+      SaveColor(button, style);
+    }
+    style->set_size_percent(controls->size->value());
+    style->set_corner_radius(controls->corner_radius->value());
+    style->set_opacity_percent(controls->opacity->value());
+    style->set_shadow(static_cast<config::Config::CandidateStyle::Shadow>(
+        controls->shadow->currentData().toInt()));
+    style->set_font_family(
+        controls->font->currentData().toString().toStdString());
+  }
+  config::Config::RubyStyle* ruby = config->mutable_ruby_style();
+  ruby->set_font_size(rubyFontSizeSpinBox_->value());
+  ruby->set_corner_radius(rubyCornerRadiusSpinBox_->value());
+  ruby->set_opacity_percent(rubyOpacitySpinBox_->value());
+  for (const QPushButton* button : rubyColorButtons_) SaveColor(button, ruby);
+  config::Config::IndicatorStyle* indicator = config->mutable_indicator_style();
+  indicator->set_shape(static_cast<config::Config::IndicatorStyle::Shape>(
+      indicatorShapeComboBox_->currentIndex()));
+  indicator->set_label(static_cast<config::Config::IndicatorStyle::Label>(
+      indicatorLabelComboBox_->currentIndex()));
+  indicator->set_placement(
+      static_cast<config::Config::IndicatorStyle::Placement>(
+          indicatorPlacementComboBox_->currentIndex()));
+  indicator->set_height(indicatorHeightSpinBox_->value());
+  indicator->set_font_size(indicatorFontSizeSpinBox_->value());
+  indicator->set_corner_radius(indicatorCornerRadiusSpinBox_->value());
+  indicator->set_opacity_percent(indicatorOpacitySpinBox_->value());
+  for (const QPushButton* button : indicatorColorButtons_) {
+    SaveColor(button, indicator);
+  }
+}
+
+void ConfigDialog::RefreshLook() {
+  config::Config config = base_config_;
+  SaveLookControls(&config);
+  for (const auto& [controls, style] :
+       {std::pair{&candidateControls_, &config.candidate_style()},
+        std::pair{&suggestControls_, &config.suggest_style()}}) {
+    // An unset color shows the one the window gets.
+    const floatype::WindowLook look =
+        floatype::ResolveWindowLook(*style, previewDark_);
+    config::Config::CandidateStyle shown = *style;
+    shown.set_background_color(look.background);
+    shown.set_text_color(look.text);
+    shown.set_focused_background_color(look.focused_background);
+    shown.set_focused_border_color(look.focused_border);
+    shown.set_border_color(look.border);
+    const bool custom =
+        style->theme() == config::Config::CandidateStyle::CUSTOM;
+    for (QPushButton* button : controls->colors) {
+      controls->form->setRowVisible(button, custom);
+      ShowColor(button, shown);
+    }
+    controls->size_value->setText(
+        QStringLiteral("%1%").arg(controls->size->value()));
+  }
+  for (QPushButton* button : rubyColorButtons_) {
+    ShowColor(button, config.ruby_style());
+  }
+  for (QPushButton* button : indicatorColorButtons_) {
+    ShowColor(button, config.indicator_style());
+  }
+  lookPreview_->update();
+}
+
+void ConfigDialog::PaintPreview(QPainter& painter, const QRectF& area) const {
+  config::Config config = base_config_;
+  SaveLookControls(&config);
+  PaintBackdrop(painter, area, previewDark_);
+  switch (lookStack_->currentIndex()) {
+    case 0:
+      PaintCandidateWindow(
+          painter, area,
+          floatype::ResolveWindowLook(config.candidate_style(), previewDark_),
+          false);
+      break;
+    case 1:
+      PaintCandidateWindow(
+          painter, area,
+          floatype::ResolveWindowLook(config.suggest_style(), previewDark_),
+          true);
+      break;
+    case 2:
+      PaintRuby(painter, area, config.ruby_style(), previewDark_);
+      break;
+    default:
+      PaintIndicators(painter, area, config.indicator_style());
+      break;
+  }
 }
 
 // TODO(taku)
@@ -829,12 +1271,8 @@ void ConfigDialog::ConvertFromProto(const config::Config& config) {
   SET_CHECKBOX(mixedEnglishCheckBox_, mixed_english);
   SET_CHECKBOX(suggestAddedWordsCheckBox_, suggest_added_words);
   SET_CHECKBOX(displayAmbiguousCheckBox_, display_ambiguous_romaji);
-  candidateFontScaleSpinBox_->setValue(config.candidate_style().size_percent());
   SET_CHECKBOX(showIndicatorCheckBox_, show_indicator);
-  indicatorPlacementComboBox_->setCurrentIndex(
-      config.indicator_style().placement());
-  indicatorLabelComboBox_->setCurrentIndex(config.indicator_style().label());
-  indicatorShapeComboBox_->setCurrentIndex(config.indicator_style().shape());
+  LoadLookControls(config);
 
   // tab5
   SetSendStatsCheckBox();
@@ -956,16 +1394,8 @@ void ConfigDialog::ConvertToProto(config::Config* config) const {
   GET_CHECKBOX(mixedEnglishCheckBox_, mixed_english);
   GET_CHECKBOX(suggestAddedWordsCheckBox_, suggest_added_words);
   GET_CHECKBOX(displayAmbiguousCheckBox_, display_ambiguous_romaji);
-  config->mutable_candidate_style()->set_size_percent(
-      candidateFontScaleSpinBox_->value());
   GET_CHECKBOX(showIndicatorCheckBox_, show_indicator);
-  config::Config::IndicatorStyle* style = config->mutable_indicator_style();
-  style->set_placement(static_cast<config::Config::IndicatorStyle::Placement>(
-      indicatorPlacementComboBox_->currentIndex()));
-  style->set_label(static_cast<config::Config::IndicatorStyle::Label>(
-      indicatorLabelComboBox_->currentIndex()));
-  style->set_shape(static_cast<config::Config::IndicatorStyle::Shape>(
-      indicatorShapeComboBox_->currentIndex()));
+  SaveLookControls(config);
 
   // tab5
   GetSendStatsCheckBox();
@@ -1094,6 +1524,19 @@ void ConfigDialog::LaunchAdministrationDialog() {
 
 // Catch MouseButtonRelease event to toggle the CheckBoxes
 bool ConfigDialog::eventFilter(QObject* obj, QEvent* event) {
+  if (event->type() == QEvent::Wheel) {
+    if (QWidget* widget = qobject_cast<QWidget*>(obj);
+        widget != nullptr && !widget->hasFocus()) {
+      for (QWidget* parent = widget->parentWidget(); parent != nullptr;
+           parent = parent->parentWidget()) {
+        if (QScrollArea* scroll = qobject_cast<QScrollArea*>(parent)) {
+          QCoreApplication::sendEvent(scroll->verticalScrollBar(), event);
+          break;
+        }
+      }
+      return true;
+    }
+  }
   if (event->type() == QEvent::MouseButtonRelease) {
     if (obj == usageStatsMessage) {
 #ifndef CHANNEL_DEV

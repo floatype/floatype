@@ -32,7 +32,12 @@
 #ifndef MOZC_GUI_CONFIG_DIALOG_CONFIG_DIALOG_H_
 #define MOZC_GUI_CONFIG_DIALOG_CONFIG_DIALOG_H_
 
+#include <QFormLayout>
 #include <QObject>
+#include <QPainter>
+#include <QRectF>
+#include <QSlider>
+#include <QStackedWidget>
 #include <QTimer>
 #include <map>
 #include <memory>
@@ -126,11 +131,51 @@ class ConfigDialog : public QDialog, private Ui::ConfigDialog {
   QCheckBox* mixedEnglishCheckBox_;
   QCheckBox* suggestAddedWordsCheckBox_;
   QCheckBox* displayAmbiguousCheckBox_;
-  QSpinBox* candidateFontScaleSpinBox_;
   QCheckBox* showIndicatorCheckBox_;
   QComboBox* indicatorPlacementComboBox_;
   QComboBox* indicatorLabelComboBox_;
   QComboBox* indicatorShapeComboBox_;
+
+  // floatype: the 外観 tab, a preview beside the form for one of four
+  // targets. Color buttons name their field in the property "field" and
+  // hold the color set in "rgb", which is absent while the field is unset.
+  struct WindowControls {
+    QFormLayout* form = nullptr;
+    QComboBox* theme = nullptr;
+    std::vector<QPushButton*> colors;
+    QSlider* size = nullptr;
+    QLabel* size_value = nullptr;
+    QSpinBox* corner_radius = nullptr;
+    QSpinBox* opacity = nullptr;
+    QComboBox* shadow = nullptr;
+    QComboBox* font = nullptr;
+  };
+  QWidget* SetUpLookTab();
+  QWidget* NewWindowForm(WindowControls& controls);
+  QPushButton* NewColorButton(const char* field, const char* label,
+                              QComboBox* theme);
+  void WrapTabsInScrollAreas();
+  void LoadLookControls(const config::Config& config);
+  void SaveLookControls(config::Config* config) const;
+  // Brings the swatches, the rows shown and the preview up to the controls.
+  void RefreshLook();
+  void PaintPreview(QPainter& painter, const QRectF& area) const;
+  WindowControls candidateControls_;
+  WindowControls suggestControls_;
+  QSpinBox* rubyFontSizeSpinBox_;
+  QSpinBox* rubyCornerRadiusSpinBox_;
+  QSpinBox* rubyOpacitySpinBox_;
+  std::vector<QPushButton*> rubyColorButtons_;
+  QSpinBox* indicatorHeightSpinBox_;
+  QSpinBox* indicatorFontSizeSpinBox_;
+  QSpinBox* indicatorCornerRadiusSpinBox_;
+  QSpinBox* indicatorOpacitySpinBox_;
+  std::vector<QPushButton*> indicatorColorButtons_;
+  QStackedWidget* lookStack_;
+  QWidget* lookPreview_;
+  // The preview's backdrop, and the system appearance AUTO follows in it.
+  // Not a setting.
+  bool previewDark_ = false;
 };
 
 }  // namespace gui

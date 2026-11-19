@@ -6,7 +6,10 @@ mozc_cc_library(
     name = "indicator_layout",
     srcs = ["indicator_layout.cc"],
     hdrs = ["indicator_layout.h"],
-    visibility = ["//renderer:__pkg__"],
+    visibility = [
+        "//gui/config_dialog:__pkg__",
+        "//renderer:__pkg__",
+    ],
     deps = [
         "//protocol:commands_cc_proto",
         "//protocol:config_cc_proto",
