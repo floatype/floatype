@@ -187,11 +187,13 @@ COMMIT_DELAYS_MS = (50, 100, 150, 200, 300, 500)
 
 
 def replay_with_session(
-    pairs: list[tuple[str, str]], binary: Path, data_file: Path
+    pairs: list[tuple[str, str]], binary: Path, data_file: Path,
+    model: Path | None = None
 ) -> list[dict]:
   """Replays (left context, hiragana reading) pairs; see replay_main.cc for the fields."""
   done = subprocess.run(
-      [str(binary), f"--data_file={data_file}", "--data_type=oss"],
+      [str(binary), f"--data_file={data_file}", "--data_type=oss"]
+      + ([f"--model={model}"] if model else []),
       input="".join(f"{line_field(c)}\t{line_field(r)}\n" for c, r in pairs),
       capture_output=True,
       encoding="utf-8",
@@ -264,6 +266,7 @@ def main() -> None:
   )
   parser.add_argument("--no_context", action="store_true", help="zenz: ignore the left context")
   parser.add_argument("--threads", type=int, default=4, help="zenz: inference threads")
+  parser.add_argument("--zenz_model", type=Path, help="replay: the zenz model (default: replay_main's)")
   parser.add_argument("--out", type=Path, help="write per-item results as JSON lines")
   args = parser.parse_args()
 
@@ -304,7 +307,7 @@ def main() -> None:
         ("" if args.no_context else item.get("context_text", ""), katakana_to_hiragana(item["input"]))
         for item in items
     ]
-    replayed = replay_with_session(pairs, binary, args.data_file)
+    replayed = replay_with_session(pairs, binary, args.data_file, args.zenz_model)
     top1 = [r["final"] for r in replayed]
     extras = [
         {k: r[k] for k in ("mozc", "space_ms", "final_ms", "polls")} for r in replayed

@@ -48,11 +48,13 @@ def main():
   parser.add_argument("--replay", default="bazel-bin/floatype/eval/replay_main")
   parser.add_argument("--scorer", default="floatype/scorer/build/floatype_scorer")
   parser.add_argument("--out", type=Path, help="write every row's results")
+  parser.add_argument("--model", help="the zenz model (default: replay_main's)")
   args = parser.parse_args()
 
   rows = load_rows(FILES)
   done = subprocess.run(
-      [args.replay, f"--scorer={args.scorer}"],
+      [args.replay, f"--scorer={args.scorer}"]
+      + ([f"--model={args.model}"] if args.model else []),
       input="".join(f"\t{reading}\n" for reading, _ in rows),
       capture_output=True, text=True, check=True)
   results = [tuple(line.split("\t")[:2]) for line in done.stdout.splitlines()]
