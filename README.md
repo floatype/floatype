@@ -1,3 +1,59 @@
+# floatype
+
+Apple Silicon の Mac 用の日本語入力です。Mozc の辞書変換をもとに、打つのを止めたところで小さな言語モデル zenz（zenz-v3.2-small）が変換を見直します。変換も zenz もすべて Mac の中で動き、ネットワークには触れません。
+
+- 動きの説明: [docs/floatype/behavior.md](docs/floatype/behavior.md)（打ってから確定するまで、何 ms 後に何が起きるか）
+- 仕様と計測: [docs/floatype/spec.md](docs/floatype/spec.md)
+
+## 動く環境
+
+- Apple Silicon（M1 以降）の Mac。Intel の Mac では動きません。
+- macOS 12 以降の作りです。動きを確かめているのは macOS 27 です。
+- メモリは 16GB 以上を想定しています。floatype 全体で、打っている間は約 145MB、しばらく打たないと約 51MB 使います。
+
+## 入れ方
+
+1. [Releases](https://github.com/floatype/floatype/releases) から、`floatype-<版>.pkg` と `floatype-<版>.pkg.sha256` の 2 つを同じフォルダに落とします。
+2. ターミナルでそのフォルダに移り、ファイルが壊れたり差し替えられたりしていないか確かめます。
+
+   ```sh
+   shasum -a 256 -c floatype-<版>.pkg.sha256
+   ```
+
+   `floatype-<版>.pkg: OK` と出れば、Releases に置いたものと同じです。`FAILED` と出たら開かずに消してください。
+3. pkg をダブルクリックして、インストーラの案内に従います。開けなかったときは、次の「macOS に止められたとき」を見てください。
+4. 終わったらログアウトして、ログインし直します。
+5. システム設定 → キーボード → 入力ソース の「編集…」で「＋」を押し、日本語の「ひらがな (floatype)」を足します。
+
+設定は、入力メニューの「環境設定…」の floatype のタブか、`~/.config/floatype/config.txtpb` で変えられます（例は [src/floatype/config/config.example.txtpb](src/floatype/config/config.example.txtpb)）。
+
+### macOS に止められたとき
+
+floatype の pkg には Apple の署名と公証がありません。そのため macOS が「開けません」と止めることがあります。上の手順 2 で `OK` を確かめた pkg に限り、その 1 つだけを次の手順で許可してください。
+
+1. 止められたダイアログは「完了」で閉じます。
+2. システム設定 → プライバシーとセキュリティ を開き、下の方の「セキュリティ」を見ます。
+3. 「“floatype-<版>.pkg” は Mac を保護するためにブロックされました」の横の「このまま開く」を押します。
+4. もう一度出る確認で、ファイル名が自分の落としたものと同じかを見てから「このまま開く」を押します。
+
+文言や場所は macOS の版で少し違います。Gatekeeper そのものを切る必要はありません。「マルウェアが含まれている」「壊れている」と出た場合は、許可せずにファイルを消してください。Apple の説明: https://support.apple.com/ja-jp/102445
+
+## 消し方
+
+`/Applications/floatype/Uninstallfloatype.app` を開きます。
+
+## 自分でビルドする
+
+Xcode と Nix が要ります。`src/floatype/update.sh` が、採点プロセスと zenz のモデル、足した辞書を用意してビルドし、この Mac に入れ直します（初回は数分、変更が無ければ数秒）。
+
+## ライセンス
+
+floatype は Mozc（BSD 3-Clause）の派生です。同梱するもの（zenz-v3.2-small は CC BY-SA 4.0、llama.cpp は MIT、足した辞書の出どころなど）のライセンスは [src/data/installer/credits_en.html](src/data/installer/credits_en.html) にあります。
+
+---
+
+以下は上流の Mozc の README です。
+
 [Mozc - a Japanese Input Method Editor designed for multi-platform](https://github.com/google/mozc)
 ===================================
 
