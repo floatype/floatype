@@ -35,7 +35,7 @@
 #include <QComboBox>
 #include <QFont>
 #include <QFormLayout>
-#include <QGridLayout>
+#include <QHBoxLayout>
 #include <QGuiApplication>
 #include <QLabel>
 #include <QMessageBox>
@@ -576,17 +576,19 @@ void ConfigDialog::SetUpFloatypeTab() {
                liveConversionWaitSpinBox_);
   useDirectCommitCheckBox_ =
       check("句読点・記号を打ったら、zenz を待ってその場で確定する");
+  // One row, packed to the left: spread over the form's width they did not
+  // read as checkboxes for their characters.
   QWidget* characters = new QWidget(tab);
-  QGridLayout* grid = new QGridLayout(characters);
-  grid->setContentsMargins(0, 0, 0, 0);
+  QHBoxLayout* row = new QHBoxLayout(characters);
+  row->setContentsMargins(0, 0, 0, 0);
   for (const char* character : kDirectCommitCharacters) {
     QCheckBox* box = new QCheckBox(text(character), characters);
-    const int i = static_cast<int>(directCommitCheckBoxes_.size());
-    grid->addWidget(box, i / 5, i % 5);
+    row->addWidget(box);
     directCommitCheckBoxes_.push_back(box);
     connect(useDirectCommitCheckBox_, &QCheckBox::toggled, box,
             &QWidget::setEnabled);
   }
+  row->addStretch();
   form->addRow(text("確定する文字"), characters);
 
   heading("ローマ字");
