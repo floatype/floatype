@@ -274,6 +274,25 @@ def nico_pixiv(titles, ids, pairs, readings, seen, surnames,
   return sorted(rows)
 
 
+def unsuggested(values, mozc_values, suggested) -> list[str]:
+  """Added words convert when typed in full but stay out of suggestions: there
+  they came after a few kana as noise (たあと to 田蛙澄) and pushed Mozc's own
+  suggestions out (にゅー lost ニューヨーク). Keeping out only the words no
+  Wikipedia article starts with still left 21 of 456 prefixes losing one of
+  Mozc's; keeping them all out, 14, the rest coming from the added words
+  in Mozc's realtime conversion. Words both encyclopedias have, net words
+  people do type (草生える), stay `suggested`. The filter matches the
+  written form, so a form Mozc's dictionary also has stays suggested."""
+  return sorted({v for v in values
+                 if v not in mozc_values and v not in suggested})
+
+
+def nico_pixiv_values() -> set[str]:
+  return {line.split("\t")[1]
+          for line in fetch(*NICO_PIXIV).decode("utf-8").splitlines()
+          if line and not line.startswith("#")}
+
+
 def self_check() -> None:
   assert keeps_name("かとうまき", "加藤麻希")
   assert not keeps_name("やっちゃん", "やっちゃん"), "no kanji"
@@ -293,6 +312,8 @@ def self_check() -> None:
   assert adjusted(8000, "あい", "AI", set()) == 9000
   assert plain("らぶすてーじ", "ラブステージ")
   assert not plain("らぶすてーじ", "LOVE STAGE!!") and not plain("ひがし", "東１４")
+  assert unsuggested(["高尾山", "低尾", "東京", "草生える"], {"東京"},
+                     {"草生える"}) == ["低尾", "高尾山"]
   assert known_cost(0) == 9500 and known_cost(1) == 8750 and known_cost(30) == 7500
 
 
@@ -318,6 +339,12 @@ def main() -> None:
     out = OUT_DIR / f"dictionary_floatype_ut_{name}.txt"
     out.write_text("".join(f"{row}\n" for row in rows))
     print(f"{out}: {len(rows)} entries", file=sys.stderr)
+  unknown = unsuggested(
+      (row.split("\t")[4] for rows in outputs.values() for row in rows),
+      {value for _, value in pairs}, nico_pixiv_values())
+  out = OUT_DIR / "suggestion_filter_floatype_ut.txt"
+  out.write_text("".join(f"{value}\n" for value in unknown))
+  print(f"{out}: {len(unknown)} words", file=sys.stderr)
 
 
 if __name__ == "__main__":

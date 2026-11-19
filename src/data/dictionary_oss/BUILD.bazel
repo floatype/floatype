@@ -51,6 +51,20 @@ exports_files(
     visibility = ["//data_manager:__subpackages__"],
 )
 
+# floatype: Mozc's list plus the added words (floatype/tools/
+# make_extra_dictionary.py, not committed): they convert but are not
+# suggested.
+genrule(
+    name = "suggestion_filter_all",
+    srcs = ["suggestion_filter.txt"] + glob(
+        ["suggestion_filter_floatype_ut.txt"],
+        allow_empty = True,
+    ),
+    outs = ["suggestion_filter_all.txt"],
+    cmd = "cat $(SRCS) > $@",
+    visibility = ["//data_manager:__subpackages__"],
+)
+
 exports_files(
     # dictionary00.txt is used in system_dictionary_test.cc.
     srcs = ["dictionary00.txt"],

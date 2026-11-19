@@ -99,7 +99,7 @@ mozc_dataset(
     sorting_map = "//data/rules:sorting_map.tsv",
     special_pos = "//data/rules:special_pos.def",
     suggestion_filter_src = (
-        "//data/dictionary_oss:suggestion_filter.txt"
+        "//data/dictionary_oss:suggestion_filter_all"
     ),
     symbol_ordering_rule = "//data/symbol:ordering_rule.txt",
     symbol_src = "//data/symbol:symbol.tsv",
