@@ -8,7 +8,10 @@
 #include "absl/time/time.h"
 #include "base/clock.h"
 #include "base/clock_mock.h"
+#include "base/file_util.h"
+#include "base/system_util.h"
 #include "floatype/scorer/protocol.h"
+#include "testing/gmock.h"
 #include "testing/gunit.h"
 #include "testing/mozctest.h"
 
@@ -80,6 +83,38 @@ TEST_F(ScorerClientTest, RestartsADeadScorerAfterTheInterval) {
   clock_.Advance(ScorerClient::kRestartInterval);
   ASSERT_TRUE(client.Send(Request{3, "", "ア"}));
   EXPECT_TRUE(WaitForResponse(client, 3).has_value());
+}
+
+TEST_F(ScorerClientTest, StartsAgainAtOnceAfterTheScorerIdledOut) {
+  ScorerClient client({FakeScorer()});
+  ASSERT_TRUE(client.Send(Request{1, "", "アイドル"}));
+  EXPECT_EQ(WaitForResponse(client, 1), std::nullopt);
+  // The scorer idles out a minute after its last request, so long after it
+  // started; the request after that is not lost to the dead process.
+  clock_.Advance(absl::Seconds(60));
+  ASSERT_TRUE(client.Send(Request{2, "", "ア"}));
+  EXPECT_TRUE(WaitForResponse(client, 2).has_value());
+}
+
+TEST_F(ScorerClientTest, WarmStartsTheScorerAhead) {
+  ScorerClient client({FakeScorer()});
+  client.Warm();
+  ASSERT_TRUE(client.Send(Request{1, "", "ア"}));
+  EXPECT_TRUE(WaitForResponse(client, 1).has_value());
+}
+
+TEST_F(ScorerClientTest, NewArgumentsTakeEffectOnTheNextStart) {
+  const std::string answers =
+      FileUtil::JoinPath(SystemUtil::GetUserProfileDirectory(), "answers.tsv");
+  ASSERT_OK(FileUtil::SetContents(answers, "ア\t亜\n"));
+  ScorerClient client({FakeScorer()});
+  ASSERT_TRUE(client.Send(Request{1, "", "ア"}));
+  EXPECT_EQ(WaitForResponse(client, 1)->conversion, "ア");
+  // The fake reads its first argument as its answers.
+  client.SetArguments({answers});
+  clock_.Advance(ScorerClient::kRestartInterval);
+  ASSERT_TRUE(client.Send(Request{2, "", "ア"}));
+  EXPECT_EQ(WaitForResponse(client, 2)->conversion, "亜");
 }
 
 TEST_F(ScorerClientTest, FailsWithoutAScorer) {

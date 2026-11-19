@@ -554,6 +554,10 @@ void ConfigDialog::SetUpFloatypeTab() {
   zenzLearningCheckBox_ = check(
       "補正の表示中に Ctrl+Delete "
       "で止めた補正を覚え、同じ読みでは繰り返さない");
+  zenzStopWhenIdleCheckBox_ = check(
+      "打っていない間は止める（1 分で止まり、次の 1 文字目で起きる）");
+  zenzLowMemoryCheckBox_ = check(
+      "軽くする（動いている間のメモリが約 64MB 減り、補正は約 2 倍遅くなる）");
 
   heading("ライブ変換");
   liveConversionCheckBox_ = check("手が止まったら Space を押さずに変換する");
@@ -631,7 +635,8 @@ void ConfigDialog::SetUpFloatypeTab() {
   // Settings that only matter while their switch is on follow it.
   for (QWidget* widget : std::initializer_list<QWidget*>{
            zenzTimeoutSpinBox_, zenzSuggestionLearningCheckBox_,
-           zenzLearningCheckBox_, zenzDelaySpinBox_}) {
+           zenzLearningCheckBox_, zenzStopWhenIdleCheckBox_,
+           zenzLowMemoryCheckBox_, zenzDelaySpinBox_}) {
     connect(useZenzCheckBox_, &QCheckBox::toggled, widget,
             &QWidget::setEnabled);
   }
@@ -725,6 +730,8 @@ void ConfigDialog::ConvertFromProto(const config::Config& config) {
   zenzTimeoutSpinBox_->setValue(config.zenz_timeout_millisec());
   SET_CHECKBOX(zenzSuggestionLearningCheckBox_, zenz_suggestion_learning);
   SET_CHECKBOX(zenzLearningCheckBox_, zenz_learning);
+  SET_CHECKBOX(zenzStopWhenIdleCheckBox_, zenz_stop_when_idle);
+  SET_CHECKBOX(zenzLowMemoryCheckBox_, zenz_low_memory);
   SET_CHECKBOX(liveConversionCheckBox_, use_live_conversion);
   liveConversionDelaySpinBox_->setValue(
       config.live_conversion_delay_millisec());
@@ -846,6 +853,8 @@ void ConfigDialog::ConvertToProto(config::Config* config) const {
   config->set_zenz_timeout_millisec(zenzTimeoutSpinBox_->value());
   GET_CHECKBOX(zenzSuggestionLearningCheckBox_, zenz_suggestion_learning);
   GET_CHECKBOX(zenzLearningCheckBox_, zenz_learning);
+  GET_CHECKBOX(zenzStopWhenIdleCheckBox_, zenz_stop_when_idle);
+  GET_CHECKBOX(zenzLowMemoryCheckBox_, zenz_low_memory);
   GET_CHECKBOX(liveConversionCheckBox_, use_live_conversion);
   config->set_live_conversion_delay_millisec(
       liveConversionDelaySpinBox_->value());

@@ -284,6 +284,9 @@ class Session {
   floatype::ZenzCorrector zenz_{floatype::ZenzCorrector::DefaultClient()};
   // Sends the new conversion to zenz and asks the client to call back.
   void RequestZenz(commands::Command* command);
+  // After a typed character: starts the scorer if it ended after idling, so
+  // it has the model loaded when the user pauses.
+  void WarmZenz();
   // Handles the callback: shows zenz's correction or asks to be called again.
   bool PollZenz(commands::Command* command);
   // floatype live conversion: true while the conversion on screen is a live

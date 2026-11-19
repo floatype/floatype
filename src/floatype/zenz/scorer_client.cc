@@ -96,7 +96,9 @@ bool ScorerClient::Start() {
   fcntl(parent_fd, F_SETFL, fcntl(parent_fd, F_GETFL) | O_NONBLOCK);
   fcntl(parent_fd, F_SETFD, FD_CLOEXEC);
 
-  pid_ = Spawn(command_, child_fd);
+  std::vector<std::string> argv = command_;
+  argv.insert(argv.end(), arguments_.begin(), arguments_.end());
+  pid_ = Spawn(argv, child_fd);
   close(child_fd);
   if (pid_ < 0) {
     close(parent_fd);
@@ -123,8 +125,31 @@ void ScorerClient::Stop() {
   buffer_.clear();
 }
 
+bool ScorerClient::Running() {
+  if (pid_ > 0 && waitpid(pid_, nullptr, WNOHANG) == pid_) {
+    pid_ = -1;  // Reaped.
+    Stop();
+  }
+  return fd_ >= 0;
+}
+
+void ScorerClient::SetArguments(std::vector<std::string> arguments) {
+  if (arguments != arguments_) {
+    Stop();
+    arguments_ = std::move(arguments);
+  }
+}
+
+void ScorerClient::Warm() {
+  if (!Running()) {
+    Start();
+  }
+}
+
 bool ScorerClient::Send(const Request& request) {
-  if (fd_ < 0 && !Start()) {
+  // A scorer that ended itself after idling takes this request after a new
+  // start rather than failing it.
+  if (!Running() && !Start()) {
     return false;
   }
   const std::string line = FormatRequest(request);

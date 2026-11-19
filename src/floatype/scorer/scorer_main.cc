@@ -9,6 +9,7 @@
 // The backend is fixed at build time (GGML_METAL).
 
 #include <mach/mach.h>
+#include <poll.h>
 #include <unistd.h>
 
 #include <cerrno>
@@ -234,6 +235,11 @@ int main(int argc, char** argv) {
   int threads = 4;
   bool show_tokens = false;
   bool reuse_cache = true;
+  // 0 runs until the client closes the connection.
+  int idle_exit_seconds = 0;
+  // Repacking the weights for the CPU's fast kernels copies the model into
+  // memory (about 64MB); without it zenz takes about twice as long.
+  bool repack = true;
   for (int i = 1; i < argc; ++i) {
     const std::string_view arg = argv[i];
     if (arg == "--model" && i + 1 < argc) {
@@ -244,6 +250,10 @@ int main(int argc, char** argv) {
       show_tokens = true;
     } else if (arg == "--no_cache_reuse") {  // For measuring.
       reuse_cache = false;
+    } else if (arg == "--idle_exit_seconds" && i + 1 < argc) {
+      idle_exit_seconds = std::atoi(argv[++i]);
+    } else if (arg == "--no_repack") {
+      repack = false;
     } else {
       std::fprintf(stderr, "unknown argument: %s\n", argv[i]);
       return 2;
@@ -252,7 +262,8 @@ int main(int argc, char** argv) {
   if (model_path.empty() || threads < 1) {
     std::fprintf(stderr,
                  "usage: floatype_scorer --model <gguf> [--threads N] "
-                 "[--show_tokens] [--no_cache_reuse]\n");
+                 "[--idle_exit_seconds N] [--no_repack] [--show_tokens] "
+                 "[--no_cache_reuse]\n");
     return 2;
   }
   // A closed socket must end the loop through write() errors, not a signal.
@@ -266,6 +277,7 @@ int main(int argc, char** argv) {
   const std::vector<llama_model_kv_override> overrides =
       PreTokenizerOverrides(model_path);
   model_params.kv_overrides = overrides.data();
+  model_params.use_extra_bufts = repack;
   // The default callback prints progress dots to stderr.
   model_params.progress_callback = [](float, void*) { return true; };
   llama_model* model =
@@ -296,6 +308,14 @@ int main(int argc, char** argv) {
   std::string line;
   char chunk[1 << 16];
   while (true) {
+    // With no request for a while, the process ends to give its memory back;
+    // the client starts it again when the user types.
+    if (idle_exit_seconds > 0) {
+      pollfd input{STDIN_FILENO, POLLIN, 0};
+      const int ready = poll(&input, 1, idle_exit_seconds * 1000);
+      if (ready < 0 && errno == EINTR) continue;
+      if (ready == 0) break;
+    }
     // read() returns what has arrived so far, so a burst of requests is seen
     // together and only the latest one is converted.
     const ssize_t n = read(STDIN_FILENO, chunk, sizeof(chunk));

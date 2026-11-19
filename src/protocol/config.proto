@@ -438,6 +438,14 @@ message Config {
   // the end of the composition converts it, waits for zenz, and commits it.
   // Mozkey's characters and first choice.
   optional bool use_direct_commit = 1020 [default = false];
+  // floatype: the scorer ends after a minute without a request and starts
+  // again on the next typed character (about 50ms, before the user pauses),
+  // so zenz holds no memory while idle. Off, it runs while floatype does.
+  optional bool zenz_stop_when_idle = 1021 [default = true];
+  // floatype: zenz keeps the model as the file holds it instead of a copy
+  // repacked for the CPU: about 64MB less while it runs, and corrections take
+  // about twice as long (median 26ms to 50ms on an M4 Pro).
+  optional bool zenz_low_memory = 1022 [default = false];
   optional string direct_commit_characters = 1015 [default = "、。？！「」"];
   // floatype: the reading above a live conversion, in small type.
   optional bool live_conversion_ruby = 1016 [default = false];

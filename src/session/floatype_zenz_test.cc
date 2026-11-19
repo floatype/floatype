@@ -359,6 +359,21 @@ TEST_F(FloatypeZenzTest, ALiveConversionConvertsAfreshAsMozkeyDoes) {
   EXPECT_EQ(Preedit(PollWhileAsked(CallBack(converted))), "機械が");
 }
 
+TEST_F(FloatypeZenzTest, ZenzCorrectsWithTheMemorySettings) {
+  floatype::EnableSessionFeatures(true);
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_zenz_low_memory(true);
+  config.set_zenz_stop_when_idle(false);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+  // The first key starts the scorer with these settings, and the correction
+  // after the pause comes from it.
+  const commands::Output live = CallBack(SendKeys({"k", "i", "k", "a", "i"}));
+  EXPECT_EQ(Preedit(PollWhileAsked(CallBack(live))), "機械");
+}
+
 TEST_F(FloatypeZenzTest, ALiveConversionNeedsTwoCharactersAndCanBeOff) {
   floatype::EnableSessionFeatures(true);
   EXPECT_FALSE(SendKeys({"k", "i"}).has_callback());

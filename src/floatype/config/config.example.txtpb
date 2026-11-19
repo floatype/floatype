@@ -20,6 +20,15 @@
 ## zenz の答えを待つ上限（ミリ秒、50〜5000）。これより遅い答えは捨てます。
 # zenz_timeout_millisec: 300
 
+## 打っていない間は zenz を止める。1 分間使わないと止まり、次に打った 1 文字目で
+## 起き直す（約 50ms、手を止めるまでに間に合う）。止まっている間 zenz はメモリを使わない。
+## false にすると floatype が動いている間ずっと動く。
+# zenz_stop_when_idle: true
+
+## zenz を軽くする。モデルを CPU 向けに並べ替えた複製を持たず、動いている間のメモリが
+## 約 64MB 減る。代わりに補正にかかる時間が約 2 倍になる（M4 Pro で中央値 26ms → 50ms）。
+# zenz_low_memory: false
+
 ## zenz が直した確定を、予測候補（サジェスト）の履歴に覚えさせるか。
 ## 変換の順位は、オンでも zenz の選択を覚えません。
 # zenz_suggestion_learning: true

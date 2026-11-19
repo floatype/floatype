@@ -6,6 +6,7 @@
 //   CRASH  aborts without answering.
 //   スロウ  answers after 200ms.
 //   カップ  answers with the stop reason "cap".
+//   アイドル  ends the process without answering, as the scorer does after idling.
 
 #include <unistd.h>
 
@@ -44,6 +45,7 @@ int main(int argc, char** argv) {
     const std::optional<Request> request = ParseRequest(line);
     if (!request.has_value()) continue;
     if (request->reading == "CRASH") std::abort();
+    if (request->reading == "アイドル") return 0;
     if (request->reading == "スロウ") {
       std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }

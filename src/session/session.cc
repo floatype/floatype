@@ -713,6 +713,7 @@ bool Session::SendKey(commands::Command* command) {
           japanese::FullWidthAsciiToHalfWidthAscii(zenz_text_)) {
     floatype::ZenzMemory::Accepted().Add(zenz_reading_, zenz_text_);
   }
+  WarmZenz();
   if (MaybeCommitOnCharacter(command)) {
     SetIndicator(command);
     SetCandidateLook(command);
@@ -2991,12 +2992,24 @@ bool Session::RequestZenzAfterLiveConversion(commands::Command* command) {
   return true;
 }
 
+void Session::WarmZenz() {
+  const config::Config& config = context_->GetConfig();
+  if (!floatype::SessionFeaturesEnabled() || !config.use_zenz()) {
+    return;
+  }
+  // The settings go first: changing them later would stop a scorer just
+  // started, and the restart interval would then keep zenz away.
+  zenz_.Configure(config.zenz_stop_when_idle(), config.zenz_low_memory());
+  zenz_.Warm();
+}
+
 void Session::RequestZenz(commands::Command* command) {
   const config::Config& config = context_->GetConfig();
   if (!config.use_zenz()) {
     return;
   }
   zenz_.set_timeout(absl::Milliseconds(config.zenz_timeout_millisec()));
+  zenz_.Configure(config.zenz_stop_when_idle(), config.zenz_low_memory());
   // A correction the user committed before shows at once; zenz still looks,
   // as the context may call for another.
   if (ApplyAcceptedCorrection()) {

@@ -183,6 +183,27 @@ std::optional<std::vector<int>> MapToCandidates(const Segments& segments,
   return Map(segments, text);
 }
 
+void ZenzCorrector::Configure(bool stop_when_idle, bool low_memory) {
+  if (client_ == nullptr) {
+    return;
+  }
+  std::vector<std::string> arguments;
+  if (stop_when_idle) {
+    arguments.insert(arguments.end(),
+                     {"--idle_exit_seconds", std::to_string(kIdleExitSeconds)});
+  }
+  if (low_memory) {
+    arguments.push_back("--no_repack");
+  }
+  client_->SetArguments(std::move(arguments));
+}
+
+void ZenzCorrector::Warm() {
+  if (client_ != nullptr) {
+    client_->Warm();
+  }
+}
+
 bool ZenzCorrector::Request(const Segments& segments,
                             absl::string_view left_context) {
   pending_.reset();

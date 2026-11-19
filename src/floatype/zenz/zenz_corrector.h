@@ -33,6 +33,9 @@ class ZenzCorrector {
   // Answers that come later are dropped, unless set_timeout() says otherwise
   // (the zenz_timeout_millisec setting).
   static constexpr absl::Duration kTimeout = absl::Milliseconds(300);
+  // With zenz_stop_when_idle, the scorer ends after this long without a
+  // request; it starts again in about 50ms on the next key.
+  static constexpr int kIdleExitSeconds = 60;
   // How long the client waits before calling back.
   static constexpr absl::Duration kPollInterval = absl::Milliseconds(10);
   // Longer readings are left to Mozc. The scorer's context (512 tokens) holds
@@ -65,6 +68,11 @@ class ZenzCorrector {
   // Whether a scorer is there to ask.
   bool available() const { return client_ != nullptr; }
   void set_timeout(absl::Duration timeout) { timeout_ = timeout; }
+  // The settings zenz_stop_when_idle and zenz_low_memory, applied from the
+  // scorer's next start. Call it before Warm() and Request().
+  void Configure(bool stop_when_idle, bool low_memory);
+  // Starts the scorer ahead of a request, while the user types.
+  void Warm();
   // True while an answer is awaited.
   bool pending() const { return pending_.has_value(); }
 
