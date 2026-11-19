@@ -8,8 +8,10 @@ pinned to a revision and a SHA-256 and downloaded once into
 Run from src/: python3 floatype/tools/make_extra_dictionary.py
 """
 
+import bisect
 import bz2
 import hashlib
+import html
 import re
 import sys
 import urllib.request
@@ -25,10 +27,27 @@ PERSONAL_NAMES = (
     "610e2e52fad15df0edac854960a05451a7e9a62f3df09c3f065db9e1ab6f51f4",
 )
 
+# utuhiro78/mozcdic-ut-place-names, from Japan Post's ZIP code data (no
+# copyright claimed).
+PLACE_NAMES = (
+    "https://raw.githubusercontent.com/utuhiro78/mozcdic-ut-place-names/"
+    "98cf8e9d7731695a52e5bc72ed633933c71d1913/mozcdic-ut-place-names.txt.bz2",
+    "71a3e28e8acead3793739ec3466826b01adedc168354957661ec57c18688a0a2",
+)
+
+# Japanese Wikipedia's article titles (CC BY-SA), only to tell how well
+# known a word is; no title becomes an entry.
+JAWIKI_TITLES = (
+    "https://dumps.wikimedia.org/jawiki/20261001/"
+    "jawiki-20261001-pages-articles-multistream-index.txt.bz2",
+    "8a040564302dc0ba57160172abef3d4f69cc7ca36ea67b6439959d441cd037e7",
+)
+
 # Parts of speech, by name in id.def.
 NAME = "名詞,固有名詞,人名,一般,*,*,*"
 SURNAME = "名詞,固有名詞,人名,姓,*,*,*"
 GIVEN = "名詞,固有名詞,人名,名,*,*,*"
+PLACE = "名詞,固有名詞,地域,一般,*,*,*"
 # Above most of Mozc's names (5000 to 8000), so a name never pushes an
 # ordinary word aside; it shows when nothing else spells the reading.
 NAME_COST = 9000
@@ -84,6 +103,31 @@ def composable(reading: str, value: str, surnames, given) -> bool:
   return False
 
 
+class Titles:
+  """Counts Wikipedia titles that start with a word, the way merge-ut weighs
+  words: a word many articles start with (高尾山, 高尾山口駅...) is well known."""
+
+  def __init__(self, text: str):
+    titles = set()
+    for line in text.splitlines():
+      title = html.unescape(line.split(":", 2)[2])
+      if ":" in title:  # Wikipedia:, Category: and other namespaces.
+        continue
+      titles.add(title.split(" (")[0])
+    self.titles = sorted(titles)
+
+  def hits(self, word: str, cap: int = 30) -> int:
+    start = bisect.bisect_left(self.titles, word)
+    end = bisect.bisect_left(self.titles, word + "\uffff", start)
+    return min(end - start, cap)
+
+
+def known_cost(hits: int) -> int:
+  """Unknown words rank last; the better known, the cheaper, never below
+  most of Mozc's ordinary nouns."""
+  return 9500 if hits == 0 else max(7500, 8800 - 50 * hits)
+
+
 def keeps_name(reading: str, value: str) -> bool:
   return (re.fullmatch(f"[ぁ-ゖー]{{2,}}", reading) is not None
           and re.fullmatch(f"[{KANA}{KANJI}]{{2,}}", value) is not None
@@ -101,6 +145,26 @@ def personal_names(ids, pairs, surnames, given) -> list[str]:
   return sorted(rows)
 
 
+def ut_rows(source, ids, pairs, seen, pos, keep) -> list[str]:
+  """Rows of a merge-ut child dictionary Mozc and earlier sources lack."""
+  rows = []
+  text = bz2.decompress(fetch(*source)).decode("utf-8")
+  for line in text.splitlines():
+    reading, _, _, _, value = line.split("\t")
+    if (reading, value) in pairs or (reading, value) in seen:
+      continue
+    cost = keep(reading, value)
+    if cost is not None:
+      seen.add((reading, value))
+      rows.append(f"{reading}\t{ids[pos]}\t{ids[pos]}\t{cost}\t{value}")
+  return sorted(rows)
+
+
+def plain(reading: str, value: str) -> bool:
+  return (re.fullmatch("[\u3041-\u3096\u30fc]+", reading) is not None
+          and 2 <= len(value) <= 25)
+
+
 def self_check() -> None:
   assert keeps_name("かとうまき", "加藤麻希")
   assert not keeps_name("やっちゃん", "やっちゃん"), "no kanji"
@@ -109,16 +173,28 @@ def self_check() -> None:
   surnames, given = {("かとう", "加藤")}, {("まき", "麻希")}
   assert composable("かとうまき", "加藤麻希", surnames, given)
   assert not composable("かとうまき", "加藤真紀", surnames, given)
+  titles = Titles("1:2:高尾山\n1:3:高尾山口駅\n1:4:高尾 (曖昧さ回避)\n1:5:Category:高尾\n")
+  assert titles.hits("高尾山") == 2 and titles.hits("高尾") == 3
+  assert titles.hits("低尾") == 0
+  assert known_cost(0) == 9500 and known_cost(1) == 8750 and known_cost(30) == 7500
 
 
 def main() -> None:
   self_check()
   ids = pos_ids()
   pairs, surnames, given = base_entries(ids)
-  rows = personal_names(ids, pairs, surnames, given)
-  out = OUT_DIR / "dictionary_floatype_ut_names.txt"
-  out.write_text("".join(f"{row}\n" for row in rows))
-  print(f"{out}: {len(rows)} entries", file=sys.stderr)
+  titles = Titles(bz2.decompress(fetch(*JAWIKI_TITLES)).decode("utf-8"))
+  seen = set()
+  outputs = {
+      "names": personal_names(ids, pairs, surnames, given),
+      "places": ut_rows(
+          PLACE_NAMES, ids, pairs, seen, PLACE,
+          lambda r, v: known_cost(titles.hits(v)) if plain(r, v) else None),
+  }
+  for name, rows in outputs.items():
+    out = OUT_DIR / f"dictionary_floatype_ut_{name}.txt"
+    out.write_text("".join(f"{row}\n" for row in rows))
+    print(f"{out}: {len(rows)} entries", file=sys.stderr)
 
 
 if __name__ == "__main__":
