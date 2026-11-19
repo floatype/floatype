@@ -15,6 +15,8 @@ nix develop .. --command bash -c '
   set -euo pipefail
   cmake -S floatype/scorer -B floatype/scorer/build -DCMAKE_BUILD_TYPE=Release >/dev/null
   cmake --build floatype/scorer/build -j --target floatype_scorer >/dev/null
+  # The dictionaries made from outside data: downloaded once, then cached.
+  python3 floatype/tools/make_extra_dictionary.py
   # Here Bazel does not notice edited headers (protocol buffers, keymaps and
   # hand-written .h files alike) until a clean build, and mixing old and new
   # objects crashes the converter. A clean build takes a few minutes.

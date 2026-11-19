@@ -73,7 +73,12 @@ filegroup(
         # floatype: days, hours and minutes (floatype/tools/make_time_words.py).
         "dictionary_floatype_time.txt",
         "//dictionary:zip_code_data",
-    ],
+    ] + glob(
+        # floatype: made from outside data by
+        # floatype/tools/make_extra_dictionary.py, not committed.
+        ["dictionary_floatype_ut_*.txt"],
+        allow_empty = True,
+    ),
     visibility = ["//visibility:private"],
 )
 
