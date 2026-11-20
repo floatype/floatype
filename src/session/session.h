@@ -307,6 +307,8 @@ class Session {
   // The candidates zenz moved to the top while its correction is on screen;
   // empty otherwise.
   std::vector<int> zenz_indices_;
+  // Whether the candidates were opened on that correction (the first Space).
+  bool zenz_listed_ = false;
   // The reading and zenz's text of the correction on screen, for Ctrl+Delete.
   std::string zenz_reading_;
   std::string zenz_text_;

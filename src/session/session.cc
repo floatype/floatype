@@ -657,6 +657,7 @@ bool Session::SendKey(commands::Command* command) {
     follows_japanese_ = FollowsJapanese(*command);
   }
   const std::vector<int> zenz_indices = std::exchange(zenz_indices_, {});
+  const bool zenz_listed = std::exchange(zenz_listed_, false);
   const bool live = live_conversion_;
   live_conversion_ = false;
   UpdateTime();
@@ -696,15 +697,24 @@ bool Session::SendKey(commands::Command* command) {
   // floatype: Space after an English word commits and types a space.
   const bool spaced = TypeSpaceAfterEnglish(live, command);
 
-  // floatype: while zenz's correction is shown, Space (any key for the next
-  // candidate) shows Mozc's result again. Nothing learns from it.
+  // floatype: while zenz's correction is shown, the first Space (any key for
+  // the next candidate) opens the candidates with the correction still
+  // chosen, so that one Space does not take a correction away. The Space
+  // after it goes on to the next candidate, which is Mozc's own.
   if (keymap::ConversionState::Commands key_command;
-      !spaced && !zenz_indices.empty() &&
+      !spaced && !zenz_indices.empty() && !zenz_listed &&
       context_->state() == ImeContext::CONVERSION &&
       context_->GetKeyMapManager().GetCommandConversion(command->input().key(),
                                                         &key_command) &&
       key_command == keymap::ConversionState::CONVERT_NEXT) {
-    return ShowMozcAgain(zenz_indices, live, command);
+    command->mutable_output()->set_consumed(true);
+    context_->mutable_converter()->SetCandidateListVisible(true);
+    zenz_indices_ = zenz_indices;
+    zenz_listed_ = true;
+    Output(command);
+    SetIndicator(command);
+    SetCandidateLook(command);
+    return true;
   }
   // Ctrl+Delete (the key that deletes a suggestion) while zenz's correction is
   // shown stops it, and zenz does not make it again for this reading.
