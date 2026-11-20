@@ -631,9 +631,13 @@ std::vector<EnglishSpan> SpanByCost(const std::vector<std::string>& raws,
   const Word* best = nullptr;
   int best_margin = 0;
   for (const Word& word : found) {
-    // At the start of a composition that follows Japanese, the kana may go
-    // on with it: 猫 + のてをみる is 猫の手を見る.
-    if (first == 0 && word.begin == 0 && search.after_japanese) {
+    // At the start of a composition that follows Japanese, a particle goes
+    // on with that text: 猫 + のてをみる is 猫の手を見る, 座布団 + にねを is
+    // 座布団に根を. Other kana start afresh (今日は + ちめを is timeを).
+    constexpr absl::string_view kParticles =
+        "はがをにでともへやかねよわなのさぞぜてば";
+    if (first == 0 && word.begin == 0 && search.after_japanese &&
+        absl::StrContains(kParticles, query[first])) {
       continue;
     }
     // A Japanese word still being typed may start inside the word's kana:

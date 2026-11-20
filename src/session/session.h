@@ -378,10 +378,15 @@ class Session {
   void KeepEnglishWords(bool undoable, bool prose = false);
   // Whether the composition holds an English word still to turn into letters.
   bool HasEnglishWords() const;
-  // Whether the composition follows Japanese text, or may: the text the app
-  // reports before the caret, else what this session committed with the key
-  // before; where neither is known, it may.
-  bool MayFollowJapanese() const;
+  // Whether what `command`'s key starts follows Japanese text: what the key
+  // has just committed, else the text the app reports before the caret, else
+  // what this session committed with the key before. Where none is known
+  // (the first key in a terminal, or after the caret moved there), it starts
+  // afresh.
+  bool FollowsJapanese(const commands::Command& command) const;
+  // FollowsJapanese() at the key that started the composition: its first
+  // kana may go on with that text (KanaSearch's after_japanese).
+  bool follows_japanese_ = false;
   // The Space key kept the English words of the composition on its way to
   // converting it, so Convert() does not work them out again.
   bool english_kept_ = false;

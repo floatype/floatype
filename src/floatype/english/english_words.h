@@ -93,9 +93,9 @@ struct KanaSearch {
   // (EngineConverter's ConversionCost()); negative where it cannot tell.
   // Without it, no word is told by its cost.
   std::function<int(absl::string_view text)> cost;
-  // The composition follows Japanese text, or may (nothing is known of the
-  // text before it): its first kana may go on with that text, so no word at
-  // its start is told by its cost.
+  // The composition follows Japanese text: a particle at its start goes on
+  // with that text, so no word that starts with one there is told by its
+  // cost (猫 + のてをみる is no note).
   bool after_japanese = false;
 };
 

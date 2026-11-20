@@ -652,6 +652,10 @@ bool Session::SendKey(commands::Command* command) {
       english_run_ = false;
     }
   }
+  // The key that starts a composition knows best what comes before it.
+  if (context_->state() == ImeContext::PRECOMPOSITION) {
+    follows_japanese_ = FollowsJapanese(*command);
+  }
   const std::vector<int> zenz_indices = std::exchange(zenz_indices_, {});
   const bool live = live_conversion_;
   live_conversion_ = false;
@@ -2993,7 +2997,7 @@ bool Session::IsSlashAfterAscii(const commands::KeyEvent& key,
          ends_in_ascii(segments.history_segment(history - 1).candidate(0).value);
 }
 
-bool Session::MayFollowJapanese() const {
+bool Session::FollowsJapanese(const commands::Command& command) const {
   const auto ends_in_japanese = [](absl::string_view text) {
     if (text.empty()) {
       return false;
@@ -3003,23 +3007,23 @@ bool Session::MayFollowJapanese() const {
     return type == Util::HIRAGANA || type == Util::KATAKANA ||
            type == Util::KANJI;
   };
-  // English is being written: the word and the space are before it.
-  if (english_run_) {
-    return false;
+  // What this key has just committed comes before what it starts.
+  if (command.output().has_result()) {
+    return ends_in_japanese(command.output().result().value());
   }
-  if (context_->client_context().has_preceding_text()) {
-    return ends_in_japanese(context_->client_context().preceding_text());
+  if (command.input().context().has_preceding_text()) {
+    return ends_in_japanese(command.input().context().preceding_text());
   }
   // The app does not tell (a terminal, a long document): what this session
   // committed with the key before, known while that can still be undone.
-  // Else nothing is known, and Japanese may well be there.
+  // Else the composition is taken to start afresh.
   if (!HasUndoContext()) {
-    return true;
+    return false;
   }
   const Segments& segments = context_->converter().GetSegments();
   const size_t history = segments.history_segments_size();
-  return history == 0 ||
-         segments.history_segment(history - 1).candidates_size() == 0 ||
+  return history > 0 &&
+         segments.history_segment(history - 1).candidates_size() > 0 &&
          ends_in_japanese(
              segments.history_segment(history - 1).candidate(0).value);
 }
@@ -3065,7 +3069,8 @@ bool Session::KeepEnglishWordsIn(composer::Composer* composer,
           [this](absl::string_view text) {
             return context_->converter().ConversionCost(text);
           },
-      .after_japanese = MayFollowJapanese(),
+      // English being written has its word and space before it.
+      .after_japanese = follows_japanese_ && !english_run_,
   };
   const EnglishView view(*composer, KanaReadsAsJapanese(), &search);
   std::vector<floatype::EnglishSpan> spans = view.spans;

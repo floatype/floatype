@@ -558,7 +558,7 @@ class CostSearchTest : public ::testing::Test {
       const std::vector<std::vector<std::string>>& chars,
       std::map<std::string, int> costs, bool after_japanese = false,
       std::vector<std::string> readings = {}) {
-    const EnglishWords words("size\nmake\nare\n", "time\n");
+    const EnglishWords words("size\nmake\nare\n", "time\nnote\n");
     const ReadingLookup lookup = ReadingsOf(readings);
     const KanaSearch search = {
         .lookup = lookup,
@@ -621,8 +621,15 @@ TEST_F(CostSearchTest, LeavesWhatMayGoOnAsJapanese) {
       {"ti", "ち"}, {"me", "め"}, {"wo", "を"}};
   const std::map<std::string, int> costs = {{"ちめを", 15000},
                                             {"timeを", 25000}};
-  // After Japanese, the first kana may go on with it (猫 + の手を).
-  EXPECT_EQ(Spans(time, costs, true), Spans_{});
+  // After Japanese, a particle at the start goes on with it (猫 + の手を is
+  // no note); other kana start afresh (今日は + timeを).
+  EXPECT_EQ(Spans({{"no", "の"}, {"te", "て"}, {"wo", "を"}},
+                  {{"のてを", 15000}, {"noteを", 25000}}, true),
+            Spans_{});
+  EXPECT_EQ(Spans({{"no", "の"}, {"te", "て"}, {"wo", "を"}},
+                  {{"のてを", 15000}, {"noteを", 25000}}, false),
+            (Spans_{{0, 2, "note", "", true}}));
+  EXPECT_EQ(Spans(time, costs, true), (Spans_{{0, 2, "time", "", true}}));
   // A word still being typed may start inside the word's kana: めをと.
   EXPECT_EQ(Spans(time, costs, false, {"めをと"}), Spans_{});
   // A word of the general list whose kana are a word of the dictionary is
