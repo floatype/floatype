@@ -579,6 +579,18 @@ TEST_F(FloatypeZenzTest, KeepsZenzsCorrectionOutOfSuggestionsWhenAskedTo) {
   EXPECT_FALSE(Suggests(TypeKikaiga(), "機械が機械"));
 }
 
+TEST_F(FloatypeZenzTest, TeachingMozcStillKeepsCorrectionsOutOfSuggestions) {
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_zenz_teaches_mozc(true);
+  config.set_zenz_suggestion_learning(false);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+  CommitCorrectedSentence();
+  EXPECT_FALSE(Suggests(TypeKikaiga(), "機械が機械"));
+}
+
 TEST_F(FloatypeZenzTest, CtrlBackspaceDeletesTheSelectedSuggestion) {
   CommitCorrectedSentence();
   ASSERT_TRUE(Suggests(TypeKikaiga(), "機械が機械"));
@@ -1166,6 +1178,42 @@ TEST_F(FloatypeZenzTest, KeepsALearnedCandidateWithNothingRemembered) {
   ASSERT_OK(FileUtil::SetContents(answers_, "キカイ\t機会\n"));
   StartSession(/*zenz=*/true);
   EXPECT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
+}
+
+// What keeps a word the user chose over another is the memory of turned-down
+// words, which holds where zenz teaches Mozc too.
+TEST_P(ZenzTurnedDownTest, ZenzDoesNotBringBackWhatTheUserChoseOver) {
+  StartSession(/*zenz=*/false);
+  ASSERT_EQ(Preedit(SendKeys({"k", "i", "k", "a", "i", "Space", "Space"})),
+            "機械");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機械");
+  ASSERT_TRUE(floatype::ZenzMemory::TurnedDown().Contains("きかい", "機会"));
+
+  ASSERT_OK(FileUtil::SetContents(answers_, "キカイ\t機会\n"));
+  StartSession(/*zenz=*/true);
+  const commands::Output converted = ConvertKikai();
+  ASSERT_EQ(Preedit(converted), "機械");
+  ASSERT_TRUE(converted.has_callback());
+  EXPECT_EQ(Preedit(PollWhileAsked(converted)), "機械");
+}
+
+// The other side of KeepsALearnedCandidateWithNothingRemembered: where zenz
+// teaches Mozc, a word learned with nothing remembered about it is zenz's to
+// change, as zenz's own teaching looks the same.
+TEST_F(FloatypeZenzTest,
+       ChangesALearnedCandidateWithNothingRememberedIfTeaching) {
+  SetZenzTeachesMozc(true);
+  StartSession(/*zenz=*/false);
+  ASSERT_EQ(Preedit(SendKeys({"k", "i", "k", "a", "i", "Space", "Space"})),
+            "機械");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機械");
+  floatype::ZenzMemory::TurnedDown().Clear();
+
+  ASSERT_OK(FileUtil::SetContents(answers_, "キカイ\t機会\n"));
+  StartSession(/*zenz=*/true);
+  const commands::Output converted = ConvertKikai();
+  ASSERT_EQ(Preedit(converted), "機械");
+  EXPECT_EQ(Preedit(PollWhileAsked(converted)), "機会");
 }
 
 TEST_P(ZenzTurnedDownTest, TurnsNothingDownWithLearningOff) {

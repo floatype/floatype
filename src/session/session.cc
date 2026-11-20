@@ -3574,13 +3574,16 @@ bool Session::ShowZenzText(absl::string_view reading, absl::string_view text,
   const bool recut = mapping.segments.has_value();
   // zenz's choices do not teach the conversion ranking, unless the setting
   // zenz_teaches_mozc says so: then a choice on Mozc's own segments is marked
-  // as the user's. The suggestion history may learn the committed sentence.
+  // as the user's. The suggestion history learns the committed sentence
+  // where its own setting says so.
+  const config::Config& config = context_->GetConfig();
   const uint32_t attributes =
-      !recut && context_->GetConfig().zenz_teaches_mozc()
-          ? converter::Attribute::RERANKED
-      : context_->GetConfig().zenz_suggestion_learning()
-          ? converter::Attribute::NO_HISTORY_LEARNING
-          : converter::Attribute::NO_LEARNING;
+      (!recut && config.zenz_teaches_mozc()
+           ? converter::Attribute::RERANKED
+           : converter::Attribute::NO_HISTORY_LEARNING) |
+      (config.zenz_suggestion_learning()
+           ? converter::Attribute::DEFAULT_ATTRIBUTE
+           : converter::Attribute::NO_SUGGEST_LEARNING);
   if (!recut && std::all_of(mapping.candidate_indices.begin(),
                             mapping.candidate_indices.end(),
                             [](int index) { return index == 0; })) {
