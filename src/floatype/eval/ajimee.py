@@ -412,7 +412,8 @@ def main() -> None:
   parser.add_argument("--threads", type=int, default=4, help="zenz: inference threads")
   parser.add_argument(
       "--zenz_model", type=Path,
-      help="replay: the zenz model (default: replay_main's); azookey: required unless --no_zenzai")
+      help="zenz: the zenz model (default: the published one, downloaded); "
+           "replay: the same (default: replay_main's); azookey: required unless --no_zenzai")
   parser.add_argument("--no_zenzai", action="store_true", help="azookey: run without Zenzai")
   parser.add_argument("--out", type=Path, help="write per-item results as JSON lines")
   parser.add_argument(
@@ -486,7 +487,8 @@ def main() -> None:
     report["empty"] = sum(not t for t in top1)
   else:
     binary = args.binary or Path("floatype/scorer/build/floatype_scorer")
-    model = fetch(ZENZ_URL, f"zenz-v3.2-small-{ZENZ_REVISION[:12]}-Q5_K_M.gguf", ZENZ_SHA256)
+    model = args.zenz_model or fetch(
+        ZENZ_URL, f"zenz-v3.2-small-{ZENZ_REVISION[:12]}-Q5_K_M.gguf", ZENZ_SHA256)
     pairs = [("" if args.no_context else item.get("context_text", ""), item["input"]) for item in items]
     results, stats = convert_with_zenz(pairs, binary, model, args.threads)
     top1 = [text for text, _, _ in results]
