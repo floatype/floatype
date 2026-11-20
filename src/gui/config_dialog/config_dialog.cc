@@ -745,8 +745,8 @@ void ConfigDialog::SetUpFloatypeSettings() {
       "を出す");
   slashAfterAsciiCheckBox_ = AddCheckBox(
       assist,
-      "英字や数字のすぐ後の / を、・ ではなく / のまま打つ（before/after、"
-      "2026/11/20）");
+      "英字や数字のすぐ後の / を、・ ではなく / のまま打つ（2026/11/20、"
+      "test/spec）");
   displayAmbiguousCheckBox_ = AddCheckBox(
       assist, "長い規則の途中のローマ字を、いまの かな で見せる（n を ん で）");
 
