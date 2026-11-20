@@ -85,9 +85,10 @@ ABSL_FLAG(bool, suggest, false,
 ABSL_FLAG(bool, mixed_english, false, "live mode: turn mixed English input on");
 ABSL_FLAG(bool, keys, false,
           "live mode: each reading is the keys to type, so a space is the "
-          "Space key, a carriage return the Enter key, and an upper-case "
-          "letter is typed as it is; the text committed is everything the "
-          "keys commit, not only the last Enter");
+          "Space key, a carriage return the Enter key, a vertical tab a pause "
+          "after the key before it, and an upper-case letter is typed as it "
+          "is; the text committed is everything the keys commit, not only "
+          "the last Enter");
 ABSL_FLAG(bool, unknown_context, false,
           "live mode: tell the session nothing of the text before the caret, "
           "as an app that does not report it (a terminal, a long document)");
@@ -345,6 +346,12 @@ class Replayer {
       return true;
     };
     for (const char32_t c : Utf8AsChars32(reading)) {
+      // With --keys, a vertical tab is a pause after the key before it.
+      if (absl::GetFlag(FLAGS_keys) && c == U'\v') {
+        if (!flush()) return std::nullopt;
+        if (!keys.empty()) keys.back().second = true;
+        continue;
+      }
       // Lower-case letters, digits and ASCII symbols are typed as they are:
       // an English word, 2026, before/after.
       if (c < 0x7F &&
