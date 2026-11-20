@@ -89,6 +89,18 @@ ABSL_FLAG(bool, keys, false,
           "after the key before it, and an upper-case letter is typed as it "
           "is; the text committed is everything the keys commit, not only "
           "the last Enter");
+ABSL_FLAG(std::string, commit, "",
+          "replay (not live): commit with Enter instead of reverting, so that "
+          "what is learned carries on to the lines after it: \"all\" commits "
+          "every conversion, \"right\" only one that equals an expected text "
+          "(a third field of the line, alternatives separated by U+001F), as "
+          "a user who mends the others by hand would teach nothing wrong");
+ABSL_FLAG(bool, zenz_teaches_mozc, false,
+          "for measuring: committing a correction of zenz's teaches Mozc's "
+          "conversion ranking its words");
+ABSL_FLAG(bool, zenz_ignores_learning, false,
+          "for measuring: zenz may change a candidate the user's history "
+          "ranked first to any other, Mozc's own best included");
 ABSL_FLAG(bool, unknown_context, false,
           "live mode: tell the session nothing of the text before the caret, "
           "as an app that does not report it (a terminal, a long document)");
@@ -127,8 +139,8 @@ class Replayer {
 
   // Converts `reading` with Space after `left_context` and calls back until the
   // session stops asking, then reverts the conversion so nothing is learned.
-  std::string Replay(absl::string_view left_context,
-                     absl::string_view reading) {
+  std::string Replay(absl::string_view left_context, absl::string_view reading,
+                     absl::string_view expected = "") {
     // The first key carries the context, which the session keeps as the
     // client's; then the composition becomes exactly the reading.
     commands::Input first;
@@ -183,10 +195,22 @@ class Replayer {
                       MillisecondsSince(pressed));
     }
 
-    commands::Input revert;
-    revert.set_type(commands::Input::SEND_COMMAND);
-    revert.mutable_command()->set_type(commands::SessionCommand::REVERT);
-    Eval(std::move(revert));
+    const std::string commit = absl::GetFlag(FLAGS_commit);
+    const std::vector<absl::string_view> right =
+        absl::StrSplit(expected, '\x1f', absl::SkipEmpty());
+    if (commit == "all" ||
+        (commit == "right" &&
+         std::find(right.begin(), right.end(), final) != right.end())) {
+      commands::Input enter;
+      enter.set_type(commands::Input::SEND_KEY);
+      enter.mutable_key()->set_special_key(commands::KeyEvent::ENTER);
+      Eval(std::move(enter));
+    } else {
+      commands::Input revert;
+      revert.set_type(commands::Input::SEND_COMMAND);
+      revert.mutable_command()->set_type(commands::SessionCommand::REVERT);
+      Eval(std::move(revert));
+    }
 
     return mozc + '\t' + final + '\t' + std::to_string(space_ms) + '\t' +
            std::to_string(final_ms) + '\t' + std::to_string(final_polls) +
@@ -467,18 +491,29 @@ int main(int argc, char** argv) {
 
   // The first conversion starts the scorer and loads the model.
   replayer.Replay("", "きょうはいしゃにいく");
+  mozc::floatype::ZenzCorrector::SetTeachesMozcForMeasuring(
+      absl::GetFlag(FLAGS_zenz_teaches_mozc));
+  mozc::floatype::ZenzCorrector::SetIgnoresLearningForMeasuring(
+      absl::GetFlag(FLAGS_zenz_ignores_learning));
 
   std::string line;
   while (std::getline(std::cin, line)) {
     const size_t tab = line.find('\t');
     const absl::string_view context =
         tab == std::string::npos ? "" : absl::string_view(line).substr(0, tab);
-    const absl::string_view reading =
-        tab == std::string::npos ? absl::string_view(line)
-                                 : absl::string_view(line).substr(tab + 1);
+    absl::string_view reading = tab == std::string::npos
+                                    ? absl::string_view(line)
+                                    : absl::string_view(line).substr(tab + 1);
+    // An expected text may follow the reading (--commit=right).
+    absl::string_view expected;
+    if (const size_t end = reading.find('\t');
+        !live && end != absl::string_view::npos) {
+      expected = reading.substr(end + 1);
+      reading = reading.substr(0, end);
+    }
     std::cout << (absl::GetFlag(FLAGS_suggest) ? replayer.Suggest(reading)
                   : live ? replayer.ReplayLive(context, reading)
-                         : replayer.Replay(context, reading))
+                         : replayer.Replay(context, reading, expected))
               << std::endl;
   }
   mozc::floatype::ZenzCorrector::SetDefaultClientForTesting(nullptr);

@@ -3571,12 +3571,16 @@ floatype::Resegmenter Session::ZenzResegmenter() const {
 bool Session::ShowZenzText(absl::string_view reading, absl::string_view text,
                            floatype::Mapping mapping) {
   EngineConverterInterface* converter = context_->mutable_converter();
-  // zenz's choices never teach the conversion ranking; the suggestion
-  // history may learn the committed sentence.
-  const uint32_t attributes = context_->GetConfig().zenz_suggestion_learning()
-                                  ? converter::Attribute::NO_HISTORY_LEARNING
-                                  : converter::Attribute::NO_LEARNING;
   const bool recut = mapping.segments.has_value();
+  // zenz's choices never teach the conversion ranking; the suggestion
+  // history may learn the committed sentence. (Where teaching is being
+  // measured, a choice on Mozc's own segments is marked as the user's.)
+  const uint32_t attributes =
+      !recut && floatype::ZenzCorrector::TeachesMozcForMeasuring()
+          ? converter::Attribute::RERANKED
+      : context_->GetConfig().zenz_suggestion_learning()
+          ? converter::Attribute::NO_HISTORY_LEARNING
+          : converter::Attribute::NO_LEARNING;
   if (!recut && std::all_of(mapping.candidate_indices.begin(),
                             mapping.candidate_indices.end(),
                             [](int index) { return index == 0; })) {

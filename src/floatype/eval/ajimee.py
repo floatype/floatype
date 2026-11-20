@@ -293,13 +293,23 @@ COMMIT_DELAYS_MS = (50, 100, 150, 200, 300, 500)
 
 def replay_with_session(
     pairs: list[tuple[str, str]], binary: Path, data_file: Path,
-    model: Path | None = None
+    model: Path | None = None, flags: list[str] = [],
+    expected: list[list[str]] | None = None
 ) -> list[dict]:
-  """Replays (left context, hiragana reading) pairs; see replay_main.cc for the fields."""
+  """Replays (left context, hiragana reading) pairs; see replay_main.cc for the fields.
+
+  With `expected` (the right answers of each pair), they go along as a third
+  field, for replay_main --commit=right.
+  """
+  answers = expected or [[] for _ in pairs]
   done = subprocess.run(
       [str(binary), f"--data_file={data_file}", "--data_type=oss"]
-      + ([f"--model={model}"] if model else []),
-      input="".join(f"{line_field(c)}\t{line_field(r)}\n" for c, r in pairs),
+      + ([f"--model={model}"] if model else []) + flags,
+      input="".join(
+          f"{line_field(c)}\t{line_field(r)}"
+          + (f"\t{chr(0x1f).join(line_field(a) for a in refs)}" if refs else "")
+          + "\n"
+          for (c, r), refs in zip(pairs, answers)),
       capture_output=True,
       encoding="utf-8",
       errors="replace",
@@ -417,6 +427,11 @@ def main() -> None:
   parser.add_argument("--no_context", action="store_true", help="zenz: ignore the left context")
   parser.add_argument("--threads", type=int, default=4, help="zenz: inference threads")
   parser.add_argument(
+      "--replay_flag", action="append", default=[],
+      help="replay: a flag for replay_main, such as --commit=all (what is "
+           "learned carries on from item to item) or --zenz_teaches_mozc; "
+           "may be given more than once")
+  parser.add_argument(
       "--zenz_model", type=Path,
       help="zenz: the zenz model (default: the published one, downloaded); "
            "replay: the same (default: replay_main's); azookey: required unless --no_zenzai")
@@ -465,7 +480,10 @@ def main() -> None:
         ("" if args.no_context else item.get("context_text", ""), katakana_to_hiragana(item["input"]))
         for item in items
     ]
-    replayed = replay_with_session(pairs, binary, args.data_file, args.zenz_model)
+    replayed = replay_with_session(
+        pairs, binary, args.data_file, args.zenz_model, args.replay_flag,
+        [item["expected_output"] for item in items]
+        if "--commit=right" in args.replay_flag else None)
     top1 = [r["final"] for r in replayed]
     extras = [
         {k: r[k] for k in ("mozc", "space_ms", "final_ms", "polls")} for r in replayed

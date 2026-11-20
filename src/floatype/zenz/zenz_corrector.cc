@@ -46,10 +46,12 @@ using ::floatype::scorer::Response;
 bool default_client_enabled = false;
 ScorerClient* default_client_for_testing = nullptr;
 bool ignore_secure_input_for_testing = false;
+bool teaches_mozc_for_measuring = false;
+bool ignores_learning_for_measuring = false;
 
 // Whether the user's history put another candidate first than Mozc's best.
 bool LearnedFromUser(const Segment& segment) {
-  return segment.candidates_size() > 0 &&
+  return !ignores_learning_for_measuring && segment.candidates_size() > 0 &&
          (segment.candidate(0).attributes &
           converter::Attribute::USER_SEGMENT_HISTORY_REWRITER);
 }
@@ -1310,6 +1312,18 @@ void ZenzCorrector::EnableDefaultClient() { default_client_enabled = true; }
 
 void ZenzCorrector::SetDefaultClientForTesting(ScorerClient* client) {
   default_client_for_testing = client;
+}
+
+void ZenzCorrector::SetTeachesMozcForMeasuring(bool teaches) {
+  teaches_mozc_for_measuring = teaches;
+}
+
+bool ZenzCorrector::TeachesMozcForMeasuring() {
+  return teaches_mozc_for_measuring;
+}
+
+void ZenzCorrector::SetIgnoresLearningForMeasuring(bool ignores) {
+  ignores_learning_for_measuring = ignores;
 }
 
 void ZenzCorrector::IgnoreSecureInputForTesting(bool ignore) {

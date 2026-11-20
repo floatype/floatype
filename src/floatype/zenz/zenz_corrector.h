@@ -175,6 +175,14 @@ class ZenzCorrector {
   // Tests and the evaluation tools ask zenz whether or not macOS has secure
   // input on (the lock screen turns it on).
   static void IgnoreSecureInputForTesting(bool ignore);
+  // For measuring only (replay_main --zenz_teaches_mozc): whether committing
+  // a correction as shown teaches Mozc's conversion ranking its words, as
+  // choosing the candidates by hand does. Off in the app.
+  static void SetTeachesMozcForMeasuring(bool teaches);
+  static bool TeachesMozcForMeasuring();
+  // For measuring only (replay_main --zenz_ignores_learning): zenz treats a
+  // segment the user's history ranked like any other. Off in the app.
+  static void SetIgnoresLearningForMeasuring(bool ignores);
 
  private:
   struct Pending {
