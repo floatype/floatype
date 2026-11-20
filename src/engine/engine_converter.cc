@@ -1229,6 +1229,13 @@ std::optional<Segments> EngineConverter::ResizedSegments(
   return segments;
 }
 
+void EngineConverter::LookupWords(absl::string_view key,
+                                  WordCallback word) const {
+  if (word_lookup_) {
+    word_lookup_(key, word);
+  }
+}
+
 bool EngineConverter::SetSegments(Segments segments) {
   if (!CheckState(CONVERSION) ||
       std::any_of(selected_candidate_indices_.begin(),

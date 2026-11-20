@@ -38,6 +38,7 @@
 #include <optional>
 #include <string>
 
+#include "absl/functional/function_ref.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "composer/composer.h"
@@ -272,6 +273,13 @@ class EngineConverterInterface {
   // picked. Works only on a conversion the user has not changed; otherwise
   // returns false and changes nothing.
   virtual bool SetSegments(converter::Segments segments) = 0;
+  // floatype: calls `word` with the reading and the writing of each word of
+  // the dictionary (the system's and the user's) whose reading starts `key`
+  // from its first character: for きょうは, きょう/今日, きょう/京, き/木.
+  // Does nothing where there is no dictionary.
+  using WordCallback = absl::FunctionRef<void(absl::string_view reading,
+                                              absl::string_view writing)>;
+  virtual void LookupWords(absl::string_view key, WordCallback word) const {}
 
   // Operation for the candidate list.
   virtual void SetCandidateListVisible(bool visible) = 0;

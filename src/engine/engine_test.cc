@@ -32,12 +32,15 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "absl/log/check.h"
+#include "absl/strings/match.h"
 #include "absl/strings/string_view.h"
 #include "base/port.h"
 #include "data_manager/data_manager.h"
 #include "data_manager/testing/mock_data_manager.h"
+#include "engine/engine_converter_interface.h"
 #include "engine/modules.h"
 #include "engine/supplemental_model_interface.h"
 #include "prediction/user_history_storage.h"
@@ -137,6 +140,31 @@ TEST_F(EngineTest, ReloadModulesTest) {
           .value();
 
   CHECK_OK(engine_->ReloadModules(std::move(modules)));
+}
+
+// floatype: zenz's answers are checked against the dictionary's words.
+TEST_F(EngineTest, EngineConvertersLookUpTheDictionarysWords) {
+  const std::unique_ptr<engine::EngineConverterInterface> without =
+      engine_->CreateEngineConverter();
+  int count = 0;
+  without->LookupWords("きょうは",
+                       [&](absl::string_view, absl::string_view) { ++count; });
+  EXPECT_EQ(count, 0) << "no dictionary yet";
+
+  CHECK_OK(engine_->ReloadModules(
+      engine::Modules::Create(std::make_unique<testing::MockDataManager>())
+          .value()));
+  const std::unique_ptr<engine::EngineConverterInterface> converter =
+      engine_->CreateEngineConverter();
+  std::vector<std::pair<std::string, std::string>> words;
+  converter->LookupWords(
+      "きょうは", [&](absl::string_view reading, absl::string_view writing) {
+        words.emplace_back(reading, writing);
+      });
+  EXPECT_THAT(words, ::testing::Contains(::testing::Pair("きょう", "今日")));
+  for (const auto& [reading, writing] : words) {
+    EXPECT_TRUE(absl::StartsWith("きょうは", reading)) << reading;
+  }
 }
 
 // Tests the interaction with DataLoader for successful Engine

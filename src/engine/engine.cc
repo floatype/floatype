@@ -43,7 +43,10 @@
 #include "converter/immutable_converter.h"
 #include "converter/immutable_converter_interface.h"
 #include "data_manager/data_manager.h"
+#include "dictionary/dictionary_interface.h"
 #include "engine/data_loader.h"
+#include "engine/engine_converter.h"
+#include "engine/engine_converter_interface.h"
 #include "engine/minimal_converter.h"
 #include "engine/modules.h"
 #include "engine/supplemental_model_interface.h"
@@ -124,6 +127,43 @@ absl::Status Engine::Init(std::unique_ptr<engine::Modules> modules) {
   }
 
   return absl::OkStatus();
+}
+
+namespace {
+
+// floatype: hands each word of a prefix lookup to `word`.
+class WordLister : public dictionary::DictionaryInterface::Callback {
+ public:
+  explicit WordLister(engine::EngineConverterInterface::WordCallback word)
+      : word_(word) {}
+
+  ResultType OnToken(absl::string_view key, absl::string_view expanded_key,
+                     dictionary::Token token) override {
+    word_(key, token.value);
+    return TRAVERSE_CONTINUE;
+  }
+
+ private:
+  engine::EngineConverterInterface::WordCallback word_;
+};
+
+}  // namespace
+
+std::unique_ptr<engine::EngineConverterInterface>
+Engine::CreateEngineConverter() const {
+  auto engine_converter =
+      std::make_unique<engine::EngineConverter>(GetConverter());
+  if (converter_) {
+    // floatype: the words zenz's answers are checked against.
+    engine_converter->set_word_lookup(
+        [converter = converter_](
+            absl::string_view key,
+            engine::EngineConverterInterface::WordCallback word) {
+          WordLister lister(word);
+          converter->modules().GetDictionary().LookupPrefix(key, &lister);
+        });
+  }
+  return engine_converter;
 }
 
 bool Engine::Reload() { return converter_ && converter_->Reload(); }

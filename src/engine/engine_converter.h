@@ -35,6 +35,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -236,6 +237,11 @@ class EngineConverter : public EngineConverterInterface {
       const composer::Composer& composer,
       absl::Span<const uint8_t> sizes) const override;
   bool SetSegments(Segments segments) override;
+  void LookupWords(absl::string_view key, WordCallback word) const override;
+  // floatype: what LookupWords() calls; the engine gives its dictionary's.
+  using WordLookup =
+      std::function<void(absl::string_view key, WordCallback word)>;
+  void set_word_lookup(WordLookup lookup) { word_lookup_ = std::move(lookup); }
 
   // Operation for the candidate list.
   void SetCandidateListVisible(bool visible) override;
@@ -387,6 +393,7 @@ class EngineConverter : public EngineConverterInterface {
                       ConversionRequest::Options& options);
 
   std::shared_ptr<const ConverterInterface> converter_;
+  WordLookup word_lookup_;
 
   // Conversion stats used by converter_.
   Segments segments_;
