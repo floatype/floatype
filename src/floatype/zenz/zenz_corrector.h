@@ -184,6 +184,11 @@ class ZenzCorrector {
   // Tests and the evaluation tools ask zenz whether or not macOS has secure
   // input on (the lock screen turns it on).
   static void IgnoreSecureInputForTesting(bool ignore);
+  // Tests have secure input on without the lock screen.
+  static void PretendSecureInputForTesting(bool on);
+  // Whether macOS has secure input on (a password field, or a terminal's
+  // secure keyboard entry): what is typed then stays out of zenz.
+  static bool SecureInput();
   // For measuring only (replay_main --zenz_learning_rules): which of the
   // rules about a segment the user's history ranked are on, whatever
   // `keeps_learned` says, as a sum: 1, the candidate the learning displaced

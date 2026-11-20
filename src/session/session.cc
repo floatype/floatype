@@ -577,6 +577,7 @@ bool Session::SendCommand(commands::Command* command) {
       result = DoNothing(command);
       break;
   }
+  RememberSecureCommit(*command);
   SetIndicator(command);
   SetCandidateLook(command);
   MaybeSetUndoStatus(command);
@@ -916,11 +917,13 @@ bool Session::SendKey(commands::Command* command) {
                   (run_committed || !command->output().has_result()));
   WarmZenz();
   if (MaybeCommitOnCharacter(command)) {
+    RememberSecureCommit(*command);
     SetIndicator(command);
     SetCandidateLook(command);
     MaybeSetUndoStatus(command);
     return true;
   }
+  RememberSecureCommit(*command);
   MaybeScheduleLiveConversion(command);
   SetIndicator(command);
   SetCandidateLook(command);
@@ -3874,6 +3877,34 @@ void Session::WarmZenz() {
   zenz_.Warm();
 }
 
+void Session::RememberSecureCommit(const commands::Command& command) {
+  // What is typed while secure input is on stays out of zenz later too: it
+  // does not stand in until Mozc drops its history segments, which hold it.
+  if (command.output().has_result() && floatype::ZenzCorrector::SecureInput()) {
+    committed_in_secure_input_ = true;
+  }
+}
+
+std::string Session::CommittedBefore(const Segments& segments) {
+  std::string history;
+  for (const Segment& segment : segments.history_segments()) {
+    if (segment.candidates_size() > 0) {
+      history += segment.candidate(0).value;
+    }
+  }
+  // Mozc drops its history segments where the app says that another text
+  // precedes the caret, where the field is left, and at any key that goes to
+  // the app (Enter, an arrow): nothing stands in then.
+  if (history.empty()) {
+    committed_in_secure_input_ = false;
+  }
+  if (committed_in_secure_input_ ||
+      !context_->GetConfig().zenz_context_from_commits()) {
+    return "";
+  }
+  return history;
+}
+
 void Session::RequestZenz(commands::Command* command, bool not_this) {
   const config::Config& config = context_->GetConfig();
   if (!config.use_zenz()) {
@@ -3904,11 +3935,7 @@ void Session::RequestZenz(commands::Command* command, bool not_this) {
   // Where the app does not tell what precedes the caret, as in terminals, what
   // was committed last stands in (spec section 4).
   if (left_context.empty()) {
-    for (const Segment& segment : segments.history_segments()) {
-      if (segment.candidates_size() > 0) {
-        left_context += segment.candidate(0).value;
-      }
-    }
+    left_context = CommittedBefore(segments);
   }
   if (!zenz_.Request(segments, left_context, not_this)) {
     return;

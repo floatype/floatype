@@ -46,6 +46,7 @@ using ::floatype::scorer::Response;
 bool default_client_enabled = false;
 ScorerClient* default_client_for_testing = nullptr;
 bool ignore_secure_input_for_testing = false;
+bool pretend_secure_input_for_testing = false;
 // See ZenzCorrector::SetLearningRulesForMeasuring().
 constexpr int kKeepsDisplacedOut = 1;
 constexpr int kKeepsOutOfRuns = 2;
@@ -1054,12 +1055,10 @@ bool ZenzCorrector::Request(const Segments& segments,
   if (client_ == nullptr || segments.conversion_segments_size() == 0) {
     return false;
   }
-#ifdef __APPLE__
   // What is typed while secure input is on stays out of zenz (spec section 4).
-  if (!ignore_secure_input_for_testing && IsSecureEventInputEnabled()) {
+  if (SecureInput()) {
     return false;
   }
-#endif  // __APPLE__
   const std::string reading = Reading(segments);
   // Longer readings are slow to convert and may not fit the scorer's context.
   if (Util::CharsLen(reading) > kMaxReadingChars) {
@@ -1347,6 +1346,21 @@ void ZenzCorrector::SetContextCharsForMeasuring(std::optional<size_t> chars) {
 
 void ZenzCorrector::IgnoreSecureInputForTesting(bool ignore) {
   ignore_secure_input_for_testing = ignore;
+}
+
+void ZenzCorrector::PretendSecureInputForTesting(bool on) {
+  pretend_secure_input_for_testing = on;
+}
+
+bool ZenzCorrector::SecureInput() {
+  if (pretend_secure_input_for_testing) {
+    return true;
+  }
+#ifdef __APPLE__
+  return !ignore_secure_input_for_testing && IsSecureEventInputEnabled();
+#else   // __APPLE__
+  return false;
+#endif  // __APPLE__
 }
 
 }  // namespace mozc::floatype

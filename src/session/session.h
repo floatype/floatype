@@ -291,6 +291,14 @@ class Session {
   // `not_this`, the user turned down the conversion on screen (see
   // ZenzCorrector::Request()).
   void RequestZenz(commands::Command* command, bool not_this = false);
+  // Notes that `command` committed something while secure input was on, for
+  // CommittedBefore().
+  void RememberSecureCommit(const commands::Command& command);
+  // What stands in for the text before the caret where the app does not tell
+  // it: Mozc's history segments, the last four committed. Nothing where some
+  // of it was typed with secure input on, or where the setting
+  // zenz_context_from_commits is off.
+  std::string CommittedBefore(const converter::Segments& segments);
   // After a typed character: starts the scorer if it ended after idling, so
   // it has the model loaded when the user pauses.
   void WarmZenz();
@@ -339,6 +347,9 @@ class Session {
   // it again, for Space to bring back; nullopt when the correction kept
   // Mozc's segments. Set with each correction shown.
   std::optional<converter::Segments> mozc_segments_;
+  // Whether something was committed with secure input on since Mozc last
+  // dropped its history segments.
+  bool committed_in_secure_input_ = false;
   // Converts the conversion again with other segments, for zenz's answers
   // that Mozc's segments cannot write.
   floatype::Resegmenter ZenzResegmenter() const;

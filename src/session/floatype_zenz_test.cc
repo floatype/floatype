@@ -87,6 +87,7 @@ class FloatypeZenzTest : public testing::SessionHandlerTestBase {
     handler_.reset();
     floatype::ZenzCorrector::SetDefaultClientForTesting(nullptr);
     floatype::ZenzCorrector::IgnoreSecureInputForTesting(false);
+    floatype::ZenzCorrector::PretendSecureInputForTesting(false);
     client_.reset();
     SessionHandlerTestBase::TearDown();
   }
@@ -1083,6 +1084,66 @@ TEST_F(FloatypeZenzTest, WhatWasCommittedLastStandsInForTheContext) {
   ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機会");
   ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機会");
   // The test client tells nothing about the text before the caret.
+  EXPECT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
+}
+
+// Enter with nothing composed goes to the app, and Mozc drops what was
+// committed: the line before does not stand in.
+TEST_F(FloatypeZenzTest, NothingStandsInAfterEnterEndedTheLine) {
+  ASSERT_OK(
+      FileUtil::SetContents(answers_, "キカイ\t機会\n機会|キカイ\t機械\n"));
+  ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機会");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機会");
+  EXPECT_FALSE(SendKeys({"Enter"}).consumed()) << "the app ends the line";
+  EXPECT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機会");
+}
+
+// The app says that nothing precedes the caret: Mozc drops what was
+// committed, and nothing stands in.
+TEST_F(FloatypeZenzTest, NothingStandsInWhereTheAppTellsWhatPrecedes) {
+  ASSERT_OK(
+      FileUtil::SetContents(answers_, "キカイ\t機会\n機会|キカイ\t機械\n"));
+  ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機会");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機会");
+  commands::Input first;
+  first.set_type(commands::Input::SEND_KEY);
+  ASSERT_TRUE(KeyParser::ParseKey("k", first.mutable_key()));
+  first.mutable_context()->set_preceding_text("");
+  Eval(std::move(first));
+  EXPECT_EQ(Preedit(PollWhileAsked(SendKeys({"i", "k", "a", "i", "Space"}))),
+            "機会");
+}
+
+TEST_F(FloatypeZenzTest, NothingStandsInWithTheSettingOff) {
+  ASSERT_OK(
+      FileUtil::SetContents(answers_, "キカイ\t機会\n機会|キカイ\t機械\n"));
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_zenz_context_from_commits(false);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+  ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機会");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機会");
+  EXPECT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機会");
+}
+
+// What was typed with secure input on is not shown to zenz once it is off.
+TEST_F(FloatypeZenzTest, WhatWasCommittedInSecureInputDoesNotStandIn) {
+  ASSERT_OK(
+      FileUtil::SetContents(answers_, "キカイ\t機会\n機会|キカイ\t機械\n"));
+  floatype::ZenzCorrector::PretendSecureInputForTesting(true);
+  ASSERT_EQ(Preedit(ConvertKikai()), "機会");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機会");
+  floatype::ZenzCorrector::PretendSecureInputForTesting(false);
+  EXPECT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機会");
+  // Once the field is left, what is committed stands in again.
+  commands::Input reset;
+  reset.set_type(commands::Input::SEND_COMMAND);
+  reset.mutable_command()->set_type(commands::SessionCommand::RESET_CONTEXT);
+  Eval(std::move(reset));
+  ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機会");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機会");
   EXPECT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
 }
 

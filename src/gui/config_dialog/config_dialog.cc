@@ -722,6 +722,10 @@ void ConfigDialog::SetUpFloatypeSettings() {
   liveConversionWaitSpinBox_ = NewSpinBox(0, 1000, 10, " ms");
   zenz->addRow(Text("ライブ変換で zenz の答えを待つ上限（0 で待たない）"),
                liveConversionWaitSpinBox_);
+  zenzContextFromCommitsCheckBox_ = AddCheckBox(
+      zenz,
+      "前の文を教えないアプリ（ターミナルなど）では、直前に確定した文を "
+      "zenz に見せる");
 
   QFormLayout* assist = InsertGroup(basicTabLayout, general + 4, "入力の補助");
   useDirectCommitCheckBox_ = AddCheckBox(
@@ -825,7 +829,7 @@ void ConfigDialog::SetUpFloatypeSettings() {
            zenzTimeoutSpinBox_, zenzSuggestionLearningCheckBox_,
            zenzTeachesMozcCheckBox_, zenzLearningCheckBox_,
            zenzRememberedMinCharsSpinBox_, zenzStopWhenIdleCheckBox_,
-           zenzDelaySpinBox_}) {
+           zenzContextFromCommitsCheckBox_, zenzDelaySpinBox_}) {
     connect(useZenzCheckBox_, &QCheckBox::toggled, widget,
             &QWidget::setEnabled);
   }
@@ -1310,6 +1314,7 @@ void ConfigDialog::ConvertFromProto(const config::Config& config) {
   SET_CHECKBOX(zenzSuggestionLearningCheckBox_, zenz_suggestion_learning);
   SET_CHECKBOX(zenzLearningCheckBox_, zenz_learning);
   SET_CHECKBOX(zenzTeachesMozcCheckBox_, zenz_teaches_mozc);
+  SET_CHECKBOX(zenzContextFromCommitsCheckBox_, zenz_context_from_commits);
   zenzRememberedMinCharsSpinBox_->setValue(config.zenz_remembered_min_chars());
   SET_CHECKBOX(zenzStopWhenIdleCheckBox_, zenz_stop_when_idle);
   SET_CHECKBOX(liveConversionCheckBox_, use_live_conversion);
@@ -1433,6 +1438,7 @@ void ConfigDialog::ConvertToProto(config::Config* config) const {
   GET_CHECKBOX(zenzSuggestionLearningCheckBox_, zenz_suggestion_learning);
   GET_CHECKBOX(zenzLearningCheckBox_, zenz_learning);
   GET_CHECKBOX(zenzTeachesMozcCheckBox_, zenz_teaches_mozc);
+  GET_CHECKBOX(zenzContextFromCommitsCheckBox_, zenz_context_from_commits);
   config->set_zenz_remembered_min_chars(
       zenzRememberedMinCharsSpinBox_->value());
   GET_CHECKBOX(zenzStopWhenIdleCheckBox_, zenz_stop_when_idle);

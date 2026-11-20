@@ -104,6 +104,13 @@ ABSL_FLAG(int, zenz_remembered_min_chars, 1,
           "the setting zenz_remembered_min_chars: a correction committed "
           "before shows at once only for a reading of this many characters "
           "or more");
+ABSL_FLAG(bool, enter_after_commit, false,
+          "replay (not live), with --commit: Enter once more after the "
+          "commit, as a user who ends the line after each sentence");
+ABSL_FLAG(bool, zenz_context_from_commits, true,
+          "the setting zenz_context_from_commits: where the app does not tell "
+          "what precedes the caret (--unknown_context), what was committed "
+          "last stands in for it");
 ABSL_FLAG(int, zenz_context_chars, -1,
           "for measuring: zenz sees no more than this many characters, the "
           "last ones, of the text before the composition; 0 is none, -1 the "
@@ -227,7 +234,10 @@ class Replayer {
       commands::Input enter;
       enter.set_type(commands::Input::SEND_KEY);
       enter.mutable_key()->set_special_key(commands::KeyEvent::ENTER);
-      Eval(std::move(enter));
+      Eval(enter);
+      if (absl::GetFlag(FLAGS_enter_after_commit)) {
+        Eval(enter);
+      }
     } else {
       commands::Input revert;
       revert.set_type(commands::Input::SEND_COMMAND);
@@ -238,6 +248,15 @@ class Replayer {
     return mozc + '\t' + final + '\t' + std::to_string(space_ms) + '\t' +
            std::to_string(final_ms) + '\t' + std::to_string(final_polls) +
            not_this;
+  }
+
+  // What the client sends when the field loses the focus: nothing committed
+  // before stands in for the text before the caret any more.
+  void ResetContext() {
+    commands::Input reset;
+    reset.set_type(commands::Input::SEND_COMMAND);
+    reset.mutable_command()->set_type(commands::SessionCommand::RESET_CONTEXT);
+    Eval(std::move(reset));
   }
 
   // Types `reading` key by key as romaji and lists what the suggestion window
@@ -365,6 +384,8 @@ class Replayer {
     input.mutable_config()->set_zenz_teaches_mozc(zenz_teaches_mozc);
     input.mutable_config()->set_zenz_remembered_min_chars(
         absl::GetFlag(FLAGS_zenz_remembered_min_chars));
+    input.mutable_config()->set_zenz_context_from_commits(
+        absl::GetFlag(FLAGS_zenz_context_from_commits));
     if (absl::GetFlag(FLAGS_no_learning)) {
       input.mutable_config()->set_history_learning_level(
           config::Config::READ_ONLY);
@@ -543,6 +564,13 @@ int main(int argc, char** argv) {
     absl::string_view reading = tab == std::string::npos
                                     ? absl::string_view(line)
                                     : absl::string_view(line).substr(tab + 1);
+    // A form feed for the reading leaves the field, as between two texts
+    // that have nothing to do with each other.
+    if (reading == "\f") {
+      replayer.ResetContext();
+      std::cout << std::endl;
+      continue;
+    }
     // An expected text may follow the reading (--commit=right).
     absl::string_view expected;
     if (const size_t end = reading.find('\t');

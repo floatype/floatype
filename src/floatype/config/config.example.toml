@@ -30,6 +30,12 @@
 ## false にすると floatype が動いている間ずっと動く。
 # zenz_stop_when_idle = true
 
+## アプリがカーソルの前の文を教えないとき（ターミナルなど）、同じ行で直前に確定した
+## 文節（最大 4 つ）を、前の文の代わりに zenz に見せるか。続きの文では当たりやすく、
+## 関係のない文を同じ行に続けて確定すると外れやすくなります。Enter や矢印を打った
+## あとは、どちらでも見せません。
+# zenz_context_from_commits = true
+
 ## zenz が直した確定を、予測候補（サジェスト）の履歴に覚えさせるか。
 ## 変換の順位は、これをオンにしても覚えません（下の zenz_teaches_mozc）。
 # zenz_suggestion_learning = true

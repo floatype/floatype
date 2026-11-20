@@ -518,6 +518,12 @@ message Config {
   // remembered and zenz makes it again whatever the length. 1 is always;
   // Mozkey's default is 7, as short readings are homophones more often.
   optional uint32 zenz_remembered_min_chars = 1028 [default = 1];
+  // floatype: where the app does not tell what precedes the caret, as in
+  // terminals, what was committed last on the line (Mozc's history segments)
+  // stands in for it when zenz is asked. It helps a text that goes on from
+  // what was committed and hurts where the two have nothing to do with each
+  // other.
+  optional bool zenz_context_from_commits = 1029 [default = true];
 
   //////////////////////////////////////////////////////////////
   //
