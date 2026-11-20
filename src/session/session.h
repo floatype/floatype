@@ -385,7 +385,8 @@ class Session {
   // Space key committed a word and typed a space (TypeSpaceAfterEnglish()).
   // While the next word is typed, its keys are that word whatever kana they
   // type (you, are, a). Any other commit, and any key or command that leaves
-  // nothing composed, ends the run.
+  // nothing composed, ends the run; so does a caret the app reports
+  // elsewhere than after the word and its space (a click).
   bool english_run_ = false;
   // The composition as typed, before a live conversion kept a word that ends
   // it in loose letters: the user may have paused inside a syllable

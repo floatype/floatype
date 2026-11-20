@@ -1030,6 +1030,11 @@ std::vector<EnglishSpan> JoinedNames(
                   std::all_of(piece.keys.begin(), piece.keys.end(), [](char c) {
                     return absl::ascii_isalnum(static_cast<unsigned char>(c));
                   });
+    // Digits alone tell nothing: 3。して is no 3.site.
+    piece.english = piece.english &&
+                    std::any_of(piece.keys.begin(), piece.keys.end(), [](char c) {
+                      return absl::ascii_isalpha(static_cast<unsigned char>(c));
+                    });
     pieces.push_back(std::move(piece));
   }
   if (pieces.size() < 2) {
@@ -1085,9 +1090,11 @@ std::vector<EnglishSpan> JoinedNames(
           name(*left);
         }
         name(piece);
-      } else if (listed(piece) &&
-                 (after_english || (before_english && piece.after != '.'))) {
-        // node_modules, app.name; not それ。test, which may be two sentences.
+      } else if (listed(piece) && piece.after != '-' &&
+                 ((after_english && piece.before != '.') ||
+                  (before_english && piece.after != '.'))) {
+        // node_modules, src/main; not それ。test or test。それ, which may be
+        // two sentences, nor えらーlog, where ー is the long vowel of エラー.
         name(piece);
       } else if (before_english && piece.after == '@') {
         name(piece);  // taro@example.com

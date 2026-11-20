@@ -639,6 +639,18 @@ bool Session::SendKey(commands::Command* command) {
   }
   space_after_commit_ = false;
   const bool run_committed = space_pending && command->output().has_result();
+  // A click or a change of focus ends a run of English with no key: the text
+  // the app then reports before the caret is not the word and its space.
+  if (english_run_ && !run_committed &&
+      context_->state() == ImeContext::PRECOMPOSITION &&
+      command->input().context().has_preceding_text()) {
+    const std::string& before = command->input().context().preceding_text();
+    if (before.size() < 2 || before.back() != ' ' ||
+        !absl::ascii_isgraph(
+            static_cast<unsigned char>(before[before.size() - 2]))) {
+      english_run_ = false;
+    }
+  }
   const std::vector<int> zenz_indices = std::exchange(zenz_indices_, {});
   const bool live = live_conversion_;
   live_conversion_ = false;
@@ -3048,6 +3060,8 @@ bool Session::KeepEnglishWordsIn(composer::Composer* composer,
     for (floatype::EnglishSpan& name : floatype::JoinedNames(
              view.raws, view.query, view.preedit,
              *floatype::CurrentEnglishWords(), spans)) {
+      // At the end it may go on in kana, as any word found there.
+      may_go_on = may_go_on || name.end == view.raws.size();
       spans.push_back(std::move(name));
     }
   }

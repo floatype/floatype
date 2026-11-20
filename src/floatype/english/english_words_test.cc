@@ -652,7 +652,7 @@ std::vector<EnglishSpan> Names(
     const std::vector<std::vector<std::string>>& chars,
     const std::vector<EnglishSpan>& spans) {
   const EnglishWords words("node\nmain\nmodules\nexample\nlocal\nbin\n"
-                           "sore\ntest\n");
+                           "sore\ntest\nera\nlog\n");
   const Typed typed = TypedAs(chars);
   return JoinedNames(typed.raws, typed.query, typed.preedit, words, spans);
 }
@@ -701,6 +701,19 @@ TEST(JoinedNamesTest, JapaneseBesideAMarkStaysJapanese) {
   EXPECT_EQ(Names({{"so", "そ"}, {"u", "う"}, {".", "。"}, {"t", "ｔ"},
                    {"s", "ｓ"}},
                   {}),
+            Spans_{});
+  // test。それ and 3。して: a word after a period, and digits before a word.
+  EXPECT_EQ(Names({{"te", "て"}, {"s", "ｓ"}, {"t", "ｔ"}, {".", "。"},
+                   {"so", "そ"}, {"re", "れ"}},
+                  {{0, 3, "test", ""}}),
+            Spans_{});
+  EXPECT_EQ(Names({{"3", "3"}, {"_", "_", "＿"}, {"so", "そ"}, {"re", "れ"}},
+                  {}),
+            Spans_{});
+  // えらーlog: era is a word, but ー after kana is a long vowel (エラーlog).
+  EXPECT_EQ(Names({{"e", "え"}, {"ra", "ら"}, {"-", "ー"}, {"lo", "ぉ"},
+                   {"g", "ｇ"}},
+                  {{3, 5, "log", ""}}),
             Spans_{});
   // No mark: one piece.
   EXPECT_EQ(Names({{"no", "の"}, {"de", "で"}}, {}), Spans_{});

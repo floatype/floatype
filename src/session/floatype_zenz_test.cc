@@ -1319,6 +1319,30 @@ TEST_F(FloatypeZenzTest, MixedEnglishGoesOnInEnglishAfterAWordAndASpace) {
   EXPECT_FALSE(spaced.has_result());
   SendKeys({"Enter"});
 
+  // So does a caret the app reports elsewhere (a click), and not one after
+  // the word and its space.
+  const auto type_at = [&](absl::string_view before, absl::string_view keys) {
+    for (const char key : keys) {
+      commands::Input input;
+      input.set_type(commands::Input::SEND_KEY);
+      EXPECT_TRUE(
+          KeyParser::ParseKey(std::string(1, key), input.mutable_key()));
+      input.mutable_context()->set_preceding_text(before);
+      Eval(std::move(input));
+    }
+  };
+  type("how");
+  SendKeys({"Space"});
+  type_at("今日は", "are");
+  spaced = SendKeys({"Space"});
+  EXPECT_FALSE(spaced.has_result());
+  SendKeys({"Enter"});
+  type("how");
+  SendKeys({"Space"});
+  type_at("how ", "are");
+  EXPECT_EQ(SendKeys({"Space"}).result().value(), "are ");
+  SendKeys({"Left"});
+
   // Short words with a letter no kana takes, and commands of letters only.
   type("of");
   EXPECT_EQ(SendKeys({"Space"}).result().value(), "of ");

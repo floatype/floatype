@@ -169,10 +169,12 @@ std::optional<EnglishSpan> WordsRunTogether(
     const std::function<bool(absl::string_view kana)>& reads_as_japanese);
 
 // The pieces of a name joined by . _ / @ : = or - that are English too,
-// beside one that is (`spans`, and letters kept as typed):
+// beside one that is (`spans`, and letters kept as typed; digits alone tell
+// nothing):
 //   - a word of `words` whose keys typed kana that read as Japanese
-//     (node_modules, app.name; not a word before a period and a word, それ。
-//     test, which may be two sentences);
+//     (node_modules, src/main; not a word beside a period, それ。test and
+//     test。それ, which may be two sentences, nor before -, えらーlog, where
+//     ー is the long vowel of エラー);
 //   - the ending of a file or a host after a period, where a letter stays,
 //     and with it a word before the period (main.cc, example.com);
 //   - what comes before @ (taro@example.com);
