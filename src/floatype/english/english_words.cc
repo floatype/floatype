@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <string>
@@ -26,24 +27,39 @@ namespace mozc::floatype {
 
 namespace {
 #include "floatype/english/english_words.inc"
-}  // namespace
+#include "floatype/english/preset_words.inc"
 
-EnglishWords::EnglishWords(absl::string_view text,
-                           absl::string_view user_text) {
-  for (const absl::string_view line :
-       absl::StrSplit(user_text, '\n', absl::SkipEmpty())) {
-    user_words_.push_back(absl::AsciiStrToLower(line));
-  }
-  std::sort(user_words_.begin(), user_words_.end());
-  user_words_.erase(std::unique(user_words_.begin(), user_words_.end()),
-                    user_words_.end());
-  words_ = user_words_;
+// The lines of `text` in lower case, sorted, each once.
+std::vector<std::string> SortedWords(absl::string_view text) {
+  std::vector<std::string> words;
   for (const absl::string_view line :
        absl::StrSplit(text, '\n', absl::SkipEmpty())) {
-    words_.push_back(absl::AsciiStrToLower(line));
+    words.push_back(absl::AsciiStrToLower(line));
   }
-  std::sort(words_.begin(), words_.end());
-  words_.erase(std::unique(words_.begin(), words_.end()), words_.end());
+  std::sort(words.begin(), words.end());
+  words.erase(std::unique(words.begin(), words.end()), words.end());
+  return words;
+}
+
+// The preset words, one a line.
+const std::string& PresetWords() {
+  static absl::NoDestructor<std::string> words(
+      ParseUserEnglishWords(kPresetWords).words);
+  return *words;
+}
+}  // namespace
+
+EnglishWords::EnglishWords(absl::string_view text, absl::string_view user_text,
+                           absl::string_view removed_text) {
+  const std::vector<std::string> removed = SortedWords(removed_text);
+  const auto kept = [&](std::vector<std::string> words) {
+    std::vector<std::string> out;
+    std::set_difference(words.begin(), words.end(), removed.begin(),
+                        removed.end(), std::back_inserter(out));
+    return out;
+  };
+  user_words_ = kept(SortedWords(user_text));
+  words_ = kept(SortedWords(absl::StrCat(text, "\n", user_text)));
 }
 
 bool EnglishWords::Contains(absl::string_view word) const {
@@ -57,7 +73,7 @@ bool EnglishWords::ContainsUser(absl::string_view word) const {
 }
 
 const EnglishWords& EnglishWords::Default() {
-  static absl::NoDestructor<EnglishWords> words(kEnglishWords);
+  static absl::NoDestructor<EnglishWords> words(kEnglishWords, PresetWords());
   return *words;
 }
 
@@ -65,19 +81,22 @@ UserEnglishWords ParseUserEnglishWords(absl::string_view text) {
   UserEnglishWords user;
   const std::vector<absl::string_view> lines = absl::StrSplit(text, '\n');
   for (size_t i = 0; i < lines.size(); ++i) {
-    const absl::string_view word = absl::StripAsciiWhitespace(lines[i]);
-    if (word.empty() || word.starts_with('#')) {
+    const absl::string_view line = absl::StripAsciiWhitespace(lines[i]);
+    if (line.empty() || line.starts_with('#')) {
       continue;
     }
+    const bool removes = line.starts_with('-');
+    const absl::string_view word =
+        absl::StripAsciiWhitespace(line.substr(removes ? 1 : 0));
     // EnglishSpans takes 3 to 32 letters, LooksEnglish 3 or more.
     if (word.size() < 3 || word.size() > 32 ||
         !std::all_of(word.begin(), word.end(), [](char c) {
           return absl::ascii_isalpha(static_cast<unsigned char>(c));
         })) {
-      user.left_out.push_back(absl::StrCat(i + 1, " 行目「", word, "」"));
+      user.left_out.push_back(absl::StrCat(i + 1, " 行目「", line, "」"));
       continue;
     }
-    absl::StrAppend(&user.words, word, "\n");
+    absl::StrAppend(removes ? &user.removed : &user.words, word, "\n");
   }
   return user;
 }
@@ -114,7 +133,8 @@ std::shared_ptr<const EnglishWords> CurrentEnglishWords() {
                      absl::StrJoin(user.left_out, "、"),
                      "：英字だけの 3〜32 文字の語が使えます"));
   }
-  state->words = std::make_shared<const EnglishWords>(kEnglishWords, user.words);
+  state->words = std::make_shared<const EnglishWords>(
+      kEnglishWords, absl::StrCat(PresetWords(), user.words), user.removed);
   return state->words;
 }
 

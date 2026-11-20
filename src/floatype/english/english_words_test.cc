@@ -1,17 +1,16 @@
 #include "floatype/english/english_words.h"
 
+#include <memory>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "absl/functional/function_ref.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/ascii.h"
+#include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
-
-#include <memory>
-#include <string>
-#include <utility>
-#include <vector>
-
 #include "absl/time/time.h"
 #include "base/clock.h"
 #include "base/clock_mock.h"
@@ -20,11 +19,12 @@
 #include "floatype/config/settings_file.h"
 #include "testing/gmock.h"
 #include "testing/gunit.h"
+#include "testing/mozctest.h"
 
 namespace mozc::floatype {
 namespace {
 
-class EnglishWordsTest : public testing::Test {
+class EnglishWordsTest : public ::testing::Test {
  protected:
   static EnglishWords Words() {
     return EnglishWords("Macbook\nhello\nupdate\nkoto\n");
@@ -214,6 +214,47 @@ TEST(EnglishWordsDefaultTest, HasSCOWLsWords) {
       << "newer than macOS's 1934 list";
 }
 
+TEST(EnglishWordsDefaultTest, HasThePresetWordsAsWordsAUserAdded) {
+  const EnglishWords& words = EnglishWords::Default();
+  EXPECT_TRUE(words.Contains("json")) << "not in SCOWL";
+  EXPECT_TRUE(words.ContainsUser("json"));
+  EXPECT_TRUE(words.ContainsUser("page")) << "ぱげ";
+  EXPECT_TRUE(words.ContainsUser("time")) << "ちめ";
+  EXPECT_FALSE(words.ContainsUser("keyboard")) << "SCOWL's";
+  EXPECT_FALSE(words.ContainsUser("site")) << "して is typed for Japanese";
+  EXPECT_FALSE(words.ContainsUser("made")) << "まで";
+}
+
+TEST(EnglishWordsDefaultTest, EveryPresetLineIsAWord) {
+  const absl::StatusOr<std::string> text = FileUtil::GetContents(
+      testing::GetSourceFileOrDie({"floatype", "english", "preset_words.txt"}));
+  ASSERT_OK(text);
+  const UserEnglishWords preset = ParseUserEnglishWords(*text);
+  EXPECT_THAT(preset.left_out, ::testing::IsEmpty());
+  EXPECT_EQ(preset.removed, "");
+  const std::vector<std::string> lines =
+      absl::StrSplit(preset.words, '\n', absl::SkipEmpty());
+  EXPECT_GT(lines.size(), 100);
+  for (const std::string& word : lines) {
+    EXPECT_EQ(word, absl::AsciiStrToLower(word));
+    EXPECT_TRUE(EnglishWords::Default().ContainsUser(word)) << word;
+  }
+  EXPECT_EQ(std::set<std::string>(lines.begin(), lines.end()).size(),
+            lines.size())
+      << "a word twice";
+}
+
+TEST(EnglishWordsRemovedTest, TakesWordsOutOfBothLists) {
+  const EnglishWords words("keyboard\ntime\nemail\n", "time\nFigma\n",
+                           "Time\nkeyboard\n");
+  EXPECT_FALSE(words.Contains("time"));
+  EXPECT_FALSE(words.ContainsUser("time"));
+  EXPECT_FALSE(words.Contains("keyboard"));
+  EXPECT_TRUE(words.Contains("email"));
+  EXPECT_TRUE(words.ContainsUser("figma"));
+  EXPECT_EQ(words.size(), 2);
+}
+
 TEST(UserEnglishWordsTest, LeavesOutWhatNoSpanTakes) {
   const UserEnglishWords user = ParseUserEnglishWords(
       "# mine\r\n"
@@ -229,7 +270,20 @@ TEST(UserEnglishWordsTest, LeavesOutWhatNoSpanTakes) {
                                "7 行目「abcdefghijklmnopqrstuvwxyzabcdefg」"}));
 }
 
-class CurrentEnglishWordsTest : public testing::Test {
+TEST(UserEnglishWordsTest, ALineStartingWithAHyphenTakesAWordOut) {
+  const UserEnglishWords user = ParseUserEnglishWords(
+      "figma\n"
+      "-time\n"
+      "  - Page  \n"
+      "-go\n"
+      "-\n");
+  EXPECT_EQ(user.words, "figma\n");
+  EXPECT_EQ(user.removed, "time\nPage\n");
+  EXPECT_EQ(user.left_out,
+            (std::vector<std::string>{"4 行目「-go」", "5 行目「-」"}));
+}
+
+class CurrentEnglishWordsTest : public ::testing::Test {
  protected:
   void SetUp() override {
     Clock::SetClockForUnitTest(&clock_);
@@ -254,23 +308,33 @@ TEST_F(CurrentEnglishWordsTest, WithoutAFileIsTheBuiltInList) {
 }
 
 TEST_F(CurrentEnglishWordsTest, AddsTheUsersWordsAndReadsEdits) {
-  Write("figma\n");
+  Write("floatype\n");
   std::shared_ptr<const EnglishWords> words = CurrentEnglishWords();
-  EXPECT_TRUE(words->Contains("Figma"));
+  EXPECT_TRUE(words->Contains("Floatype"));
   EXPECT_TRUE(words->Contains("keyboard"));
-  EXPECT_FALSE(words->Contains("backend"));
+  EXPECT_TRUE(words->ContainsUser("page")) << "the preset words stay";
+  EXPECT_FALSE(words->Contains("kanakanji"));
 
-  Write("backend\nmore\n");
-  EXPECT_FALSE(CurrentEnglishWords()->Contains("backend"))
+  Write("kanakanji\nmore\n");
+  EXPECT_FALSE(CurrentEnglishWords()->Contains("kanakanji"))
       << "looks once a second";
   clock_.Advance(absl::Seconds(1));
-  EXPECT_TRUE(CurrentEnglishWords()->Contains("backend"));
-  EXPECT_FALSE(CurrentEnglishWords()->Contains("figma"));
+  EXPECT_TRUE(CurrentEnglishWords()->Contains("kanakanji"));
+  EXPECT_FALSE(CurrentEnglishWords()->Contains("floatype"));
 
   ASSERT_OK(
       FileUtil::Unlink(FileUtil::JoinPath(dir_.path(), kEnglishWordsFile)));
   clock_.Advance(absl::Seconds(1));
   EXPECT_EQ(CurrentEnglishWords().get(), &EnglishWords::Default());
+}
+
+TEST_F(CurrentEnglishWordsTest, TakesOutTheWordsTheFileSays) {
+  Write("-page\n-keyboard\nsite\n");
+  const std::shared_ptr<const EnglishWords> words = CurrentEnglishWords();
+  EXPECT_FALSE(words->Contains("page")) << "a preset word";
+  EXPECT_FALSE(words->Contains("keyboard")) << "SCOWL's";
+  EXPECT_TRUE(words->ContainsUser("time")) << "the other preset words stay";
+  EXPECT_TRUE(words->ContainsUser("site"));
 }
 
 }  // namespace

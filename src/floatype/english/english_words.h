@@ -19,9 +19,11 @@ namespace mozc::floatype {
 class EnglishWords {
  public:
   // `text` has one word a line; so does `user_text`, the words the user
-  // added, which are in the list too.
+  // added, which are in the list too, and `removed_text`, the words the user
+  // took out, which are in neither.
   explicit EnglishWords(absl::string_view text,
-                        absl::string_view user_text = "");
+                        absl::string_view user_text = "",
+                        absl::string_view removed_text = "");
   bool Contains(absl::string_view word) const;
   // Whether the user added `word`: English even where its keys also spell a
   // Japanese word (time and ちめ).
@@ -29,7 +31,8 @@ class EnglishWords {
   size_t size() const { return words_.size(); }
 
   // SCOWL's size-60 American list (english_words.txt, made by
-  // floatype/tools/make_english_words.py), built into the binary.
+  // floatype/tools/make_english_words.py) and, as words a user added, the
+  // preset words (preset_words.txt: page, time, json), built into the binary.
   static const EnglishWords& Default();
 
  private:
@@ -37,18 +40,21 @@ class EnglishWords {
   std::vector<std::string> user_words_;  // Lower case, sorted.
 };
 
-// The words a user's english_words.txt adds, one a line, and the lines left
-// out ("N 行目「go」"): those not 3 to 32 ASCII letters, which no span takes.
+// The words a user's english_words.txt adds, one a line, the words it takes
+// out of the lists ("-time", a line starting with -), and the lines left out
+// ("N 行目「go」"): those not 3 to 32 ASCII letters, which no span takes.
 // Lines starting with # and blank lines are comments.
 struct UserEnglishWords {
-  std::string words;  // One a line.
+  std::string words;    // One a line.
+  std::string removed;  // One a line.
   std::vector<std::string> left_out;
 };
 UserEnglishWords ParseUserEnglishWords(absl::string_view text);
 
 // The words that count as English: Default(), and while the user has an
-// english_words.txt next to config.toml, its words too, read again a second
-// after it changes. Lines left out are reported.
+// english_words.txt next to config.toml, with the words it adds and without
+// those it takes out, read again a second after it changes. Lines left out
+// are reported.
 std::shared_ptr<const EnglishWords> CurrentEnglishWords();
 
 // Whether the keys `raw` typed into the composition queried as `preedit` (with
