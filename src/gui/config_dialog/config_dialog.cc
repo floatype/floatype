@@ -756,12 +756,8 @@ void ConfigDialog::SetUpFloatypeSettings() {
                   "zenz のメモリと学習");
   zenzStopWhenIdleCheckBox_ =
       AddCheckBox(memory,
-                  "打っていない間は止める（待機中のメモリ 約 145MB → 約 51MB。"
+                  "打っていない間は止める（zenz のメモリ 約 30MB を返す。"
                   "1 分で止まり、次の 1 文字目で起きる）");
-  zenzLowMemoryCheckBox_ =
-      AddCheckBox(memory,
-                  "軽くする（動いている間のメモリ 約 145MB → 約 87MB、"
-                  "補正にかかる時間 約 26ms → 約 50ms）");
   zenzLearningCheckBox_ =
       AddCheckBox(memory,
                   "補正の表示中に control+delete "
@@ -811,7 +807,7 @@ void ConfigDialog::SetUpFloatypeSettings() {
   for (QWidget* widget : std::initializer_list<QWidget*>{
            zenzTimeoutSpinBox_, zenzSuggestionLearningCheckBox_,
            zenzLearningCheckBox_, zenzStopWhenIdleCheckBox_,
-           zenzLowMemoryCheckBox_, zenzDelaySpinBox_}) {
+           zenzDelaySpinBox_}) {
     connect(useZenzCheckBox_, &QCheckBox::toggled, widget,
             &QWidget::setEnabled);
   }
@@ -1296,7 +1292,6 @@ void ConfigDialog::ConvertFromProto(const config::Config& config) {
   SET_CHECKBOX(zenzSuggestionLearningCheckBox_, zenz_suggestion_learning);
   SET_CHECKBOX(zenzLearningCheckBox_, zenz_learning);
   SET_CHECKBOX(zenzStopWhenIdleCheckBox_, zenz_stop_when_idle);
-  SET_CHECKBOX(zenzLowMemoryCheckBox_, zenz_low_memory);
   SET_CHECKBOX(liveConversionCheckBox_, use_live_conversion);
   liveConversionDelaySpinBox_->setValue(
       config.live_conversion_delay_millisec());
@@ -1418,7 +1413,6 @@ void ConfigDialog::ConvertToProto(config::Config* config) const {
   GET_CHECKBOX(zenzSuggestionLearningCheckBox_, zenz_suggestion_learning);
   GET_CHECKBOX(zenzLearningCheckBox_, zenz_learning);
   GET_CHECKBOX(zenzStopWhenIdleCheckBox_, zenz_stop_when_idle);
-  GET_CHECKBOX(zenzLowMemoryCheckBox_, zenz_low_memory);
   GET_CHECKBOX(liveConversionCheckBox_, use_live_conversion);
   config->set_live_conversion_delay_millisec(
       liveConversionDelaySpinBox_->value());

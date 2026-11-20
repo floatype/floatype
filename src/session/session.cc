@@ -3443,7 +3443,7 @@ void Session::WarmZenz() {
   }
   // The settings go first: changing them later would stop a scorer just
   // started, and the restart interval would then keep zenz away.
-  zenz_.Configure(config.zenz_stop_when_idle(), config.zenz_low_memory());
+  zenz_.Configure(config.zenz_stop_when_idle());
   zenz_.Warm();
 }
 
@@ -3454,7 +3454,7 @@ void Session::RequestZenz(commands::Command* command, bool not_this) {
   }
   zenz_.set_timeout(absl::Milliseconds(config.zenz_timeout_millisec()));
   zenz_.set_learning(config.zenz_learning());
-  zenz_.Configure(config.zenz_stop_when_idle(), config.zenz_low_memory());
+  zenz_.Configure(config.zenz_stop_when_idle());
   // A correction the user committed before shows at once; zenz still looks,
   // as the context may call for another. Not after "not this", which may have
   // turned it down.

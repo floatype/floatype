@@ -477,10 +477,11 @@ message Config {
   // again on the next typed character (about 50ms, before the user pauses),
   // so zenz holds no memory while idle. Off, it runs while floatype does.
   optional bool zenz_stop_when_idle = 1021 [default = true];
-  // floatype: zenz keeps the model as the file holds it instead of a copy
-  // repacked for the CPU: about 64MB less while it runs, and corrections take
-  // about twice as long (median 26ms to 50ms on an M4 Pro).
-  optional bool zenz_low_memory = 1022 [default = false];
+  // floatype: zenz_low_memory, which gave up the copy of the model repacked
+  // for the CPU to save about 64MB, at half the speed. The scorer maps that
+  // copy from a file now, so it costs no memory of its own.
+  reserved 1022;
+  reserved "zenz_low_memory";
   // floatype: the words of the added dictionaries (names, places,
   // SudachiDict, Niconico and pixiv) are suggested too, as in Mozkey. Off,
   // they come only when the whole reading is converted.

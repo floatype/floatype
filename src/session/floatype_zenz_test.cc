@@ -515,10 +515,9 @@ TEST_F(FloatypeZenzTest, ALiveConversionConvertsAfreshAsMozkeyDoes) {
   EXPECT_EQ(Preedit(PollWhileAsked(CallBack(converted))), "機械が");
 }
 
-TEST_F(FloatypeZenzTest, ZenzCorrectsWithTheMemorySettings) {
+TEST_F(FloatypeZenzTest, ZenzCorrectsWithTheMemorySetting) {
   floatype::EnableSessionFeatures(true);
   config::Config config = config::ConfigHandler::DefaultConfig();
-  config.set_zenz_low_memory(true);
   config.set_zenz_stop_when_idle(false);
   commands::Input input;
   input.set_type(commands::Input::SET_CONFIG);

@@ -989,7 +989,7 @@ std::optional<Mapping> MapWithResegmentation(const Segments& segments,
   return map_resized(*sizes, added);
 }
 
-void ZenzCorrector::Configure(bool stop_when_idle, bool low_memory) {
+void ZenzCorrector::Configure(bool stop_when_idle) {
   if (client_ == nullptr) {
     return;
   }
@@ -997,9 +997,6 @@ void ZenzCorrector::Configure(bool stop_when_idle, bool low_memory) {
   if (stop_when_idle) {
     arguments.insert(arguments.end(),
                      {"--idle_exit_seconds", std::to_string(kIdleExitSeconds)});
-  }
-  if (low_memory) {
-    arguments.push_back("--no_repack");
   }
   client_->SetArguments(std::move(arguments));
 }

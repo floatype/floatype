@@ -148,9 +148,9 @@ class ZenzCorrector {
   // Whether answers the user stopped (ZenzMemory::Stopped()) are kept off
   // screen: the zenz_learning setting.
   void set_learning(bool learning) { learning_ = learning; }
-  // The settings zenz_stop_when_idle and zenz_low_memory, applied from the
-  // scorer's next start. Call it before Warm() and Request().
-  void Configure(bool stop_when_idle, bool low_memory);
+  // The setting zenz_stop_when_idle, applied from the scorer's next start.
+  // Call it before Warm() and Request().
+  void Configure(bool stop_when_idle);
   // Starts the scorer ahead of a request, while the user types.
   void Warm();
   // True while an answer is awaited.
