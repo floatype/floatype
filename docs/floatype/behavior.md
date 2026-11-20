@@ -25,6 +25,7 @@ floatype が打鍵から確定までに何をするかを、時間の順に書�
 
 - Space を押すとすぐ Mozc で変換し、同時に zenz に聞く（予約の待ちはない）。インジケータは Zenz… になり、答えで Zenz か Mozc に変わる。
 - もう一度 Space で次の候補、候補の窓から選べる。zenz の補正の表示中に Space を押すと Mozc の結果に戻る。
+- 日英混在入力がオンで、入力が英単語で終わっているときは、変換せずに確定して半角の空白を入れる（6 章）。
 
 ### zenz の答えの扱い
 
@@ -128,7 +129,7 @@ Mozc の文節のままでは書けない答えは、文節を区切り直して
 
 - 日英混在入力（`mixed_english`）：かなの入力中に打った英単語を、変換で英字（半角）のままにする。英単語とみなすのは、ローマ字がかなにならずに英字が残り、英単語の一覧にある 3 文字以上の語。一覧は、SCOWL（一般の英語の約 8 万 8 千語）、初めから足してある語（json、config、page、time など。8 章）、自分で足した語（8 章の `english_words.txt`）を合わせたもの。
   - 文の途中でも単語ごとに見る。「きょうは update する」は 今日はupdateする、「update を」は updateを になる。
-  - 手を止めた（ライブ変換）か Space で変換したときに、その語を打ったとおりの英字に置き換える。そのあと打つかなは、英字のあとに かな で続く。Backspace は英字を 1 字ずつ消す。
+  - 手を止めた（ライブ変換）か変換したときに、その語を打ったとおりの英字に置き換える。そのあと打つかなは、英字のあとに かな で続く。Backspace は英字を 1 字ずつ消す。
   - 英単語の最後の子音が次のかなとつながったときも拾う（test + する は てsつる、email + を は えまいlwお と出るが、testする、emailを になる）。
   - 音の途中で手を止めたとき（きょうは + s が has と読める）は、英字で見せるが、次に英字のキーを打つと打ったとおりに戻す（きょうはしる）。子音で終わる英単語（email、keyboard）も同じで、続けて を を打つと emailを になる。
   - ローマ字が全部かなになる語（before は べふぉれ、hello は へっぉ、open は おぺん）は、その語だけで打ったとき（入力の頭から終わりまで、または / などの記号で区切られたところ）に、そのかなが日本語として読めなければ英字にする。日本語として読めるかは、「2 文字以上の辞書の語」と「1 文字の助詞（は、が、ね など）」だけで端から端まで読めるかで見る。まで（made）、して（site）、たけ（take）、わね（wane）は日本語のまま。
@@ -141,10 +142,42 @@ Mozc の文節のままでは書けない答えは、文節を区切り直して
     - 入力の終わりで拾った語は、続けて英字のキーを打つと かな に戻る（それはbefore のあとに に を打つと それはべふぉれに。次に手を止めたとき、また拾う）。後ろにかながある語は、そのまま英字で残る。
     - 英単語の一覧の語かどうかと、残りが日本語として読めるかだけで決める。前後の文の意味は見ない。
   - 手を止めて英字になったあと、続けて英字のキーを打つと、打ったとおりの かな に戻して続ける（base になった ばせ に い を打つと ばせい）。全部かなになる語のあとは、伸ばす棒（ー）のキーでも かな に戻る（note になった のて に ー を打つと のてー。「のテーマ」と打てる）。記号や / を打ったときは英字のまま。
+  - 英単語のあとの Space は、変換ではなく、確定して半角の空白を入れる。英語を単語ごとに、切り替えなしで打てる（time is money、git push origin main）。
+    - 入力が英単語で終わっているときに効く。前に日本語があれば、日本語を変換し、zenz の答えを待ってから（次のキーが先ならその時点で）全部を確定して空白を入れる（これはpull のあとの Space で「これはpull 」）。
+    - かなが 1 つも無い入力では、語のあとの . , ! ? ; : も打ったとおり半角で確定する（thank you. と hello, world）。日本語のあとの記号で終わる入力（これはtest。）は、今までどおり変換する。
+    - 日本語として読める語は、今までどおり変換する（made は まで、are は あれ、tomato は トマト）。
+    - Shift で英字を打ったあと（英数の入力に切り替わっている間）の Space は Mozc のままで、入力の中に空白が入る。
+    - 取り消し（Ctrl+Backspace）は、空白も含めて消して入力中に戻す。
+    - 英単語の候補（大文字、全角）を見たいときは、Space の前に F10 を押す。ひらがなに戻すのは F6。変換に別のキーがあるキー設定（MS-IME と ATOK の 変換キー、Shift+Space）では、そのキーで今までどおり変換できる。
+    - Space のあとにすぐ Enter を打つと、確定は済んでいるので、Enter はアプリに届く（改行や送信になる）。
+  - 英語が続いている間は、次の語も英語として読む。
+    - Space で英単語を確定した直後に打ち始めた入力が、頭から終わりまで 1 つの英単語なら、かなが日本語として読めても英字にする（how are you の are と you、this is a pen の a と pen）。3 文字以上は英単語の一覧の語。1〜2 文字は a、i、am、an、as、at、be、by、do、go、he、hi、if、in、is、it、me、my、no、of、oh、ok、on、or、so、to、up、us、we。
+    - - で始まる英数字も打ったとおりにする（git commit -m、ls -la）。
+    - 1 つの英単語でない入力は、日本語として変換する（git push してください、no problem です）。このときは文の頭として変換し、直前の英単語を前の語として扱わない（Mozc は「英字 + 空白 1 つ」の後ろを前の語の続きとして変換するので、push のあとの に が 二 になることがある）。
+    - 続きが終わるのは、ほかの確定をしたとき（日本語の確定、Enter での確定）と、何も入力していないところで文字以外のキーを打ったとき（矢印、Backspace、Enter、2 つ目の Space）。
+    - 日本語にも英語にも読める 1 語は、ここでは英語になる（git push のあとに site だけを打つと、して にならない）。
+  - Space を打ったときだけ英語とみなすものがある。英字が残る 1〜2 文字の語（of は おf、it は いt、is は いs）と、かなが 1 つもできなかった入力（ls、cd、npm、src）。手を止めただけでは変えない（いt は いった の途中かもしれない）。
+  - 記号でつないだ名前は、記号も打ったとおり半角にする（config.toml、foo_bar、@src/app.ts、key=value、localhost:3000、--help、$skill）。
+    - 対象は、英字のあいだか英字の前にある . _ / @ : = - $ # + & * % ^ \ | ~ < > と数字。文の中でもよい（今日はconfig.tomlを開く）。
+    - かなが 1 つも無い入力では、頭の記号も打ったとおりにする（/review、--help）。入力の頭の / を ・ にしたいときは z/ と打つ。
+    - 入力の終わりの記号（test。）と、かっこ（「file」）は日本語のまま。
+  - 記号の隣が英語なら、日本語として読める部分も英字にする。
+    - 英単語の一覧の語（node_modules の node、src/main.rs の main、app.name の name）。ただし「語 + . + 英単語」は 2 つの文かもしれないので変えない（それ。test）。
+    - . のあとのファイルやホストの終わり（cc、ts、rs、md、json、html、com、jp など）と、その前の語（main.cc）。
+    - @ の前（taro@example.com の taro）。
+    - 英字が残っていて、後ろに続きがある部分（usr/local/bin の usr）。
+    - 1 文字ずつを記号でつないだもの（a.b.c）。
+  - 空白なしで続けて打った英語も英字にする（timeismoney、helloworld、goodmorning、pullrequest）。
+    - 入力の全部が 2 つ以上の英単語に分けられ、しかも日本語として読めない部分が残るときだけ。英単語は 3 文字以上で、is、it、of などの 2 文字の語は、かなにならない英字が途中にある入力でだけ使う。
+    - 英単語の隣が日本語として読めるなら、日本語のまま（pushして、あとでtest、fileの）。そのため thankyou（thank + よう）、letsgo（lets + ご）、noproblem（の + problem）、takecare（たけ + かれ）、usecase は英語にならない。
+  - Shift で打った大文字の前でも語を拾う（camelCase の camel、userId の user）。Shift のあとは英数の入力になり、ふつうは手を止めても変換しないが、前に英単語があるときだけ英字に直す。
+  - 英単語の切り方。隣のかなが日本語として読める切り方を先に選ぶ（きょうはてsとぉかきます は 今日は + test + を書きます。hates + とぉ ではない）。t のあとの s は し（shi）の一部として読む（commitします、testします。commits + ひます ではない）。
   - 拾えないもの：
     - かなが日本語として読めてしまう語を、かなに続けて打ったとき。site（して）、size（しぜ：し + ぜ）、image（いまげ：い + 髷）など。初めから足してある語と自分で足した語も、文の途中では同じ（data は だた：だ + た、time は ちめ：ち + め、page は ぱげ、menu は めぬ、code は こで、note は のて。dataを保存する は だたを保存する のまま）。これらの語は、その語だけで打つか、/ などの記号で区切れば英字になる。before も、それは の後では はべ + ふぉれ（どちらも辞書にある読み）と読めてしまう。
     - ん の直後の、母音で始まる語（かんたん + update は かんたぬpだて）。
-    - 前のかなとつながって別の英単語になる場合（きょうは + test は hates と読める）。
+    - 助詞のかなとつながって別の英単語になる場合（あとで + test は あと + detest と読める）。
+    - 最初の語が日本語として読める英文（nice to meet you の nice は にせ、no problem の no は の、make sure の make は まけ）。最初の Space で日本語として変換される。
+    - Shift で大文字を打った語の前が、全部かなになる語のとき（fileName は ふぃぇName のまま）。
   - インジケータの右端は、キャレットの直前の語が英字なら A、それ以外は あ。
 - 曖昧なローマ字の途中表示（`display_ambiguous_romaji`）：長い規則の途中のローマ字を、いまの時点の かな で見せる（n は ん）。
 - ライブ変換のルビ（`live_conversion_ruby`）：ライブ変換の上に読みを小さく出す。
@@ -198,9 +231,10 @@ Mozc の辞書に、ビルドのときに作る辞書を足す（`floatype/tools
 - 日英混在入力で英単語とみなす語を、`~/.config/floatype/english_words.txt` で足したり外したりできる。1 行に 1 語で、大文字と小文字は区別しない。`#` で始まる行と空行は読み飛ばす。
   - 語をそのまま書くと、足す。ここに足した語は、その語だけで打ったとき、ローマ字が全部かなになる綴りでも、いつも英字にする（6 章）。
   - 頭に `-` を付けて書くと、外す（`-time`）。初めから足してある語にも、SCOWL の語にも効く。外した語は英単語として拾わない。
-- 初めから足してある語が 154 語ある（ソースの `src/floatype/english/preset_words.txt`）。自分で足した語と同じ扱いで、ファイルが無くても効く。
+- 初めから足してある語が 166 語ある（ソースの `src/floatype/english/preset_words.txt`）。自分で足した語と同じ扱いで、ファイルが無くても効く。
   - かなが辞書で読めてしまうが、その語だけを日本語として打つことがまず無い語（62 語）：page、menu、data、time、code、token、video、note、main、idea、area、redo、safe、zone、wide、guide、pane、core、case、cache、icon、encode、unicode、secure、notice、queue、require、unique、cookie、sequence、delete、device、voice、native、move、save、remove、invite、engine、origin、resize、hidden、domain、define、session、feature、issue、route、remote、separate、position、message、join、region、wifi、azure、debian、apache、ubuntu、heroku、notion、openai。
-  - 小文字で書くことの多いソフトウェアの語（ほとんどは SCOWL に無い）：json、yaml、toml、config、env、npm、async、auth、backend、frontend、localhost、readme、webhook、gitlab、figma、vscode、xcode、mozc、zenz など 92 語。
+  - 小文字で書くことの多いソフトウェアの語（ほとんどは SCOWL に無い）：json、yaml、toml、config、env、npm、async、auth、backend、frontend、localhost、readme、webhook、gitlab、figma、vscode、xcode、mozc、zenz、dev、utf など 94 語。
+  - アポストロフィを省いて打つ語（10 語）：arent、didnt、doesnt、dont、havent、isnt、thats、wasnt、whats、youre。
   - 入れていない語：かなを日本語として打つことがある語（site は して、made は まで、node は ので、home は ほめ、name は なめ、date は だて、demo は でも、memo は めも）。かなの続きによくある日本語がある語（mode は もでる、todo は とどく、undo は うんどう、mute は むてんか、gate は がてら。その語のかなで手を止めると、日本語を打っている途中でも英字が出てしまう）。API、URL のように大文字で書く略語（Shift を押しながら打てば、そのまま英字になる）。入れたい語は `english_words.txt` に 1 行書けば足せる。
   - 初めから足してある語でも、かなの続きに日本語があるものは残っている（time は ちめ で、地名 の途中。note は のて で、「の手」「の天気」の途中）。そこで手を止めると英字が出るが、続けて英字のキーか ー を打てば かな に戻る。気になる語は `-time` のように外せる。
 - 使えるのは英字だけの 3〜32 文字の語（それより短い語や記号の入った語は英単語として拾えない）。ほかの行は使わず、行番号を通知で知らせる。残りの語は使う。
