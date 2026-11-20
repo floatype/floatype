@@ -211,6 +211,14 @@
 /** Switches the mode icon in the task bar according to |mode_|. */
 - (void)switchDisplayMode;
 
+/** The mode to go to when macOS reports that the input mode |value| (an ID of Info.plist) was
+ * selected. The modes macOS is not told of (Katakana, half-width katakana, full-width alphanumeric)
+ * are shown as Hiragana and are kept when Hiragana is reported.
+ *
+ * @param value What setValue:forTag:client: was given.
+ */
+- (mozc::commands::CompositionMode)modeForSelectedInputMode:(id)value;
+
 /** Commits the specified text to the current client.
  *
  * @param text The text to be committed.

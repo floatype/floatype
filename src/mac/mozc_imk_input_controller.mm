@@ -90,10 +90,11 @@ constexpr int kMaxSurroundingLength = 20;
 // surrounding text takes too much time. So we set this limitation.
 constexpr int kGetSurroundingTextClientLengthLimit = 1000;
 
+// floatype: Info.plist tells macOS of these two input modes only, as azooKey
+// does, so that the list of input sources shows one Japanese entry. Katakana,
+// half-width katakana and full-width alphanumeric input stay modes of the
+// converter that a key may switch to; macOS shows them as Hiragana.
 constexpr absl::string_view kRomanModeId = "com.apple.inputmethod.Roman";
-constexpr absl::string_view kKatakanaModeId = "com.apple.inputmethod.Japanese.Katakana";
-constexpr absl::string_view kHalfWidthKanaModeId = "com.apple.inputmethod.Japanese.HalfWidthKana";
-constexpr absl::string_view kFullWidthRomanModeId = "com.apple.inputmethod.Japanese.FullWidthRoman";
 constexpr absl::string_view kHiraganaModeId = "com.apple.inputmethod.Japanese";
 
 CompositionMode GetCompositionMode(absl::string_view mode_id) {
@@ -110,15 +111,6 @@ CompositionMode GetCompositionMode(absl::string_view mode_id) {
   if (mode_id == kRomanModeId) {
     return mozc::commands::HALF_ASCII;
   }
-  if (mode_id == kKatakanaModeId) {
-    return mozc::commands::FULL_KATAKANA;
-  }
-  if (mode_id == kHalfWidthKanaModeId) {
-    return mozc::commands::HALF_KATAKANA;
-  }
-  if (mode_id == kFullWidthRomanModeId) {
-    return mozc::commands::FULL_ASCII;
-  }
   if (mode_id == kHiraganaModeId) {
     return mozc::commands::HIRAGANA;
   }
@@ -133,11 +125,8 @@ absl::string_view GetModeId(CompositionMode mode) {
     case mozc::commands::HALF_ASCII:
       return kRomanModeId;
     case mozc::commands::FULL_KATAKANA:
-      return kKatakanaModeId;
     case mozc::commands::HALF_KATAKANA:
-      return kHalfWidthKanaModeId;
     case mozc::commands::FULL_ASCII:
-      return kFullWidthRomanModeId;
     case mozc::commands::HIRAGANA:
       return kHiraganaModeId;
     default:
@@ -342,19 +331,28 @@ bool CanSurroundingText(absl::string_view bundle_id) {
     return;
   }
 
+  [self switchMode:[self modeForSelectedInputMode:value] client:sender];
+  [self handleConfig];
+  [super setValue:value forTag:tag client:sender];
+}
+
+#pragma mark internal methods
+
+- (CompositionMode)modeForSelectedInputMode:(id)value {
   CompositionMode new_mode = [value isKindOfClass:[NSString class]]
                                  ? GetCompositionMode([value UTF8String])
                                  : mozc::commands::DIRECT;
   if (new_mode == mozc::commands::HALF_ASCII && [composedString_ length] == 0) {
     new_mode = mozc::commands::DIRECT;
   }
-
-  [self switchMode:new_mode client:sender];
-  [self handleConfig];
-  [super setValue:value forTag:tag client:sender];
+  // floatype: macOS answers switchDisplayMode with the mode it was told to
+  // select. Katakana and the like are shown as Hiragana, and that answer must
+  // not take the converter out of them.
+  if (new_mode == mozc::commands::HIRAGANA && GetModeId(mode_) == kHiraganaModeId) {
+    return mode_;
+  }
+  return new_mode;
 }
-
-#pragma mark internal methods
 
 - (void)handleConfig {
   // Get the config and set client-side behaviors

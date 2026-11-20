@@ -63,93 +63,6 @@
 				<key>tsInputModeScriptKey</key>
 				<string>smJapanese</string>
 			</dict>
-			<key>com.apple.inputmethod.Japanese.Katakana</key>
-			<dict>
-				<key>TISInputSourceID</key>
-				<string>${PRODUCT_BUNDLE_IDENTIFIER}.Katakana</string>
-				<key>TISIconIsTemplate</key>
-				<true/>
-				<key>TISIntendedLanguage</key>
-				<string>ja</string>
-				<key>tsInputModeAlternateMenuIconFileKey</key>
-				<string>full_katakana.tiff</string>
-				<key>tsInputModeDefaultStateKey</key>
-				<true/>
-				<key>tsInputModeIsVisibleKey</key>
-				<true/>
-				<key>tsInputModeJISKeyboardShortcutKey</key>
-				<integer>2</integer>
-				<key>tsInputModeKeyEquivalentKey</key>
-				<string>K</string>
-				<key>tsInputModeKeyEquivalentModifiersKey</key>
-				<integer>4608</integer>
-				<key>tsInputModeMenuIconFileKey</key>
-				<string>full_katakana.tiff</string>
-				<key>tsInputModePaletteIconFileKey</key>
-				<string>full_katakana.tiff</string>
-				<key>tsInputModePrimaryInScriptKey</key>
-				<false/>
-				<key>tsInputModeScriptKey</key>
-				<string>smJapanese</string>
-			</dict>
-			<key>com.apple.inputmethod.Japanese.HalfWidthKana</key>
-			<dict>
-				<key>TISInputSourceID</key>
-				<string>${PRODUCT_BUNDLE_IDENTIFIER}.HalfWidthKana</string>
-				<key>TISIconIsTemplate</key>
-				<true/>
-				<key>TISIntendedLanguage</key>
-				<string>ja</string>
-				<key>tsInputModeAlternateMenuIconFileKey</key>
-				<string>half_katakana.tiff</string>
-				<key>tsInputModeDefaultStateKey</key>
-				<true/>
-				<key>tsInputModeIsVisibleKey</key>
-				<true/>
-				<key>tsInputModeJISKeyboardShortcutKey</key>
-				<integer>2</integer>
-				<key>tsInputModeKeyEquivalentKey</key>
-				<string>:</string>
-				<key>tsInputModeKeyEquivalentModifiersKey</key>
-				<integer>4608</integer>
-				<key>tsInputModeMenuIconFileKey</key>
-				<string>half_katakana.tiff</string>
-				<key>tsInputModePaletteIconFileKey</key>
-				<string>half_katakana.tiff</string>
-				<key>tsInputModePrimaryInScriptKey</key>
-				<false/>
-				<key>tsInputModeScriptKey</key>
-				<string>smJapanese</string>
-			</dict>
-			<key>com.apple.inputmethod.Japanese.FullWidthRoman</key>
-			<dict>
-				<key>TISInputSourceID</key>
-				<string>${PRODUCT_BUNDLE_IDENTIFIER}.FullWidthRoman</string>
-				<key>TISIconIsTemplate</key>
-				<true/>
-				<key>TISIntendedLanguage</key>
-				<string>ja</string>
-				<key>tsInputModeAlternateMenuIconFileKey</key>
-				<string>full_ascii.tiff</string>
-				<key>tsInputModeDefaultStateKey</key>
-				<true/>
-				<key>tsInputModeIsVisibleKey</key>
-				<true/>
-				<key>tsInputModeJISKeyboardShortcutKey</key>
-				<integer>0</integer>
-				<key>tsInputModeKeyEquivalentKey</key>
-				<string>L</string>
-				<key>tsInputModeKeyEquivalentModifiersKey</key>
-				<integer>4608</integer>
-				<key>tsInputModeMenuIconFileKey</key>
-				<string>full_ascii.tiff</string>
-				<key>tsInputModePaletteIconFileKey</key>
-				<string>full_ascii.tiff</string>
-				<key>tsInputModePrimaryInScriptKey</key>
-				<false/>
-				<key>tsInputModeScriptKey</key>
-				<string>smJapanese</string>
-			</dict>
 			<key>com.apple.inputmethod.Roman</key>
 			<dict>
 				<key>TISInputSourceID</key>
@@ -183,9 +96,6 @@
 		<key>tsVisibleInputModeOrderedArrayKey</key>
 		<array>
 			<string>com.apple.inputmethod.Japanese</string>
-			<string>com.apple.inputmethod.Japanese.Katakana</string>
-			<string>com.apple.inputmethod.Japanese.HalfWidthKana</string>
-			<string>com.apple.inputmethod.Japanese.FullWidthRoman</string>
 			<string>com.apple.inputmethod.Roman</string>
 		</array>
 	</dict>

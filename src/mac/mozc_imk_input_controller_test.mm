@@ -622,6 +622,43 @@ TEST_F(MozcImkInputControllerTest, SwitchDisplayMode) {
   EXPECT_EQ(mock_client_.selectedMode, "com.apple.inputmethod.Roman");
 }
 
+// floatype: Info.plist names two input modes; the converter's other modes
+// are shown as one of them.
+TEST_F(MozcImkInputControllerTest, SwitchDisplayModeSelectsOnlyDeclaredModes) {
+  for (const commands::CompositionMode mode :
+       {commands::HIRAGANA, commands::FULL_KATAKANA, commands::HALF_KATAKANA,
+        commands::FULL_ASCII}) {
+    [controller_ switchMode:mode client:mock_client_];
+    ASSERT_EQ(controller_.mode, mode);
+    [controller_ switchDisplayMode];
+    EXPECT_EQ(mock_client_.selectedMode, "com.apple.inputmethod.Japanese") << mode;
+  }
+  [controller_ switchMode:commands::HALF_ASCII client:mock_client_];
+  [controller_ switchDisplayMode];
+  EXPECT_EQ(mock_client_.selectedMode, "com.apple.inputmethod.Roman");
+}
+
+// macOS reports the mode switchDisplayMode selected; that must not take the
+// converter out of a mode shown as Hiragana.
+TEST_F(MozcImkInputControllerTest, SelectedHiraganaKeepsTheModesShownAsHiragana) {
+  for (const commands::CompositionMode mode :
+       {commands::HIRAGANA, commands::FULL_KATAKANA, commands::HALF_KATAKANA,
+        commands::FULL_ASCII}) {
+    [controller_ switchMode:mode client:mock_client_];
+    EXPECT_EQ([controller_ modeForSelectedInputMode:@"com.apple.inputmethod.Japanese"], mode);
+    // The Roman mode with nothing composed is direct input, as before.
+    EXPECT_EQ([controller_ modeForSelectedInputMode:@"com.apple.inputmethod.Roman"],
+              commands::DIRECT);
+  }
+  // From direct input and from half-width alphanumeric, Hiragana is Hiragana.
+  [controller_ switchMode:commands::DIRECT client:mock_client_];
+  EXPECT_EQ([controller_ modeForSelectedInputMode:@"com.apple.inputmethod.Japanese"],
+            commands::HIRAGANA);
+  [controller_ switchMode:commands::HALF_ASCII client:mock_client_];
+  EXPECT_EQ([controller_ modeForSelectedInputMode:@"com.apple.inputmethod.Japanese"],
+            commands::HIRAGANA);
+}
+
 TEST_F(MozcImkInputControllerTest, commitText) {
   controller_.replacementRange = NSMakeRange(0, 1);
   [controller_ commitText:"foo" client:mock_client_];
