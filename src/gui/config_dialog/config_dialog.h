@@ -127,6 +127,7 @@ class ConfigDialog : public QDialog, private Ui::ConfigDialog {
   // One per character Mozkey offers, in kDirectCommitCharacters' order.
   std::vector<QCheckBox*> directCommitCheckBoxes_;
   QCheckBox* mixedEnglishCheckBox_;
+  QCheckBox* slashAfterAsciiCheckBox_;
   QCheckBox* suggestAddedWordsCheckBox_;
   QCheckBox* kindMarkCheckBox_;
   // The width of digits: the 全角・半角 table's digit row in one choice.

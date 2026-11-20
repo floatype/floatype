@@ -469,6 +469,24 @@ TEST(ExampleTest, ListsEveryFloatypeFieldWithItsDefault) {
   ExpectDefaults(example->ruby_style(), defaults.ruby_style());
 }
 
+TEST(TomlConfigTest, SlashAfterAsciiIsOnUnlessTurnedOff) {
+  const Config defaults = config::ConfigHandler::DefaultConfig();
+  EXPECT_TRUE(defaults.slash_after_ascii());
+  const absl::StatusOr<std::string> same =
+      UpdateTomlConfig("", defaults, defaults);
+  ASSERT_TRUE(same.ok()) << same.status();
+  EXPECT_FALSE(absl::StrContains(*same, "slash_after_ascii"));
+
+  Config off = defaults;
+  off.set_slash_after_ascii(false);
+  const absl::StatusOr<std::string> text = UpdateTomlConfig("", off, defaults);
+  ASSERT_TRUE(text.ok()) << text.status();
+  EXPECT_TRUE(absl::StrContains(*text, "slash_after_ascii = false"));
+  const absl::StatusOr<Config> read = ParseTomlConfig(*text);
+  ASSERT_TRUE(read.ok()) << read.status();
+  EXPECT_FALSE(read->slash_after_ascii());
+}
+
 TEST(TomlConfigTest, TheDigitDefaultIsNotWrittenAndTheOldOneRoundTrips) {
   const Config defaults = config::ConfigHandler::DefaultConfig();
   const absl::StatusOr<std::string> same = UpdateTomlConfig("", defaults, defaults);

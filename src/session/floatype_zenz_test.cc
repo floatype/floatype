@@ -1091,6 +1091,104 @@ TEST_F(FloatypeZenzTest, WithoutMixedEnglishAWordInsideJapaneseIsKana) {
   EXPECT_EQ(Preedit(SendKeys({"Space"})).find("update"), std::string::npos);
 }
 
+// Sets the config for the tests of / after a letter or a digit.
+#define SET_SLASH_CONFIG(mixed_english, slash)                       \
+  floatype::EnableSessionFeatures(true);                             \
+  {                                                                  \
+    config::Config config = config::ConfigHandler::DefaultConfig(); \
+    config.set_mixed_english(mixed_english);                         \
+    config.set_slash_after_ascii(slash);                             \
+    config.set_use_live_conversion(false);                           \
+    commands::Input input;                                           \
+    input.set_type(commands::Input::SET_CONFIG);                     \
+    *input.mutable_config() = config;                                \
+    Eval(std::move(input));                                          \
+  }
+
+TEST_F(FloatypeZenzTest, SlashAfterADigitIsASlash) {
+  SET_SLASH_CONFIG(false, true);
+  EXPECT_EQ(Preedit(SendKeys({"2", "0", "2", "6", "/", "1", "1", "/", "2", "0"})),
+            "2026/11/20");
+  EXPECT_EQ(Preedit(SendKeys({"Space"})), "2026/11/20");
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(), "2026/11/20");
+
+  // Committed from the composition as it is.
+  SendKeys({"1", "/", "2"});
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(), "1/2");
+}
+
+TEST_F(FloatypeZenzTest, SlashAfterKanaIsStillTheMiddleDot) {
+  SET_SLASH_CONFIG(true, true);
+  EXPECT_EQ(Preedit(SendKeys({"a", "/"})), "あ・");
+  SendKeys({"Escape"});
+  EXPECT_EQ(Preedit(SendKeys({"/"})), "・") << "nothing before it";
+  SendKeys({"Escape"});
+  EXPECT_EQ(Preedit(SendKeys({"z", "/"})), "・") << "the rule z/ stays";
+  SendKeys({"Escape"});
+  EXPECT_EQ(Preedit(SendKeys({"a", "z", "/"})), "あ・");
+}
+
+TEST_F(FloatypeZenzTest, SlashAfterAnEnglishWordIsASlash) {
+  SET_SLASH_CONFIG(true, true);
+  SendKeys({"t", "e", "s", "t", "/", "s", "p", "e", "c"});
+  EXPECT_EQ(Preedit(SendKeys({"Space"})), "test/spec");
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(), "test/spec");
+
+  // Loose letters that are no word in the list (src), two or more.
+  const commands::Output typed = SendKeys({"s", "r", "c", "/"});
+  EXPECT_TRUE(Preedit(typed).ends_with("/")) << Preedit(typed);
+  SendKeys({"Escape"});
+}
+
+TEST_F(FloatypeZenzTest, SlashRightAfterCommittingAnEnglishWordIsASlash) {
+  SET_SLASH_CONFIG(true, true);
+  // No app tells what precedes the caret here, as in a terminal.
+  SendKeys({"k", "e", "y", "b", "o", "a", "r", "d", "Space"});
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "keyboard");
+  EXPECT_EQ(Preedit(SendKeys({"/"})), "/");
+  SendKeys({"Escape"});
+
+  // Typing / on the conversion commits it and goes on.
+  SendKeys({"k", "e", "y", "b", "o", "a", "r", "d", "Space"});
+  const commands::Output slash = SendKeys({"/"});
+  EXPECT_EQ(slash.result().value(), "keyboard");
+  EXPECT_EQ(Preedit(slash), "/");
+  SendKeys({"Escape"});
+
+  // After Japanese, and after a key since the commit, it is the dot.
+  SendKeys({"k", "i", "k", "a", "i", "Space"});
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機会");
+  EXPECT_EQ(Preedit(SendKeys({"/"})), "・");
+  SendKeys({"Escape"});
+  SendKeys({"k", "e", "y", "b", "o", "a", "r", "d", "Space"});
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "keyboard");
+  SendKeys({"a", "Backspace"});
+  EXPECT_EQ(Preedit(SendKeys({"/"})), "・");
+}
+
+TEST_F(FloatypeZenzTest, SlashAfterALetterTheAppTellsIsASlash) {
+  SET_SLASH_CONFIG(false, true);
+  for (const auto& [before, expected] :
+       {std::pair{"see README", "/"}, std::pair{"日本語", "・"}}) {
+    commands::Input input;
+    input.set_type(commands::Input::SEND_KEY);
+    ASSERT_TRUE(KeyParser::ParseKey("/", input.mutable_key()));
+    input.mutable_context()->set_preceding_text(before);
+    EXPECT_EQ(Preedit(Eval(std::move(input))), expected) << before;
+    SendKeys({"Escape"});
+  }
+}
+
+TEST_F(FloatypeZenzTest, SlashStaysTheMiddleDotWithTheSettingOff) {
+  SET_SLASH_CONFIG(true, false);
+  EXPECT_EQ(Preedit(SendKeys({"2", "0", "2", "6", "/"})), "2026・");
+  SendKeys({"Escape"});
+  SendKeys({"t", "e", "s", "t", "/"});
+  EXPECT_FALSE(Preedit(SendKeys({"Space"})).ends_with("/"));
+}
+
+#undef SET_SLASH_CONFIG
+
 TEST_F(FloatypeZenzTest, MixedEnglishLeavesATrailingNJapanese) {
   floatype::EnableSessionFeatures(true);
   config::Config config = config::ConfigHandler::DefaultConfig();

@@ -337,6 +337,12 @@ class Session {
   // After a typed character: when it is one of the direct commit characters,
   // converts, asks zenz, and commits once it answers. Returns whether it did.
   bool MaybeCommitOnCharacter(commands::Command* command);
+  // floatype: whether `key` is a / to type as it is, because a letter or a
+  // digit comes right before it: in the composition, in the text the app says
+  // is before the caret, or else at the end of what was committed by the
+  // key before (`committed`, or the last commit while it can still be undone).
+  bool IsSlashAfterAscii(const commands::KeyEvent& key,
+                         absl::string_view committed) const;
   // Mixed English input: converts the composition to its letters when they
   // were an English word. Returns whether it did.
   bool MaybeConvertAsEnglish(commands::Command* command);

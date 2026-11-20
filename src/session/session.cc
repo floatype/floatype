@@ -1788,6 +1788,8 @@ bool Session::InsertCharacter(commands::Command* command) {
     should_commit = true;
   }
 
+  // floatype: decided before the commit below ends the conversion.
+  std::string committed;
   if (should_commit) {
     CommitNotTriggeringZeroQuerySuggest(command);
     if (key.input_style() == commands::KeyEvent::DIRECT_INPUT) {
@@ -1797,9 +1799,24 @@ bool Session::InsertCharacter(commands::Command* command) {
       CommitCompositionDirectly(command);
       return true;
     }
+    committed = command->output().result().value();
   }
 
-  context_->mutable_composer()->InsertCharacterKeyEvent(key);
+  if (IsSlashAfterAscii(key, committed)) {
+    // As typed, in the way KeepEnglishWords() writes a word's letters.
+    composer::Composer* composer = context_->mutable_composer();
+    const transliteration::TransliterationType mode = composer->GetInputMode();
+    const transliteration::TransliterationType comeback =
+        composer->GetComebackInputMode();
+    composer->SetTemporaryInputMode(transliteration::HALF_ASCII);
+    composer->InsertCharacter("/");
+    composer->SetInputMode(comeback);
+    if (mode != comeback) {
+      composer->SetTemporaryInputMode(mode);
+    }
+  } else {
+    context_->mutable_composer()->InsertCharacterKeyEvent(key);
+  }
   ClearUndoContext();
   if (context_->mutable_composer()->ShouldCommit()) {
     CommitCompositionDirectly(command);
@@ -2796,6 +2813,78 @@ struct EnglishView {
 
 }  // namespace
 
+bool Session::IsSlashAfterAscii(const commands::KeyEvent& key,
+                                absl::string_view committed) const {
+  const config::Config& config = context_->GetConfig();
+  if (!floatype::SessionFeaturesEnabled() || !config.slash_after_ascii() ||
+      !key.has_key_code() || key.key_code() != '/' ||
+      key.modifier_keys_size() != 0 ||
+      key.input_style() != commands::KeyEvent::FOLLOW_MODE) {
+    return false;
+  }
+  const composer::Composer& composer = context_->composer();
+  const transliteration::TransliterationType mode = composer.GetInputMode();
+  if (mode == transliteration::HALF_ASCII ||
+      mode == transliteration::FULL_ASCII) {
+    return false;  // / is / there already.
+  }
+  const auto ends_in_ascii = [](absl::string_view text) {
+    return !text.empty() &&
+           absl::ascii_isalnum(static_cast<unsigned char>(text.back()));
+  };
+  if (!composer.Empty()) {
+    const size_t cursor = composer.GetCursor();
+    if (cursor == 0) {
+      return false;
+    }
+    std::vector<std::string> preedit;
+    const std::string preedit_text = composer.GetStringForPreedit();
+    for (const absl::string_view c : Utf8AsChars(preedit_text)) {
+      preedit.emplace_back(c);
+    }
+    if (cursor > preedit.size()) {
+      return false;
+    }
+    // A letter or a digit kept as typed (an English word, 2026).
+    if (ends_in_ascii(preedit[cursor - 1])) {
+      return true;
+    }
+    if (!config.mixed_english()) {
+      return false;
+    }
+    // An English word still in kana and loose letters (てst for test), or
+    // two or more loose letters (src). One alone may start a rule (z/).
+    if (EnglishView(composer).EnglishBefore(cursor)) {
+      return true;
+    }
+    const auto loose = [](const std::string& c) {
+      const std::string half = japanese::FullWidthAsciiToHalfWidthAscii(c);
+      return c.size() > 1 && half.size() == 1 &&
+             absl::ascii_isalpha(static_cast<unsigned char>(half[0]));
+    };
+    return cursor >= 2 && loose(preedit[cursor - 1]) &&
+           loose(preedit[cursor - 2]);
+  }
+  if (!committed.empty()) {
+    return ends_in_ascii(committed);
+  }
+  if (const std::string& before =
+          context_->client_context().preceding_text();
+      !before.empty()) {
+    return ends_in_ascii(before);
+  }
+  // Where the app does not tell (terminals), what was committed by the key
+  // before, known while that commit can still be undone.
+  if (!HasUndoContext()) {
+    return false;
+  }
+  const Segments& segments = context_->converter().GetSegments();
+  const size_t history = segments.history_segments_size();
+  return history > 0 &&
+         segments.history_segment(history - 1).candidates_size() > 0 &&
+         ends_in_ascii(segments.history_segment(history - 1).candidate(0).value);
+}
+
 void Session::KeepEnglishWords(bool undoable) {
   english_undo_.reset();
   if (!floatype::SessionFeaturesEnabled() ||
@@ -2852,8 +2941,11 @@ void Session::KeepEnglishWords(bool undoable) {
 }
 
 void Session::PreferTypedLetters() {
-  if (!floatype::SessionFeaturesEnabled() ||
-      !context_->GetConfig().mixed_english() ||
+  const bool letters = context_->GetConfig().mixed_english();
+  // A / in the reading was typed as it is (IsSlashAfterAscii()); the symbol
+  // setting's own is the middle dot.
+  const bool slashes = context_->GetConfig().slash_after_ascii();
+  if (!floatype::SessionFeaturesEnabled() || (!letters && !slashes) ||
       context_->state() != ImeContext::CONVERSION) {
     return;
   }
@@ -2864,8 +2956,10 @@ void Session::PreferTypedLetters() {
     int& index = indices.emplace_back(0);
     if (segment.candidates_size() == 0 ||
         std::none_of(segment.key().begin(), segment.key().end(),
-                     [](char c) {
-                       return absl::ascii_isalpha(static_cast<unsigned char>(c));
+                     [&](char c) {
+                       return (letters && absl::ascii_isalpha(
+                                              static_cast<unsigned char>(c))) ||
+                              (slashes && c == '/');
                      })) {
       continue;
     }

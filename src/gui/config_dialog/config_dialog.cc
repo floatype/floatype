@@ -743,6 +743,10 @@ void ConfigDialog::SetUpFloatypeSettings() {
       assist,
       "かなの入力中に打った英単語を英字のままにし、インジケータに あ / A "
       "を出す");
+  slashAfterAsciiCheckBox_ = AddCheckBox(
+      assist,
+      "英字や数字のすぐ後の / を、・ ではなく / のまま打つ（before/after、"
+      "2026/11/20）");
   displayAmbiguousCheckBox_ = AddCheckBox(
       assist, "長い規則の途中のローマ字を、いまの かな で見せる（n を ん で）");
 
@@ -1308,6 +1312,7 @@ void ConfigDialog::ConvertFromProto(const config::Config& config) {
     directCommitCheckBoxes_[i]->setEnabled(config.use_direct_commit());
   }
   SET_CHECKBOX(mixedEnglishCheckBox_, mixed_english);
+  SET_CHECKBOX(slashAfterAsciiCheckBox_, slash_after_ascii);
   SET_CHECKBOX(suggestAddedWordsCheckBox_, suggest_added_words);
   SET_CHECKBOX(displayAmbiguousCheckBox_, display_ambiguous_romaji);
   SET_CHECKBOX(showIndicatorCheckBox_, show_indicator);
@@ -1432,6 +1437,7 @@ void ConfigDialog::ConvertToProto(config::Config* config) const {
   }
   config->set_direct_commit_characters(characters);
   GET_CHECKBOX(mixedEnglishCheckBox_, mixed_english);
+  GET_CHECKBOX(slashAfterAsciiCheckBox_, slash_after_ascii);
   GET_CHECKBOX(suggestAddedWordsCheckBox_, suggest_added_words);
   GET_CHECKBOX(displayAmbiguousCheckBox_, display_ambiguous_romaji);
   GET_CHECKBOX(showIndicatorCheckBox_, show_indicator);
