@@ -251,8 +251,8 @@ TEST_F(FloatypeZenzTest, EscapeAfterACommitKeepsTheLearning) {
 }
 
 // Mozc's test data splits ひゃくなな into ひゃく|なな (百|ナナ), with 百 and 七
-// among the candidates and full-width digits ranked above half-width ones,
-// so zenz's 107 shows on one segment, segmented again.
+// among the candidates and, with digits half width by default, half-width
+// digits ranked first, so zenz's 107 shows on one segment, segmented again.
 TEST_F(FloatypeZenzTest, WritesInDigitsANumberMozcSplitIntoKanjiNumerals) {
   ASSERT_OK(FileUtil::SetContents(answers_, "ヒャクナナ\t107\n"));
   const commands::Output converted =
@@ -260,7 +260,7 @@ TEST_F(FloatypeZenzTest, WritesInDigitsANumberMozcSplitIntoKanjiNumerals) {
   ASSERT_EQ(Preedit(converted), "百ナナ");
   ASSERT_EQ(converted.preedit().segment_size(), 2);
   const commands::Output corrected = PollWhileAsked(converted);
-  EXPECT_EQ(Preedit(corrected), "１０７");
+  EXPECT_EQ(Preedit(corrected), "107");
   EXPECT_EQ(corrected.preedit().segment_size(), 1);
 
   const commands::Output mozc = SendKeys({"Space"});
@@ -272,8 +272,8 @@ TEST_F(FloatypeZenzTest, DoesNotTeachMozcTheSegmentsOfZenzsCorrection) {
   ASSERT_OK(FileUtil::SetContents(answers_, "ヒャクナナ\t107\n"));
   ASSERT_EQ(Preedit(PollWhileAsked(SendKeys(
                 {"h", "y", "a", "k", "u", "n", "a", "n", "a", "Space"}))),
-            "１０７");
-  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "１０７");
+            "107");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "107");
 
   StartSession(/*zenz=*/false);
   const commands::Output mozc =
@@ -286,14 +286,14 @@ TEST_F(FloatypeZenzTest, ACommittedCorrectionOnNewSegmentsShowsAtOnceNextTime) {
   ASSERT_OK(FileUtil::SetContents(answers_, "ヒャクナナ\t107\n"));
   ASSERT_EQ(Preedit(PollWhileAsked(SendKeys(
                 {"h", "y", "a", "k", "u", "n", "a", "n", "a", "Space"}))),
-            "１０７");
-  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "１０７");
+            "107");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "107");
   StartSession(/*zenz=*/true);
 
   // Right at Space, before zenz answers.
   EXPECT_EQ(Preedit(SendKeys(
                 {"h", "y", "a", "k", "u", "n", "a", "n", "a", "Space"})),
-            "１０７");
+            "107");
   EXPECT_EQ(Preedit(SendKeys({"Space"})), "百ナナ");
 }
 
