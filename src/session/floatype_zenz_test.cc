@@ -1115,6 +1115,21 @@ TEST_F(FloatypeZenzTest, SpaceThenTypingOnTurnsNothingDown) {
   EXPECT_FALSE(floatype::ZenzMemory::RefusedOnce().Contains("きかい", "機械"));
 }
 
+// Mozc's own command (DeleteSelectedCandidate), where no correction of
+// zenz's is on screen for the key to stop.
+TEST_F(FloatypeZenzTest, CtrlDeleteOnACandidateForgetsWhatMozcLearned) {
+  StartSession(/*zenz=*/false);
+  ASSERT_EQ(Preedit(SendKeys({"k", "i", "k", "a", "i", "Space", "Space"})),
+            "機械");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機械");
+  ASSERT_EQ(Preedit(ConvertKikai()), "機械") << "learned";
+
+  SendKeys({"Ctrl Delete"});
+  SendKeys({"Escape"});
+  SendKeys({"Escape"});
+  EXPECT_EQ(Preedit(ConvertKikai()), "機会");
+}
+
 TEST_F(FloatypeZenzTest, CtrlDeleteForgetsNothingWithLearningOff) {
   config::Config config = config::ConfigHandler::DefaultConfig();
   config.set_zenz_learning(false);
