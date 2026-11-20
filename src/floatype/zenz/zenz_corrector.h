@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "absl/functional/function_ref.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
@@ -60,13 +61,26 @@ struct Mapping {
   // nullopt when they are into the conversion's own segments.
   std::optional<Segments> segments;
 };
+// Calls `word` with the reading and the writing of each dictionary word whose
+// reading starts `key` from its first character (EngineConverter's
+// LookupWords()).
+using WordLookup = std::function<void(
+    absl::string_view key,
+    absl::FunctionRef<void(absl::string_view reading,
+                           absl::string_view writing)>
+        word)>;
 // MapToCandidates(), or where that fails, the same on the conversion that
 // `resegment` (when given) converts again: as ResegmentationFor() says, with
 // the digits added; then cut as zenz cuts (ZenzSegmentSizes()); then cut
-// there and where Mozc cut. Returns nullopt when none writes `text`.
+// there and where Mozc cut. With `words`, a reading Mozc wrote as one word of
+// the dictionary is not cut again, and an answer still not written shows as
+// zenz wrote it where the dictionary's words, kana and numbers read it as the
+// reading, unless it writes in kana what Mozc wrote in kanji. Returns nullopt
+// when none writes `text`.
 std::optional<Mapping> MapWithResegmentation(const Segments& segments,
                                              absl::string_view text,
-                                             const Resegmenter& resegment);
+                                             const Resegmenter& resegment,
+                                             const WordLookup& words = nullptr);
 // The conversion's reading: its segment keys in hiragana.
 std::string ConversionReading(const Segments& segments);
 
@@ -121,9 +135,11 @@ class ZenzCorrector {
     std::optional<Segments> segments;
   };
   // With `resegment`, an answer Mozc's segments cannot write may still show
-  // on the conversion segmented again (MapWithResegmentation()).
+  // on the conversion segmented again, checked against the dictionary's
+  // `words` (MapWithResegmentation()).
   PollResult Poll(const Segments& segments,
-                  const Resegmenter& resegment = nullptr);
+                  const Resegmenter& resegment = nullptr,
+                  const WordLookup& words = nullptr);
 
   void Cancel() { pending_.reset(); }
   // Whether a scorer is there to ask.
@@ -165,8 +181,8 @@ class ZenzCorrector {
   // changes what is shown, otherwise kDone.
   PollResult Judge(const Segments& segments,
                    const ::floatype::scorer::Response& response,
-                   absl::string_view left_context,
-                   const Resegmenter& resegment) const;
+                   absl::string_view left_context, const Resegmenter& resegment,
+                   const WordLookup& words) const;
   void Reject(absl::string_view conversion);
 
   ScorerClient* const client_;

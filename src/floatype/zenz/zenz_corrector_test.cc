@@ -11,6 +11,8 @@
 #include <utility>
 #include <vector>
 
+#include "absl/functional/function_ref.h"
+#include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
@@ -312,6 +314,125 @@ TEST(MapWithResegmentationTest, DoesNotCutWhatTheUsersHistoryDecided) {
                                      ResegmenterFor({1, 8}, cut, &asked))
                    .has_value());
   EXPECT_THAT(asked, ::testing::Not(::testing::Contains(ElementsAre(1, 8))));
+}
+
+// A dictionary of `words` (reading, writing) for MapWithResegmentation().
+WordLookup WordsOf(std::vector<std::pair<std::string, std::string>> words) {
+  return [words = std::move(words)](
+             absl::string_view key,
+             absl::FunctionRef<void(absl::string_view, absl::string_view)>
+                 word) {
+    for (const auto& [reading, writing] : words) {
+      if (absl::StartsWith(key, reading)) {
+        word(reading, writing);
+      }
+    }
+  };
+}
+
+TEST(MapWithResegmentationTest, DoesNotCutAgainAReadingMozcWroteAsOneWord) {
+  Segments segments;
+  AddSegment(segments, "ひともうけ", {"一儲け", "ひともうけ"});
+  Segments cut;
+  AddSegment(cut, "ひとも", {"人も"});
+  AddSegment(cut, "うけ", {"受け"});
+  std::vector<std::vector<uint8_t>> asked;
+  ASSERT_TRUE(MapWithResegmentation(segments, "人も受け",
+                                    ResegmenterFor({3, 2}, cut, &asked))
+                  .has_value())
+      << "without a dictionary to tell";
+  asked.clear();
+  EXPECT_FALSE(MapWithResegmentation(
+                   segments, "人も受け", ResegmenterFor({3, 2}, cut, &asked),
+                   WordsOf({{"ひと", "人"}, {"ひともうけ", "一儲け"}}))
+                   .has_value());
+  EXPECT_THAT(asked, ::testing::IsEmpty());
+}
+
+TEST(MapWithResegmentationTest, ShowsZenzsWritingWhereTheWordsReadIt) {
+  Segments segments;
+  AddSegment(segments, "かんぱん", {"甲板"});
+  AddSegment(segments, "たい", {"タイ", "対"});
+  AddSegment(segments, "くうき", {"空気"});
+  AddSegment(segments, "じゅうぐん", {"従軍"});
+  Segments whole;
+  AddSegment(whole, "かんぱんたいくうきじゅうぐん",
+             {"かんぱんたいくうきじゅうぐん"});
+  const WordLookup words = WordsOf({{"かんぱん", "甲板"},
+                                    {"たい", "対"},
+                                    {"たいくう", "対空"},
+                                    {"きじゅう", "機銃"},
+                                    {"ぐん", "群"}});
+  std::vector<std::vector<uint8_t>> asked;
+  const std::optional<Mapping> mapping = MapWithResegmentation(
+      segments, "甲板対空機銃群", ResegmenterFor({14}, whole, &asked), words);
+  ASSERT_TRUE(mapping.has_value());
+  EXPECT_THAT(mapping->candidate_indices, ElementsAre(1));
+  EXPECT_EQ(mapping->segments->conversion_segment(0).candidate(1).value,
+            "甲板対空機銃群")
+      << "zenz's writing, added after Mozc's candidates";
+
+  // 郡 does not read ぐん in this dictionary.
+  EXPECT_FALSE(MapWithResegmentation(segments, "甲板対空機銃郡",
+                                     ResegmenterFor({14}, whole, &asked), words)
+                   .has_value());
+}
+
+TEST(MapWithResegmentationTest, CutsBetweenWordsWhereTheWritingLeavesHiragana) {
+  Segments segments;
+  AddSegment(segments, "ちとせ", {"千歳"});
+  AddSegment(segments, "はつ", {"初"});
+  AddSegment(segments, "はねだゆきの", {"羽田ゆきの"});
+  AddSegment(segments, "びん", {"瓶"});
+  Segments cut;
+  AddSegment(cut, "ちとせはつはねだゆきの", {"ちとせはつはねだゆきの"});
+  AddSegment(cut, "びん", {"瓶", "便"});
+  std::vector<std::vector<uint8_t>> asked;
+  const std::optional<Mapping> mapping = MapWithResegmentation(
+      segments, "千歳発羽田行きの便", ResegmenterFor({11, 2}, cut, &asked),
+      WordsOf({{"ちとせ", "千歳"},
+               {"はつ", "発"},
+               {"はねだ", "羽田"},
+               {"ゆき", "行き"},
+               {"びん", "便"}}));
+  ASSERT_TRUE(mapping.has_value());
+  // 行き is one word, so nothing is cut inside it; Mozc's own 便 is used.
+  EXPECT_THAT(mapping->candidate_indices, ElementsAre(1, 1));
+  EXPECT_EQ(mapping->segments->conversion_segment(0).candidate(1).value,
+            "千歳発羽田行きの");
+}
+
+TEST(MapWithResegmentationTest, ReadsLettersByTheirNames) {
+  Segments segments;
+  AddSegment(segments, "じぇーあーる", {"ジェーアール"});
+  AddSegment(segments, "きゅうしゅう", {"吸収", "九州"});
+  Segments whole;
+  AddSegment(whole, "じぇーあーるきゅうしゅう", {"じぇーあーるきゅうしゅう"});
+  std::vector<std::vector<uint8_t>> asked;
+  const WordLookup words = WordsOf({{"きゅうしゅう", "九州"}});
+  const std::optional<Mapping> mapping = MapWithResegmentation(
+      segments, "JR九州", ResegmenterFor({12}, whole, &asked), words);
+  ASSERT_TRUE(mapping.has_value());
+  EXPECT_EQ(mapping->segments->conversion_segment(0).candidate(1).value,
+            "JR九州");
+  // えむ is M, not R.
+  EXPECT_FALSE(MapWithResegmentation(segments, "JM九州",
+                                     ResegmenterFor({12}, whole, &asked), words)
+                   .has_value());
+}
+
+TEST(MapWithResegmentationTest, DoesNotShowInKanaWhatMozcWroteInKanji) {
+  Segments segments;
+  AddSegment(segments, "かくしゅつげん", {"各出現"});
+  AddSegment(segments, "ばしょを", {"場所を"});
+  Segments whole;
+  AddSegment(whole, "かくしゅつげんばしょを", {"かくしゅつげんばしょを"});
+  std::vector<std::vector<uint8_t>> asked;
+  EXPECT_FALSE(MapWithResegmentation(segments, "各種つげんばしょを",
+                                     ResegmenterFor({11}, whole, &asked),
+                                     WordsOf({{"かくしゅ", "各種"}}))
+                   .has_value())
+      << "the words read it, but 出現 became つげん";
 }
 
 Segments KyouHa() {

@@ -43,6 +43,7 @@
 #include "absl/log/log.h"
 #include "absl/strings/ascii.h"
 #include "absl/strings/str_cat.h"
+#include "absl/functional/function_ref.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "base/clock.h"
@@ -2962,9 +2963,16 @@ bool Session::ApplyAcceptedCorrection() {
     return false;
   }
   std::optional<floatype::Mapping> mapping =
-      floatype::MapWithResegmentation(segments, text, ZenzResegmenter());
+      floatype::MapWithResegmentation(segments, text, ZenzResegmenter(),
+                                      ZenzWords());
   return mapping.has_value() &&
          ShowZenzText(reading, text, *std::move(mapping));
+}
+
+floatype::WordLookup Session::ZenzWords() const {
+  return [this](absl::string_view key,
+                absl::FunctionRef<void(absl::string_view, absl::string_view)>
+                    word) { context_->converter().LookupWords(key, word); };
 }
 
 floatype::Resegmenter Session::ZenzResegmenter() const {
@@ -3311,7 +3319,8 @@ bool Session::PollZenz(commands::Command* command) {
   }
   command->mutable_output()->set_consumed(true);
   floatype::ZenzCorrector::PollResult result =
-      zenz_.Poll(context_->converter().GetSegments(), ZenzResegmenter());
+      zenz_.Poll(context_->converter().GetSegments(), ZenzResegmenter(),
+                 ZenzWords());
   if (result.kind == floatype::ZenzCorrector::PollResult::kApply) {
     floatype::Mapping mapping{std::move(result.candidate_indices),
                               std::move(result.segments)};
@@ -3322,7 +3331,8 @@ bool Session::PollZenz(commands::Command* command) {
       RestoreMozcOrder(std::exchange(zenz_indices_, {}));
       mapping =
           floatype::MapWithResegmentation(context_->converter().GetSegments(),
-                                          result.text, ZenzResegmenter())
+                                          result.text, ZenzResegmenter(),
+                                          ZenzWords())
               .value_or(floatype::Mapping());
     }
     ShowZenzText(result.reading, result.text, std::move(mapping));

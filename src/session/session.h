@@ -315,6 +315,8 @@ class Session {
   // Converts the conversion again with other segments, for zenz's answers
   // that Mozc's segments cannot write.
   floatype::Resegmenter ZenzResegmenter() const;
+  // The dictionary's words, to check zenz's answers against.
+  floatype::WordLookup ZenzWords() const;
   // Shows zenz's `text` for `reading` as `mapping` says. Returns whether the
   // conversion on screen changed.
   bool ShowZenzText(absl::string_view reading, absl::string_view text,

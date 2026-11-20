@@ -53,6 +53,25 @@ mozc_cc_test(
 )
 
 mozc_cc_library(
+    name = "letter_reading",
+    srcs = ["letter_reading.cc"],
+    hdrs = ["letter_reading.h"],
+    deps = [
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
+mozc_cc_test(
+    name = "letter_reading_test",
+    srcs = ["letter_reading_test.cc"],
+    deps = [
+        ":letter_reading",
+        "//testing:gunit_main",
+    ],
+)
+
+mozc_cc_library(
     name = "number_reading",
     srcs = ["number_reading.cc"],
     hdrs = ["number_reading.h"],
@@ -83,6 +102,7 @@ mozc_cc_library(
         "//session:__pkg__",
     ],
     deps = [
+        ":letter_reading",
         ":number_reading",
         ":scorer_client",
         ":zenz_memory",
@@ -97,7 +117,9 @@ mozc_cc_library(
         "//converter:attribute",
         "//converter:segments",
         "//floatype/scorer:protocol",
+        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/functional:function_ref",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
@@ -122,6 +144,7 @@ mozc_cc_test(
         "//testing:gunit",
         "//testing:gunit_main",
         "//testing:mozctest",
+        "@com_google_absl//absl/functional:function_ref",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:span",
     ],
