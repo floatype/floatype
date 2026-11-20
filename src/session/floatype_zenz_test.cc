@@ -1360,6 +1360,62 @@ TEST_F(FloatypeZenzTest, AShortCorrectionIsRememberedWhileNotShownAtOnce) {
   EXPECT_EQ(Preedit(ConvertKikai()), "機械");
 }
 
+// Incognito mode writes nothing down: neither a correction committed as it
+// was shown, nor one stopped (which is still stopped for the moment).
+TEST_F(FloatypeZenzTest, IncognitoModeRemembersNoCorrection) {
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_incognito_mode(true);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+
+  ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機械");
+  EXPECT_FALSE(floatype::ZenzMemory::Accepted().Contains("きかい", "機械"));
+
+  // In a new session: after 機械, Mozc's test data writes 機械 by itself.
+  StartSession(/*zenz=*/true);
+  ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
+  EXPECT_EQ(Preedit(SendKeys({"Ctrl Delete"})), "機会") << "stopped for now";
+  EXPECT_FALSE(floatype::ZenzMemory::Stopped().Contains("きかい", "機械"));
+}
+
+// As Mozc leaves its history unused in incognito mode, a correction
+// committed before is not shown ahead of zenz's answer there.
+TEST_F(FloatypeZenzTest, IncognitoModeShowsNoRememberedCorrectionAtOnce) {
+  ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機械");
+  ASSERT_TRUE(floatype::ZenzMemory::Accepted().Contains("きかい", "機械"));
+
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_incognito_mode(true);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+  StartSession(/*zenz=*/true);
+  const commands::Output converted = ConvertKikai();
+  EXPECT_EQ(Preedit(converted), "機会");
+  EXPECT_EQ(Preedit(PollWhileAsked(converted)), "機械") << "zenz still answers";
+}
+
+// What the user stopped stays away in incognito mode too.
+TEST_F(FloatypeZenzTest, IncognitoModeKeepsAStoppedCorrectionAway) {
+  ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
+  ASSERT_EQ(Preedit(SendKeys({"Ctrl Delete"})), "機会");
+  ASSERT_TRUE(floatype::ZenzMemory::Stopped().Contains("きかい", "機械"));
+  SendKeys({"Escape", "Escape"});
+
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_incognito_mode(true);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+  EXPECT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機会");
+}
+
 TEST_F(FloatypeZenzTest, StoppingACommittedCorrectionForgetsIt) {
   ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
   ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機械");

@@ -820,7 +820,7 @@ bool Session::SendKey(commands::Command* command) {
       context_->GetKeyMapManager().GetCommandConversion(command->input().key(),
                                                         &key_command) &&
       key_command == keymap::ConversionState::DELETE_SELECTED_CANDIDATE) {
-    if (context_->GetConfig().zenz_learning()) {
+    if (ZenzRemembers()) {
       floatype::ZenzMemory::Stopped().Add(zenz_reading_, zenz_text_);
       floatype::ZenzMemory::Accepted().Remove(zenz_reading_, zenz_text_);
     }
@@ -899,7 +899,7 @@ bool Session::SendKey(commands::Command* command) {
   }
   // floatype: committing zenz's correction as it was shown teaches it.
   if (!zenz_indices.empty() && command->output().has_result() &&
-      context_->GetConfig().zenz_learning() &&
+      ZenzRemembers() &&
       japanese::FullWidthAsciiToHalfWidthAscii(
           command->output().result().value()) ==
           japanese::FullWidthAsciiToHalfWidthAscii(zenz_text_)) {
@@ -3542,8 +3542,9 @@ commands::Preedit Session::ShownPreedit() const {
 }
 
 bool Session::ApplyAcceptedCorrection() {
-  // What zenz taught comes with zenz: not where it is off or missing.
-  if (!context_->GetConfig().zenz_learning() || !zenz_.available()) {
+  // What zenz taught comes with zenz: not where it is off or missing, nor in
+  // incognito mode, where Mozc leaves its own history unused too.
+  if (!ZenzRemembers() || !zenz_.available()) {
     return false;
   }
   const Segments& segments = context_->converter().GetSegments();
@@ -3875,6 +3876,11 @@ void Session::WarmZenz() {
   // started, and the restart interval would then keep zenz away.
   zenz_.Configure(config.zenz_stop_when_idle());
   zenz_.Warm();
+}
+
+bool Session::ZenzRemembers() const {
+  const config::Config& config = context_->GetConfig();
+  return config.zenz_learning() && !config.incognito_mode();
 }
 
 void Session::RememberSecureCommit(const commands::Command& command) {
