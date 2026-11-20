@@ -1100,13 +1100,16 @@ ZenzCorrector::PollResult ZenzCorrector::Judge(
   // zenz hands the reading back unconverted when it does not know the words,
   // where Mozc's dictionary usually does. On Mozc's regression set this halves
   // the conversions zenz makes worse (20 to 10), at the cost of 2 of 48 wins.
-  // Every such harm measured had nothing before it (いく for 行く, けいさん
-  // for 計算); after other text, kana is zenz's reading of the sentence
-  // (なの, not 名の; けますと, not 毛マスト).
-  if (left_context.empty() &&
-      japanese::FullWidthAsciiToHalfWidthAscii(
-          japanese::KatakanaToHiragana(response.conversion)) ==
-          japanese::FullWidthAsciiToHalfWidthAscii(Reading(segments))) {
+  // After other text, hiragana is how zenz reads the sentence (なの, not 名の;
+  // けますと, not 毛マスト), unless Mozc wrote the reading as one word of the
+  // dictionary (けいさん for 計算). Katakana is still a word zenz does not
+  // know (バウンシャ for 馬運車).
+  if (const std::string reading =
+          japanese::FullWidthAsciiToHalfWidthAscii(Reading(segments)),
+      answer = japanese::FullWidthAsciiToHalfWidthAscii(response.conversion);
+      japanese::KatakanaToHiragana(answer) == reading &&
+      (left_context.empty() || answer != reading ||
+       IsOneWord(segments, words))) {
     return {PollResult::kDone, {}};
   }
   if (!KeepsTypedAscii(segments, response.conversion)) {

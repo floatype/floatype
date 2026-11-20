@@ -543,16 +543,40 @@ TEST_F(ZenzCorrectorTest, IgnoresTheReadingHandedBackUnconverted) {
             ZenzCorrector::PollResult::kDone);
 }
 
-TEST_F(ZenzCorrectorTest, AfterOtherTextTheReadingInKanaIsZenzsAnswer) {
+TEST_F(ZenzCorrectorTest, AfterOtherTextTheReadingInHiraganaIsZenzsAnswer) {
+  ASSERT_OK(FileUtil::SetContents(answers_, "イヌ\tいぬ\nネコ\tネコ\n"));
   ZenzCorrector corrector(client_.get());
   Segments segments;
   AddSegment(segments, "いぬ", {"犬", "イヌ", "いぬ"});
-  // The fake answers イヌ. With text before it, that is zenz's reading of the
-  // sentence (なの, not 名の).
+  // With text before it, hiragana is zenz's reading of the sentence (なの,
+  // not 名の).
   ASSERT_TRUE(corrector.Request(segments, "うちの"));
   const ZenzCorrector::PollResult result = PollUntilDone(corrector, segments);
   EXPECT_EQ(result.kind, ZenzCorrector::PollResult::kApply);
-  EXPECT_THAT(result.candidate_indices, ElementsAre(1));
+  EXPECT_THAT(result.candidate_indices, ElementsAre(2));
+
+  // Katakana is a word zenz does not know.
+  Segments cat;
+  AddSegment(cat, "ねこ", {"猫", "ネコ", "ねこ"});
+  ASSERT_TRUE(corrector.Request(cat, "うちの"));
+  EXPECT_EQ(PollUntilDone(corrector, cat).kind,
+            ZenzCorrector::PollResult::kDone);
+}
+
+TEST_F(ZenzCorrectorTest, KeepsAWordOfTheDictionaryOverTheReadingInHiragana) {
+  ASSERT_OK(FileUtil::SetContents(answers_, "イヌ\tいぬ\n"));
+  ZenzCorrector corrector(client_.get());
+  Segments segments;
+  AddSegment(segments, "いぬ", {"犬", "イヌ", "いぬ"});
+  ASSERT_TRUE(corrector.Request(segments, "うちの"));
+  ZenzCorrector::PollResult result;
+  for (int i = 0; i < 2000; ++i) {
+    result = corrector.Poll(segments, nullptr, WordsOf({{"いぬ", "犬"}}));
+    if (result.kind != ZenzCorrector::PollResult::kWait) break;
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  EXPECT_EQ(result.kind, ZenzCorrector::PollResult::kDone)
+      << "Mozc wrote いぬ as one word of the dictionary";
 }
 
 TEST_F(ZenzCorrectorTest, KeepsTheDigitsTheUserTyped) {
