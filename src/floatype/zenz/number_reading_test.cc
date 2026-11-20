@@ -27,6 +27,15 @@ TEST(ReadsAsNumberTest, ReadsTheFormsBeforeCounters) {
   EXPECT_TRUE(ReadsAsNumber("ひゃっ", 100));           // 100回
 }
 
+TEST(ReadsAsNumberTest, ReadsSmallNumbersSaidInEnglish) {
+  EXPECT_TRUE(ReadsAsNumber("ふぁいぶ", 5));               // X-5
+  EXPECT_TRUE(ReadsAsNumber("ふぃふてぃー", 50));           // 50周年
+  EXPECT_TRUE(ReadsAsNumber("とぅえんてぃーわん", 21));
+  EXPECT_TRUE(ReadsAsNumber("しっくすてぃーん", 16));
+  EXPECT_FALSE(ReadsAsNumber("ふぁいぶ", 4));
+  EXPECT_FALSE(ReadsAsNumber("ふぃふてぃーふぁいぶ", 505));
+}
+
 TEST(ReadsAsNumberTest, RefusesOtherNumbersAndOtherWords) {
   EXPECT_FALSE(ReadsAsNumber("せんきゅうひゃくななじゅうに", 1973));
   EXPECT_FALSE(ReadsAsNumber("せんきゅう", 1972));

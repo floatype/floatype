@@ -86,6 +86,60 @@ void AddGroup(int group, std::vector<const Forms*>* slots) {
   }
 }
 
+// The ways to say 0 to 19 and the tens in English, in kana.
+const Forms& EnglishOnes(int n) {
+  static const Forms* const kForms = new Forms[20]{
+      {"ぜろ"},
+      {"わん"},
+      {"つー", "とぅー"},
+      {"すりー"},
+      {"ふぉー"},
+      {"ふぁいぶ", "ふぁいゔ"},
+      {"しっくす"},
+      {"せぶん", "せゔん"},
+      {"えいと"},
+      {"ないん"},
+      {"てん"},
+      {"いれぶん", "いれゔん"},
+      {"とぅえるぶ", "とぅえるゔ"},
+      {"さーてぃーん"},
+      {"ふぉーてぃーん"},
+      {"ふぃふてぃーん"},
+      {"しっくすてぃーん"},
+      {"せぶんてぃーん"},
+      {"えいてぃーん"},
+      {"ないんてぃーん"}};
+  return kForms[n];
+}
+const Forms& EnglishTens(int d) {
+  static const Forms* const kForms = new Forms[10]{
+      {},
+      {},
+      {"とぅえんてぃー", "とぅうぇんてぃー"},
+      {"さーてぃー"},
+      {"ふぉーてぃー"},
+      {"ふぃふてぃー"},
+      {"しっくすてぃー"},
+      {"せぶんてぃー"},
+      {"えいてぃー"},
+      {"ないんてぃー"}};
+  return kForms[d];
+}
+
+// Whether `reading` says `value` (below 100) in English.
+bool SaysInEnglish(absl::string_view reading, int value) {
+  std::vector<const Forms*> slots;
+  if (value < 20) {
+    slots.push_back(&EnglishOnes(value));
+  } else {
+    slots.push_back(&EnglishTens(value / 10));
+    if (value % 10 != 0) {
+      slots.push_back(&EnglishOnes(value % 10));
+    }
+  }
+  return Says(reading, slots, 0);
+}
+
 }  // namespace
 
 bool ReadsAsNumber(absl::string_view reading, uint64_t value) {
@@ -94,6 +148,9 @@ bool ReadsAsNumber(absl::string_view reading, uint64_t value) {
   static const Forms* const kOku = new Forms{"おく"};
   if (value >= 1'0000'0000'0000) {
     return false;
+  }
+  if (value < 100 && SaysInEnglish(reading, static_cast<int>(value))) {
+    return true;
   }
   std::vector<const Forms*> slots;
   if (value == 0) {

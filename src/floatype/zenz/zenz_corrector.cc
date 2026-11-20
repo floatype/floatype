@@ -801,6 +801,14 @@ std::optional<CuttingByWords> ZenzCuttingByWords(absl::string_view reading,
         return true;
       }
     }
+    // A hyphen written between letters and digits is not said (X-5 for
+    // えっくすふぁいぶ).
+    if (rest[0] == '-' && i > 0 && i + 1 < t.size() &&
+        absl::ascii_isalnum(static_cast<unsigned char>(folded[starts[i - 1]])) &&
+        absl::ascii_isalnum(static_cast<unsigned char>(folded[starts[i + 1]])) &&
+        match(i + 1, j)) {
+      return true;
+    }
     // A kana, or a character typed as it is.
     if ((KanaReading(t[i]) == r[j] ||
          absl::string_view(folded).substr(starts[i],

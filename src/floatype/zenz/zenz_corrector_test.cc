@@ -415,6 +415,18 @@ TEST(MapWithResegmentationTest, ReadsLettersByTheirNames) {
   ASSERT_TRUE(mapping.has_value());
   EXPECT_EQ(mapping->segments->conversion_segment(0).candidate(1).value,
             "JR九州");
+  // A hyphen between letters and digits is not said, and 5 is a number of
+  // its own, said in English.
+  Segments x5;
+  AddSegment(x5, "えっくすふぁいぶ", {"エックスファイブ"});
+  Segments x5_cut;
+  AddSegment(x5_cut, "えっくす", {"エックス"});
+  AddSegment(x5_cut, "ふぁいぶ", {"ファイブ"});
+  const std::optional<Mapping> hyphen = MapWithResegmentation(
+      x5, "X-5", ResegmenterFor({4, 4}, x5_cut, &asked), words);
+  ASSERT_TRUE(hyphen.has_value());
+  EXPECT_EQ(hyphen->segments->conversion_segment(0).candidate(1).value, "X-");
+  EXPECT_THAT(hyphen->candidate_indices, ElementsAre(1, 1));
   // えむ is M, not R.
   EXPECT_FALSE(MapWithResegmentation(segments, "JM九州",
                                      ResegmenterFor({12}, whole, &asked), words)
