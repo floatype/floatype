@@ -291,8 +291,9 @@ class Replayer {
       return true;
     };
     for (const char32_t c : Utf8AsChars32(reading)) {
-      // Lower-case letters are typed as they are: an English word.
-      if (c >= U'a' && c <= U'z') {
+      // Lower-case letters, digits and ASCII symbols are typed as they are:
+      // an English word, 2026, before/after.
+      if (c > U' ' && c < 0x7F && !(c >= U'A' && c <= U'Z')) {
         if (!flush()) return std::nullopt;
         keys.emplace_back(static_cast<char>(c), false);
         continue;
