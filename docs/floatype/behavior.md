@@ -137,7 +137,7 @@ Mozc の文節のままでは書けない答えは、文節を区切り直して
     - 英単語の一覧の語かどうかと、残りが日本語として読めるかだけで決める。前後の文の意味は見ない。
   - 手を止めて英字になったあと、続けて英字のキーを打つと、打ったとおりの かな に戻して続ける（base になった ばせ に い を打つと ばせい）。全部かなになる語のあとは、伸ばす棒（ー）のキーでも かな に戻る（note になった のて に ー を打つと のてー。「のテーマ」と打てる）。記号や / を打ったときは英字のまま。
   - 拾えないもの：
-    - かなが日本語として読めてしまう語を、かなに続けて打ったとき。site（して）、time（ちめ：ち + め）、note（のて）、size（しぜ：し + ぜ）、image（いまげ：い + 髷）など。その語だけで打つか、/ などの記号で区切れば、初めから足してある語と自分で足した語は英字になる。before も、それは の後では はべ + ふぉれ（どちらも辞書にある読み）と読めてしまう。
+    - かなが日本語として読めてしまう語を、かなに続けて打ったとき。site（して）、size（しぜ：し + ぜ）、image（いまげ：い + 髷）など。初めから足してある語と自分で足した語も、文の途中では同じ（data は だた：だ + た、time は ちめ：ち + め、page は ぱげ、menu は めぬ、code は こで、note は のて。dataを保存する は だたを保存する のまま）。これらの語は、その語だけで打つか、/ などの記号で区切れば英字になる。before も、それは の後では はべ + ふぉれ（どちらも辞書にある読み）と読めてしまう。
     - ん の直後の、母音で始まる語（かんたん + update は かんたぬpだて）。
     - 前のかなとつながって別の英単語になる場合（きょうは + test は hates と読める）。
   - インジケータの右端は、キャレットの直前の語が英字なら A、それ以外は あ。
@@ -193,10 +193,11 @@ Mozc の辞書に、ビルドのときに作る辞書を足す（`floatype/tools
 - 日英混在入力で英単語とみなす語を、`~/.config/floatype/english_words.txt` で足したり外したりできる。1 行に 1 語で、大文字と小文字は区別しない。`#` で始まる行と空行は読み飛ばす。
   - 語をそのまま書くと、足す。ここに足した語は、その語だけで打ったとき、ローマ字が全部かなになる綴りでも、いつも英字にする（6 章）。
   - 頭に `-` を付けて書くと、外す（`-time`）。初めから足してある語にも、SCOWL の語にも効く。外した語は英単語として拾わない。
-- 初めから足してある語が 159 語ある（ソースの `src/floatype/english/preset_words.txt`）。自分で足した語と同じ扱いで、ファイルが無くても効く。
-  - かなが辞書で読めてしまうが、その語だけを日本語として打つことがまず無い語：page、menu、data、time、code、token、video、note、mode、main、idea、area、todo、undo、redo、mute、safe、zone、wide、guide、pane、core、case、cache、icon、encode、unicode、secure、notice、queue、require、unique、cookie、sequence、delete、device、voice、native、move、save、remove、invite、engine、origin、resize、hidden、gate、domain、define、session、feature、issue、route、remote、separate、position、message、join、region、wifi、azure、debian、apache、ubuntu、heroku、notion、openai。
+- 初めから足してある語が 154 語ある（ソースの `src/floatype/english/preset_words.txt`）。自分で足した語と同じ扱いで、ファイルが無くても効く。
+  - かなが辞書で読めてしまうが、その語だけを日本語として打つことがまず無い語（62 語）：page、menu、data、time、code、token、video、note、main、idea、area、redo、safe、zone、wide、guide、pane、core、case、cache、icon、encode、unicode、secure、notice、queue、require、unique、cookie、sequence、delete、device、voice、native、move、save、remove、invite、engine、origin、resize、hidden、domain、define、session、feature、issue、route、remote、separate、position、message、join、region、wifi、azure、debian、apache、ubuntu、heroku、notion、openai。
   - 小文字で書くことの多いソフトウェアの語（ほとんどは SCOWL に無い）：json、yaml、toml、config、env、npm、async、auth、backend、frontend、localhost、readme、webhook、gitlab、figma、vscode、xcode、mozc、zenz など 92 語。
-  - 入れていない語：かなを日本語として打つことがある語（site は して、made は まで、node は ので、home は ほめ、name は なめ、date は だて、demo は でも、memo は めも）。API、URL のように大文字で書く略語（Shift を押しながら打てば、そのまま英字になる）。
+  - 入れていない語：かなを日本語として打つことがある語（site は して、made は まで、node は ので、home は ほめ、name は なめ、date は だて、demo は でも、memo は めも）。かなの続きによくある日本語がある語（mode は もでる、todo は とどく、undo は うんどう、mute は むてんか、gate は がてら。その語のかなで手を止めると、日本語を打っている途中でも英字が出てしまう）。API、URL のように大文字で書く略語（Shift を押しながら打てば、そのまま英字になる）。入れたい語は `english_words.txt` に 1 行書けば足せる。
+  - 初めから足してある語でも、かなの続きに日本語があるものは残っている（time は ちめ で、地名 の途中。note は のて で、「の手」「の天気」の途中）。そこで手を止めると英字が出るが、続けて英字のキーか ー を打てば かな に戻る。気になる語は `-time` のように外せる。
 - 使えるのは英字だけの 3〜32 文字の語（それより短い語や記号の入った語は英単語として拾えない）。ほかの行は使わず、行番号を通知で知らせる。残りの語は使う。
 - ファイルが無いときは、SCOWL の一覧と初めから足してある語を使う。
 - 手で書き換えると、保存して 1 秒ほど後に打った次のキーで効く。
