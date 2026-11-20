@@ -1,11 +1,16 @@
-"""Renders floatype's menu bar icons as template images: the floatype F mark,
-large, with the input mode's character in its lower right, both cut out of a
-filled wide rounded rectangle as macOS's own input sources are (direct input
-has no badge).
+"""Renders floatype's menu bar icons as template images: the floatype F mark
+with the input mode's character in its lower right, both cut out of a filled
+rounded square of the size and corners of macOS's own input sources (direct
+input has no badge).
+
+macOS's own icons (ABC's A, the Japanese input's あ) are 16x16 points and fill
+their canvas: see Hiragana.tiff and Roman.tiff inside
+/System/Library/Input Methods/JapaneseIM-RomajiTyping.app. A wider icon stands
+out beside them in the menu bar.
 
 Run from src/ on macOS (Hiragino Maru Gothic and tiffutil come with the system):
   uv run --with pillow python floatype/tools/make_menu_icons.py
-It writes data/images/mac/<mode>.tiff with 22x16 and 44x32 images, and a
+It writes data/images/mac/<mode>.tiff with 16x16 and 32x32 images, and a
 preview of light and dark menu bars to /tmp/floatype-menu-icons/preview.png.
 """
 import subprocess
@@ -15,7 +20,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 FONT = "/System/Library/Fonts/ヒラギノ丸ゴ ProN W4.ttc"
-WIDTH, HEIGHT = 22, 16  # The wide ratio of macOS's ABC icon.
+WIDTH, HEIGHT = 16, 16  # The size of macOS's own input source icons.
 SS = 16  # Supersampling factor.
 # The floatype F: a polyline stroked with round caps and joins, traced from the
 # 1080px logo.
@@ -70,16 +75,16 @@ def draw_char(img, char, cx, cy, height, xscale):
 def render(char, xscale, framed):
     w, h = WIDTH * SS, HEIGHT * SS
     marks = Image.new("L", (w, h), 0)
-    # Smaller than the badge allows, for room inside it.
-    draw_f(ImageDraw.Draw(marks), w * 0.17, h * 0.23, h * 0.54, weight=0.95)
-    draw_char(marks, char, w * 0.67, h * 0.58, h * 0.42, xscale)
+    # The F's lower right is empty, where the character sits.
+    draw_f(ImageDraw.Draw(marks), w * 0.10, h * 0.12, h * 0.50, weight=0.85)
+    draw_char(marks, char, w * 0.71, h * 0.69, h * 0.44, xscale)
     if not framed:
         return marks
-    # A filled badge with the marks cut out, like macOS's own input sources.
+    # A filled badge with the marks cut out, like macOS's own input sources:
+    # it fills the canvas, and its corners are theirs.
     img = Image.new("L", (w, h), 0)
-    pad = h * 0.05
-    ImageDraw.Draw(img).rounded_rectangle((pad, pad, w - pad, h - pad),
-                                          radius=h * 0.24, fill=255)
+    ImageDraw.Draw(img).rounded_rectangle((0, 0, w - 1, h - 1),
+                                          radius=h * 0.17, fill=255)
     img.paste(0, (0, 0), mask=marks)
     return img
 
