@@ -76,6 +76,18 @@ class AjimeeTest(unittest.TestCase):
     with self.assertRaises(SystemExit):
       ajimee.azookey_top1(result, ["かんじ"])
 
+  def test_unseen_sample_leaves_out_seen_readings_and_repeats(self):
+    items = [{"input": r} for r in ["ア", "イ", "ア", "ウ", "エ", "オ", "カ"]]
+    sample = ajimee.unseen_sample(items, {"イ"}, 2)
+    # ア ウ エ オ カ are fresh; every second of them, two in all.
+    self.assertEqual([item["input"] for item in sample], ["ア", "エ"])
+
+  def test_parse_anthy_corpus_can_skip_lines_in_another_form(self):
+    text = "|あめ| |雨|\nあめ |あめ| |雨|\n"
+    self.assertEqual(len(ajimee.parse_anthy_corpus(text, skip_other_lines=True)), 1)
+    with self.assertRaises(SystemExit):
+      ajimee.parse_anthy_corpus(text)
+
   def test_latency_summary(self):
     summary = ajimee.latency_summary([float(i) for i in range(1, 101)])
     self.assertEqual(summary["p50_ms"], 51.0)

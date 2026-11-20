@@ -2,7 +2,9 @@
 
 Sets (--set): v1 is AJIMEE-Bench v1 (200 items), extended is its 628-item
 extension from a personal fork, anthy is Anthy's corpus.1.txt (1745 sentences,
-no left context, one answer each).
+no left context, one answer each). anthy3 is 2000 sentences of Anthy's
+corpus.3.txt whose readings are not in corpus.1.txt, taken at even steps: a set
+no rule was tuned on, to check the others.
 
 Engines:
   mozc  converts every reading with //converter:quality_regression_main.
@@ -75,6 +77,13 @@ ANTHY_URL = (
     f"{ANTHY_COMMIT}/corpus/corpus.1.txt"
 )
 ANTHY_SHA256 = "a0207e0c2abf0c5042615288212e37a3d70a708055a18faf90553451c0facc9f"
+# Anthy's corpus.3.txt (9305 sentences in the corpus form; 48 lines are not).
+ANTHY3_URL = (
+    "https://raw.githubusercontent.com/netsphere-labs/anthy/"
+    f"{ANTHY_COMMIT}/corpus/corpus.3.txt"
+)
+ANTHY3_SHA256 = "a71fa2ccc0a2c669dfeef355c7f096b7f3cf9597e426fd8a480d25bc35f8d0b0"
+ANTHY3_SIZE = 2000
 
 ZENZ_REVISION = "ef3e66e3665fe6a19598e6578e9b88a994b647fd"
 ZENZ_URL = (
@@ -98,12 +107,13 @@ def hiragana_to_katakana(text: str) -> str:
   )
 
 
-def parse_anthy_corpus(text: str) -> list[dict]:
+def parse_anthy_corpus(text: str, skip_other_lines: bool = False) -> list[dict]:
   """Reads Anthy's corpus format into AJIMEE-style items.
 
   Each line is "|reading|segments| |answer|segments|": the reading's segments,
   one space, the answer's segments (the two sides may be segmented
   differently). Lines starting with # are comments. The index is the line number.
+  A line in another form stops the run, or is left out with skip_other_lines.
   """
   items = []
   for number, line in enumerate(text.splitlines(), 1):
@@ -111,6 +121,8 @@ def parse_anthy_corpus(text: str) -> list[dict]:
       continue
     reading, separator, answer = line.partition("| |")
     if not separator or not reading.startswith("|") or not answer.endswith("|"):
+      if skip_other_lines:
+        continue
       raise SystemExit(f"line {number}: not a corpus line: {line!r}")
     items.append({
         "index": str(number),
@@ -132,7 +144,27 @@ def load_items(name: str) -> list[dict]:
       fetch(ANTHY_URL, f"anthy-corpus.1-{ANTHY_COMMIT[:12]}.txt", ANTHY_SHA256).read_text(encoding="utf-8"))
   if len(items) != 1745:
     raise SystemExit(f"expected 1745 Anthy items, got {len(items)}")
-  return items
+  if name == "anthy":
+    return items
+  unseen = unseen_sample(
+      parse_anthy_corpus(
+          fetch(ANTHY3_URL, f"anthy-corpus.3-{ANTHY_COMMIT[:12]}.txt", ANTHY3_SHA256).read_text(encoding="utf-8"),
+          skip_other_lines=True),
+      {item["input"] for item in items}, ANTHY3_SIZE)
+  if len(unseen) != ANTHY3_SIZE:
+    raise SystemExit(f"expected {ANTHY3_SIZE} items of corpus.3, got {len(unseen)}")
+  return unseen
+
+
+def unseen_sample(items: list[dict], seen_readings: set[str], size: int) -> list[dict]:
+  """Takes `size` of the items whose reading is not in `seen_readings`, at even steps, each reading once."""
+  fresh, readings = [], set(seen_readings)
+  for item in items:
+    if item["input"] not in readings:
+      readings.add(item["input"])
+      fresh.append(item)
+  step = max(1, len(fresh) // size)
+  return fresh[::step][:size]
 
 
 def line_field(text: str) -> str:
@@ -384,8 +416,9 @@ def main() -> None:
   parser.add_argument("--no_zenzai", action="store_true", help="azookey: run without Zenzai")
   parser.add_argument("--out", type=Path, help="write per-item results as JSON lines")
   parser.add_argument(
-      "--set", choices=["v1", "extended", "anthy"], default="v1",
-      help="AJIMEE-Bench v1 (200), its 628-item extension, or Anthy's corpus.1.txt (1745)")
+      "--set", choices=["v1", "extended", "anthy", "anthy3"], default="v1",
+      help="AJIMEE-Bench v1 (200), its 628-item extension, Anthy's corpus.1.txt (1745), "
+           "or 2000 sentences of Anthy's corpus.3.txt that no rule was tuned on")
   args = parser.parse_args()
 
   items = load_items(args.set)
