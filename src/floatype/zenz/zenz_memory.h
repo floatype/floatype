@@ -12,9 +12,13 @@
 #include <cstddef>
 #include <deque>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "absl/container/flat_hash_set.h"
 #include "absl/strings/string_view.h"
+#include "absl/time/time.h"
+#include "floatype/config/settings_file.h"
 
 namespace mozc::floatype {
 
@@ -23,13 +27,18 @@ class ZenzMemory {
   // At most this many are kept; the oldest go first.
   static constexpr size_t kCapacity = 1000;
 
-  // The memory kept in `path`, one "<reading>\t<text>" line each.
+  // The memory kept in `path`, one "<reading>\t<text>" line each. The file is
+  // what is remembered: it is read again when it has changed (an edit by
+  // hand, or the settings screen removing a line), within a second for a
+  // read and always before a write, and it is written in one step.
   explicit ZenzMemory(std::string path);
 
   // Whether zenz's `text` for the hiragana `reading` is remembered.
   bool Contains(absl::string_view reading, absl::string_view text) const;
   // The text remembered last for `reading`; empty when there is none.
   std::string Latest(absl::string_view reading) const;
+  // Everything remembered, as (reading, text), oldest first.
+  std::vector<std::pair<std::string, std::string>> Entries() const;
   // Remembers it, on disk too. Remembering it again makes it the newest.
   void Add(absl::string_view reading, absl::string_view text);
   void Remove(absl::string_view reading, absl::string_view text);
@@ -47,11 +56,17 @@ class ZenzMemory {
   static ZenzMemory& RefusedOnce();
 
  private:
-  void Save() const;
+  // Reads the file again if it changed since it was read or written. Without
+  // `now`, looks at most once a second.
+  void Refresh(bool now) const;
+  void Load() const;
+  void Save();
 
   std::string path_;
-  std::deque<std::string> order_;  // "<reading>\t<text>", oldest first.
-  absl::flat_hash_set<std::string> entries_;
+  mutable std::deque<std::string> order_;  // "<reading>\t<text>", oldest first.
+  mutable absl::flat_hash_set<std::string> entries_;
+  mutable FileStamp stamp_;
+  mutable absl::Time last_check_;
 };
 
 }  // namespace mozc::floatype

@@ -3,8 +3,12 @@
 #include <string>
 
 #include "absl/strings/str_cat.h"
+#include "absl/time/time.h"
+#include "base/clock.h"
+#include "base/clock_mock.h"
 #include "base/file_util.h"
 #include "base/system_util.h"
+#include "testing/gmock.h"
 #include "testing/gunit.h"
 #include "testing/mozctest.h"
 
@@ -70,6 +74,36 @@ TEST_F(ZenzMemoryTest, TheMemoriesLiveInTheUserProfile) {
                   FileUtil::JoinPath(dir, "floatype_zenz_accepted.tsv"))
                   .ok());
   EXPECT_FALSE(ZenzMemory::Accepted().Contains("きかい", "機械"));
+}
+
+TEST_F(ZenzMemoryTest, AWriteKeepsWhatAnotherInstanceWroteOrRemoved) {
+  // Two processes on one file: the converter and the settings screen.
+  ZenzMemory converter(Path());
+  ZenzMemory screen(Path());
+  converter.Add("きかい", "機械");
+  converter.Add("きかい", "器械");
+  screen.Remove("きかい", "機械");
+  // The converter's next write does not bring the line back.
+  converter.Add("きしゃ", "記者");
+  const ZenzMemory read(Path());
+  EXPECT_FALSE(read.Contains("きかい", "機械"));
+  EXPECT_TRUE(read.Contains("きかい", "器械"));
+  EXPECT_TRUE(read.Contains("きしゃ", "記者"));
+  EXPECT_THAT(read.Entries(),
+              ::testing::ElementsAre(::testing::Pair("きかい", "器械"),
+                                     ::testing::Pair("きしゃ", "記者")));
+}
+
+TEST_F(ZenzMemoryTest, ReadsAnEditByHandWithinASecond) {
+  ClockMock clock(absl::FromUnixSeconds(1000));
+  Clock::SetClockForUnitTest(&clock);
+  ZenzMemory memory(Path());
+  memory.Add("きかい", "機械");
+  ASSERT_OK(FileUtil::SetContents(Path(), "きしゃ\t記者\n"));
+  clock.Advance(absl::Seconds(2));
+  EXPECT_TRUE(memory.Contains("きしゃ", "記者"));
+  EXPECT_FALSE(memory.Contains("きかい", "機械"));
+  Clock::SetClockForUnitTest(nullptr);
 }
 
 }  // namespace

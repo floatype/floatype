@@ -155,16 +155,22 @@ mozc_cc_library(
     name = "zenz_memory",
     srcs = ["zenz_memory.cc"],
     hdrs = ["zenz_memory.h"],
-    visibility = ["//session:__pkg__"],
+    visibility = [
+        "//gui/config_dialog:__pkg__",
+        "//session:__pkg__",
+    ],
     deps = [
+        "//base:clock",
         "//base:file_util",
         "//base:system_util",
+        "//floatype/config:settings_file",
         "@com_google_absl//absl/base:no_destructor",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
     ],
 )
 
@@ -173,10 +179,13 @@ mozc_cc_test(
     srcs = ["zenz_memory_test.cc"],
     deps = [
         ":zenz_memory",
+        "//base:clock",
+        "//base:clock_mock",
         "//base:file_util",
         "//base:system_util",
         "//testing:gunit_main",
         "//testing:mozctest",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
     ],
 )
