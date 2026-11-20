@@ -192,9 +192,11 @@ class FloatypeZenzTest : public testing::SessionHandlerTestBase {
   }
 
   // Converts きかいがきかい, which the fake scorer turns into 機械が機械, and
-  // commits zenz's correction.
-  void CommitCorrectedSentence() {
-    ASSERT_OK(FileUtil::SetContents(answers_, "キカイガキカイ\t機械が機械\n"));
+  // commits zenz's correction. `more_answers` are more lines for the fake
+  // scorer, which reads its answers at the first request.
+  void CommitCorrectedSentence(absl::string_view more_answers = "") {
+    ASSERT_OK(FileUtil::SetContents(
+        answers_, absl::StrCat("キカイガキカイ\t機械が機械\n", more_answers)));
     const commands::Output corrected = PollWhileAsked(SendKeys(
         {"k", "i", "k", "a", "i", "g", "a", "k", "i", "k", "a", "i", "Space"}));
     ASSERT_EQ(Preedit(corrected), "機械が機械");
@@ -706,6 +708,75 @@ TEST_F(FloatypeZenzTest, SelectingASuggestionAndEnterTeachesMozcItsWords) {
       "機械が機械");
   ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機械が機械");
   EXPECT_EQ(MozcsKikai(), "機械");
+}
+
+// With a candidate of the list focused, a click commits through the
+// converter's commit of the focused segment.
+TEST_F(FloatypeZenzTest, ClickingAFocusedSuggestionTeachesMozcItsWords) {
+  SuggestTheCorrectedSentence();
+  TypeKikaiga();
+  const commands::Output tab = SendKeys({"Tab"});
+  ASSERT_EQ(tab.candidate_window().category(), commands::PREDICTION);
+  int id = -1;
+  for (const commands::CandidateWindow::Candidate& candidate :
+       tab.candidate_window().candidate()) {
+    if (candidate.value() == "機械が機械") {
+      id = candidate.id();
+    }
+  }
+  ASSERT_GE(id, 0);
+  ASSERT_EQ(SendCommand(commands::SessionCommand::SUBMIT_CANDIDATE, id)
+                .result()
+                .value(),
+            "機械が機械");
+  EXPECT_EQ(MozcsKikai(), "機械");
+}
+
+// While a live conversion shows, the suggestions stay in their window and a
+// click on one commits it.
+TEST_F(FloatypeZenzTest, ClickingASuggestionOverALiveConversionTeachesMozc) {
+  SuggestTheCorrectedSentence();
+  floatype::EnableSessionFeatures(true);
+  const commands::Output live = CallBack(TypeKikaiga());
+  int id = -1;
+  for (const commands::CandidateWindow::Candidate& candidate :
+       live.candidate_window().candidate()) {
+    if (candidate.value() == "機械が機械") {
+      id = candidate.id();
+    }
+  }
+  ASSERT_GE(id, 0) << "the suggestions stay after the live conversion";
+  ASSERT_EQ(SendCommand(commands::SessionCommand::SUBMIT_CANDIDATE, id)
+                .result()
+                .value(),
+            "機械が機械");
+  floatype::EnableSessionFeatures(false);
+  EXPECT_EQ(MozcsKikai(), "機械");
+}
+
+// The word a picked suggestion displaces is not among the turned-down words.
+// What the history ranked first is kept by the rules about it, which are off
+// where zenz teaches Mozc.
+TEST_F(FloatypeZenzTest, ZenzLeavesAPickedSuggestionsWordUnlessItTeachesMozc) {
+  // The fake also answers 機会 for きかい.
+  CommitCorrectedSentence("キカイ\t機会\n");
+  StartSession(/*zenz=*/false);
+  TypeKikaiga();
+  SelectPrediction("機械が機械");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機械が機械");
+  EXPECT_FALSE(floatype::ZenzMemory::TurnedDown().Contains("きかい", "機会"));
+
+  StartSession(/*zenz=*/true);
+  commands::Output converted = ConvertKikai();
+  ASSERT_EQ(Preedit(converted), "機械") << "learned from the pick";
+  ASSERT_TRUE(converted.has_callback());
+  EXPECT_EQ(Preedit(PollWhileAsked(converted)), "機械");
+
+  SetZenzTeachesMozc(true);
+  StartSession(/*zenz=*/true);
+  converted = ConvertKikai();
+  ASSERT_EQ(Preedit(converted), "機械");
+  EXPECT_EQ(Preedit(PollWhileAsked(converted)), "機会");
 }
 
 TEST_F(FloatypeZenzTest, PickingASuggestionByItsNumberTeachesMozcItsWords) {
