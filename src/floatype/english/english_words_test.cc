@@ -630,8 +630,18 @@ TEST_F(CostSearchTest, LeavesWhatMayGoOnAsJapanese) {
                   {{"のてを", 15000}, {"noteを", 25000}}, false),
             (Spans_{{0, 2, "note", "", true}}));
   EXPECT_EQ(Spans(time, costs, true), (Spans_{{0, 2, "time", "", true}}));
-  // A word still being typed may start inside the word's kana: めをと.
-  EXPECT_EQ(Spans(time, costs, false, {"めをと"}), Spans_{});
+  // A word still being typed may start inside the word's kana: ちめつ may go
+  // on to めつぼう. Not where what follows reads as Japanese already: ちめを
+  // is time + を, though めを starts a word too.
+  EXPECT_EQ(Spans({{"ti", "ち"}, {"me", "め"}, {"tu", "つ"}},
+                  {{"ちめつ", 15000}, {"timeつ", 25000}}, false, {"めつぼう"}),
+            Spans_{});
+  EXPECT_EQ(Spans(time, costs, false, {"めをと"}),
+            (Spans_{{0, 2, "time", "", true}}));
+  // Letters still being typed after it do not take the word away: ちめをk.
+  EXPECT_EQ(Spans({{"ti", "ち"}, {"me", "め"}, {"wo", "を"}, {"k", "ｋ"}},
+                  costs),
+            (Spans_{{0, 2, "time", "", true}}));
   // A word of the general list whose kana are a word of the dictionary is
   // that word: まけ is 負け.
   EXPECT_EQ(Spans({{"ma", "ま"}, {"ke", "け"}, {"ga", "が"}, {"i", "い"}},

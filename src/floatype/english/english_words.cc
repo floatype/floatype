@@ -641,12 +641,22 @@ std::vector<EnglishSpan> SpanByCost(const std::vector<std::string>& raws,
       continue;
     }
     // A Japanese word still being typed may start inside the word's kana:
-    // じょうとのてつづ goes on to 譲渡の手続き, no note.
+    // じょうとのてつづ goes on to 譲渡の手続き, no note. Not where what
+    // follows the word reads as Japanese already (ちめを is time + を, though
+    // めを starts 目を見張る): then the costs can tell, and the word does not
+    // come and go as more is typed.
     bool going_on = false;
-    for (size_t q = word.begin;
-         ends && search.starts_word && q < word.end && !going_on; ++q) {
-      going_on = !joined(q) &&
-                 search.starts_word(absl::string_view(kana).substr(offsets[q]));
+    if (ends && search.starts_word &&
+        (word.end == n ||
+         !KanaReader(absl::MakeConstSpan(query).subspan(first + word.end,
+                                                        n - word.end),
+                     search.lookup)
+              .Reads(0, n - word.end))) {
+      for (size_t q = word.begin; q < word.end && !going_on; ++q) {
+        going_on =
+            !joined(q) &&
+            search.starts_word(absl::string_view(kana).substr(offsets[q]));
+      }
     }
     if (going_on) {
       continue;
@@ -966,6 +976,20 @@ std::vector<EnglishSpan> EnglishSpans(
       }
       for (EnglishSpan& span : inside) {
         spans.push_back(std::move(span));
+      }
+    } else if (first == 0 || taken[first - 1] != 2) {
+      // Only letters still being typed follow, to the end (ちめをきr): the
+      // word told by its cost a key ago is told so still.
+      bool pending = last < size;
+      for (size_t i = last; i < size && pending; ++i) {
+        pending = taken[i] == 2;
+      }
+      if (pending) {
+        for (EnglishSpan& span :
+             SpanByCost(raws, query, first, last, true, letter_before,
+                        letter_after, words, *search)) {
+          spans.push_back(std::move(span));
+        }
       }
     }
     first = last;
