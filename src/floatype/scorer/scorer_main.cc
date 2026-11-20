@@ -5,24 +5,42 @@
 // scorer gets to them are skipped. The scorer exits when stdin closes, and then
 // prints its load time and memory footprint as one JSON object to stderr.
 //
-// Usage: floatype_scorer --model <gguf> [--threads N] [--show_tokens]
+// Usage: floatype_scorer --model <gguf> [--repacked <file>] [--threads N]
+//            [--show_tokens]
+//        floatype_scorer --model <gguf> --write_repacked <file>
 // The backend is fixed at build time (GGML_METAL).
+//
+// llama.cpp repacks the model's weights for the CPU's fast kernels when it
+// loads them, into a copy as large as the model (about 64MB) in memory of the
+// process's own. With --repacked the scorer maps a file that holds that copy
+// already: the same weights, so the same answers at the same speed, but a
+// mapped file is no memory of the process's own and nothing is repacked at
+// the start. --write_repacked makes the file, at build time. Which layout the
+// kernels want is fixed when llama.cpp is compiled, so one file serves every
+// Mac the scorer runs on.
 
+#include <fcntl.h>
 #include <mach/mach.h>
 #include <poll.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include <algorithm>
+#include <array>
 #include <cerrno>
 #include <chrono>
 #include <csignal>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include "ggml-cpu.h"
 #include "gguf.h"
 #include "llama.h"
 #include "protocol.h"
@@ -388,6 +406,114 @@ bool WriteAll(int fd, std::string_view data) {
 
 double ToMegabytes(double bytes) { return bytes / (1024.0 * 1024.0); }
 
+// The file of repacked weights, to map (--repacked) or to make
+// (--write_repacked): the buffer llama.cpp repacks into, then kTrailerSize
+// bytes that say which model it was made from.
+struct RepackedFile {
+  std::string path;
+  std::string model_path;
+  bool write = false;
+  // Set once llama.cpp has taken the mapping for its buffer.
+  void* memory = nullptr;
+  size_t size = 0;
+  // llama.cpp asked for a buffer; a second one is allocated as usual.
+  bool asked = false;
+};
+
+constexpr size_t kTrailerSize = 16;
+
+std::string Temporary(const RepackedFile& file) { return file.path + ".tmp"; }
+
+// The trailer for the model at `path`: a mark, and a fingerprint of the
+// model's size and of its start, middle and end (FNV-1a). It keeps another
+// model's weights, which may be as large, from being taken for this one's.
+std::optional<std::array<char, kTrailerSize>> Trailer(const std::string& path) {
+  constexpr off_t kBlock = 1 << 16;
+  const int fd = open(path.c_str(), O_RDONLY);
+  struct stat status;
+  if (fd < 0 || fstat(fd, &status) != 0) {
+    if (fd >= 0) {
+      close(fd);
+    }
+    return std::nullopt;
+  }
+  uint64_t hash = 14695981039346656037ull;
+  const auto mix = [&hash](const char* data, size_t size) {
+    for (size_t i = 0; i < size; ++i) {
+      hash = (hash ^ static_cast<unsigned char>(data[i])) * 1099511628211ull;
+    }
+  };
+  const uint64_t model_size = static_cast<uint64_t>(status.st_size);
+  mix(reinterpret_cast<const char*>(&model_size), sizeof(model_size));
+  std::vector<char> block(kBlock);
+  bool read_all = true;
+  for (const off_t offset :
+       {off_t{0}, std::max<off_t>(0, status.st_size / 2 - kBlock / 2),
+        std::max<off_t>(0, status.st_size - kBlock)}) {
+    const ssize_t got = pread(fd, block.data(), block.size(), offset);
+    read_all = read_all && got >= 0;
+    if (got > 0) {
+      mix(block.data(), static_cast<size_t>(got));
+    }
+  }
+  close(fd);
+  if (!read_all) {
+    return std::nullopt;
+  }
+  std::array<char, kTrailerSize> trailer = {'f', 'l', 'o', 'a',
+                                            't', 'r', 'p', '1'};
+  std::memcpy(trailer.data() + 8, &hash, sizeof(hash));
+  return trailer;
+}
+
+// ggml_cpu_set_repack_memory()'s callback: the memory for the buffer of
+// repacked weights, `size` bytes.
+void* RepackMemory(size_t size, bool* filled, void* user_data) {
+  RepackedFile& file = *static_cast<RepackedFile*>(user_data);
+  if (file.asked) {
+    return nullptr;
+  }
+  file.asked = true;
+  void* memory = MAP_FAILED;
+  if (file.write) {
+    // Under another name until it is whole: a file by the real name is
+    // trusted to hold the weights.
+    const int fd =
+        open(Temporary(file).c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
+    if (fd >= 0 &&
+        ftruncate(fd, static_cast<off_t>(size + kTrailerSize)) == 0) {
+      memory = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    }
+    if (fd >= 0) {
+      close(fd);
+    }
+  } else {
+    const std::optional<std::array<char, kTrailerSize>> expected =
+        Trailer(file.model_path);
+    const int fd = open(file.path.c_str(), O_RDONLY);
+    struct stat status;
+    std::array<char, kTrailerSize> trailer;
+    // Read only: nothing may write to weights that are there already.
+    if (fd >= 0 && expected.has_value() && fstat(fd, &status) == 0 &&
+        static_cast<size_t>(status.st_size) == size + kTrailerSize &&
+        pread(fd, trailer.data(), trailer.size(), static_cast<off_t>(size)) ==
+            static_cast<ssize_t>(trailer.size()) &&
+        trailer == *expected) {
+      memory = mmap(nullptr, size, PROT_READ, MAP_PRIVATE, fd, 0);
+    }
+    if (fd >= 0) {
+      close(fd);
+    }
+  }
+  if (memory == MAP_FAILED) {
+    return nullptr;
+  }
+  file.memory = memory;
+  file.size = size;
+  *filled = !file.write;
+  return memory;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -400,6 +526,7 @@ int main(int argc, char** argv) {
   // Repacking the weights for the CPU's fast kernels copies the model into
   // memory (about 64MB); without it zenz takes about twice as long.
   bool repack = true;
+  RepackedFile repacked;
   for (int i = 1; i < argc; ++i) {
     const std::string_view arg = argv[i];
     if (arg == "--model" && i + 1 < argc) {
@@ -414,6 +541,10 @@ int main(int argc, char** argv) {
       idle_exit_seconds = std::atoi(argv[++i]);
     } else if (arg == "--no_repack") {
       repack = false;
+    } else if ((arg == "--repacked" || arg == "--write_repacked") &&
+               i + 1 < argc) {
+      repacked.write = arg == "--write_repacked";
+      repacked.path = argv[++i];
     } else {
       std::fprintf(stderr, "unknown argument: %s\n", argv[i]);
       return 2;
@@ -421,9 +552,11 @@ int main(int argc, char** argv) {
   }
   if (model_path.empty() || threads < 1) {
     std::fprintf(stderr,
-                 "usage: floatype_scorer --model <gguf> [--threads N] "
-                 "[--idle_exit_seconds N] [--no_repack] [--show_tokens] "
-                 "[--no_cache_reuse]\n");
+                 "usage: floatype_scorer --model <gguf> [--repacked <file>] "
+                 "[--threads N] [--idle_exit_seconds N] [--no_repack] "
+                 "[--show_tokens] [--no_cache_reuse]\n"
+                 "       floatype_scorer --model <gguf> --write_repacked "
+                 "<file>\n");
     return 2;
   }
   // A closed socket must end the loop through write() errors, not a signal.
@@ -438,6 +571,10 @@ int main(int argc, char** argv) {
       PreTokenizerOverrides(model_path);
   model_params.kv_overrides = overrides.data();
   model_params.use_extra_bufts = repack;
+  if (repack && !repacked.path.empty()) {
+    repacked.model_path = model_path;
+    ggml_cpu_set_repack_memory(RepackMemory, &repacked);
+  }
   // The default callback prints progress dots to stderr.
   model_params.progress_callback = [](float, void*) { return true; };
   llama_model* model =
@@ -445,6 +582,42 @@ int main(int argc, char** argv) {
   if (model == nullptr) {
     std::fprintf(stderr, "failed to load model: %s\n", model_path.c_str());
     return 1;
+  }
+  if (repacked.write) {
+    // The weights are in the mapping now; the file takes its name once they
+    // are on disk.
+    bool written = repacked.memory != nullptr &&
+                   msync(repacked.memory, repacked.size, MS_SYNC) == 0;
+    if (const std::optional<std::array<char, kTrailerSize>> trailer =
+            Trailer(model_path);
+        written && trailer.has_value()) {
+      const int fd = open(Temporary(repacked).c_str(), O_WRONLY);
+      written = fd >= 0 &&
+                pwrite(fd, trailer->data(), trailer->size(),
+                       static_cast<off_t>(repacked.size)) ==
+                    static_cast<ssize_t>(trailer->size()) &&
+                fsync(fd) == 0;
+      if (fd >= 0) {
+        close(fd);
+      }
+    } else {
+      written = false;
+    }
+    written = written && std::rename(Temporary(repacked).c_str(),
+                                     repacked.path.c_str()) == 0;
+    llama_model_free(model);
+    if (!written) {
+      std::fprintf(stderr, "cannot write the repacked weights to %s\n",
+                   repacked.path.c_str());
+      return 1;
+    }
+    return 0;
+  }
+  if (!repacked.path.empty() && repack && repacked.memory == nullptr) {
+    // The answers are the same either way; the memory is not.
+    std::fprintf(stderr,
+                 "cannot use the repacked weights in %s; repacked in memory\n",
+                 repacked.path.c_str());
   }
   const llama_vocab* vocab = llama_model_get_vocab(model);
 

@@ -59,7 +59,7 @@ jobs:
         # Also downloads the pinned zenz model next to the scorer.
         run: |
           cmake -S floatype/scorer -B floatype/scorer/build -DCMAKE_BUILD_TYPE=Release
-          cmake --build floatype/scorer/build -j --target floatype_scorer
+          cmake --build floatype/scorer/build -j --target floatype_scorer zenz_repacked
 
       - name: Make the added dictionaries
         working-directory: ./src

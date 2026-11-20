@@ -25,14 +25,17 @@ genrule(
     srcs = [
         "build/floatype_scorer",
         "build/zenz-v3.2-small-Q5_K_M.gguf",
+        "build/zenz-v3.2-small-Q5_K_M.repacked",
     ],
     outs = [
         "floatype_scorer",
         "zenz-v3.2-small-Q5_K_M.gguf",
+        "zenz-v3.2-small-Q5_K_M.repacked",
     ],
     cmd = " && ".join([
         "cp $(location build/floatype_scorer) $(location floatype_scorer)",
         "cp $(location build/zenz-v3.2-small-Q5_K_M.gguf) $(location zenz-v3.2-small-Q5_K_M.gguf)",
+        "cp $(location build/zenz-v3.2-small-Q5_K_M.repacked) $(location zenz-v3.2-small-Q5_K_M.repacked)",
     ]),
 )
 

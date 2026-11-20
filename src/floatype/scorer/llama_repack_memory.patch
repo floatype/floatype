@@ -1,0 +1,70 @@
+diff --git a/ggml/include/ggml-cpu.h b/ggml/include/ggml-cpu.h
+index dc6453c6e..6a1203068 100644
+--- a/ggml/include/ggml-cpu.h
++++ b/ggml/include/ggml-cpu.h
+@@ -109,6 +109,13 @@ extern "C" {
+     GGML_BACKEND_API int ggml_cpu_has_wasm_simd  (void);
+     GGML_BACKEND_API int ggml_cpu_has_llamafile  (void);
+ 
++    // floatype: where the buffer of repacked weights lives. `memory` is called
++    // with the buffer's size and returns memory for it, or NULL to allocate
++    // it as usual. With `*filled` set, the memory holds the repacked weights
++    // already and nothing is written to it.
++    typedef void * (*ggml_cpu_repack_memory_t)(size_t size, bool * filled, void * user_data);
++    GGML_BACKEND_API void ggml_cpu_set_repack_memory(ggml_cpu_repack_memory_t memory, void * user_data);
++
+     // Internal types and functions exposed for tests and benchmarks
+ 
+     typedef void (*ggml_vec_dot_t)  (int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT x, size_t bx,
+diff --git a/ggml/src/ggml-cpu/repack.cpp b/ggml/src/ggml-cpu/repack.cpp
+index 9282ca299..64ae6231d 100644
+--- a/ggml/src/ggml-cpu/repack.cpp
++++ b/ggml/src/ggml-cpu/repack.cpp
+@@ -5164,6 +5164,24 @@ static void ggml_backend_cpu_repack_buffer_set_tensor(ggml_backend_buffer_t buff
+     GGML_UNUSED(buffer);
+ }
+ 
++// floatype: see ggml_cpu_set_repack_memory() in ggml-cpu.h.
++static ggml_cpu_repack_memory_t g_repack_memory           = nullptr;
++static void *                   g_repack_memory_user_data = nullptr;
++
++void ggml_cpu_set_repack_memory(ggml_cpu_repack_memory_t memory, void * user_data) {
++    g_repack_memory           = memory;
++    g_repack_memory_user_data = user_data;
++}
++
++static void ggml_backend_cpu_repack_buffer_set_tensor_filled(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor,
++                                                              const void * data, size_t offset, size_t size) {
++    GGML_UNUSED(buffer);
++    GGML_UNUSED(tensor);
++    GGML_UNUSED(data);
++    GGML_UNUSED(offset);
++    GGML_UNUSED(size);
++}
++
+ static const char * ggml_backend_cpu_repack_buffer_type_get_name(ggml_backend_buffer_type_t buft) {
+     return "CPU_REPACK";
+ 
+@@ -5171,7 +5189,11 @@ static const char * ggml_backend_cpu_repack_buffer_type_get_name(ggml_backend_bu
+ }
+ 
+ static ggml_backend_buffer_t ggml_backend_cpu_repack_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
+-    ggml_backend_buffer_t buffer = ggml_backend_buft_alloc_buffer(ggml_backend_cpu_buffer_type(), size);
++    bool   filled = false;
++    void * memory = g_repack_memory != nullptr ? g_repack_memory(size, &filled, g_repack_memory_user_data) : nullptr;
++    ggml_backend_buffer_t buffer = memory != nullptr
++                                       ? ggml_backend_cpu_buffer_from_ptr(memory, size)
++                                       : ggml_backend_buft_alloc_buffer(ggml_backend_cpu_buffer_type(), size);
+ 
+     if (buffer == nullptr) {
+         return nullptr;
+@@ -5179,7 +5201,8 @@ static ggml_backend_buffer_t ggml_backend_cpu_repack_buffer_type_alloc_buffer(gg
+ 
+     buffer->buft              = buft;
+     buffer->iface.init_tensor = ggml_backend_cpu_repack_buffer_init_tensor;
+-    buffer->iface.set_tensor  = ggml_backend_cpu_repack_buffer_set_tensor;
++    buffer->iface.set_tensor  = filled ? ggml_backend_cpu_repack_buffer_set_tensor_filled
++                                       : ggml_backend_cpu_repack_buffer_set_tensor;
+     buffer->iface.get_tensor  = nullptr;
+     buffer->iface.cpy_tensor  = nullptr;
+     return buffer;

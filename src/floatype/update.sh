@@ -17,7 +17,7 @@ echo "floatype: ビルドしています（変更が無ければ数秒、初回�
 if ! nix develop .. --command bash -c '
   set -euo pipefail
   cmake -S floatype/scorer -B floatype/scorer/build -DCMAKE_BUILD_TYPE=Release
-  cmake --build floatype/scorer/build -j --target floatype_scorer
+  cmake --build floatype/scorer/build -j --target floatype_scorer zenz_repacked
   # The dictionaries made from outside data: downloaded once, then cached, and
   # made again only when their inputs change.
   python3 floatype/tools/make_extra_dictionary.py

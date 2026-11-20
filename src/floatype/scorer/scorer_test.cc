@@ -1,6 +1,7 @@
 // Assert-based tests for floatype_scorer with the real model: requests with
-// exclusions answer zenz's next best, and leave later answers as they were.
-// Run with ctest, or build/scorer_test <scorer> <model>.
+// exclusions answer zenz's next best, and leave later answers as they were;
+// the repacked weights from their file answer as those repacked in memory.
+// Run with ctest, or build/scorer_test <scorer> <model> <repacked weights>.
 
 #include <sys/wait.h>
 #include <unistd.h>
@@ -32,7 +33,9 @@ void Expect(bool ok, const std::string& what) {
 // The scorer as a child process, asked one request at a time.
 class Scorer {
  public:
-  Scorer(const char* scorer, const char* model) {
+  // With `repacked`, the scorer maps that file of repacked weights.
+  Scorer(const char* scorer, const char* model,
+         const char* repacked = nullptr) {
     int to_child[2];
     int from_child[2];
     if (pipe(to_child) != 0 || pipe(from_child) != 0) std::abort();
@@ -42,7 +45,12 @@ class Scorer {
       dup2(from_child[1], STDOUT_FILENO);
       close(to_child[1]);
       close(from_child[0]);
-      execl(scorer, scorer, "--model", model, static_cast<char*>(nullptr));
+      if (repacked != nullptr) {
+        execl(scorer, scorer, "--model", model, "--repacked", repacked,
+              static_cast<char*>(nullptr));
+      } else {
+        execl(scorer, scorer, "--model", model, static_cast<char*>(nullptr));
+      }
       std::_Exit(127);
     }
     close(to_child[0]);
@@ -113,8 +121,9 @@ bool Finished(const Response& response) {
 }  // namespace
 
 int main(int argc, char** argv) {
-  if (argc != 3) {
-    std::fputs("usage: scorer_test <scorer> <model>\n", stderr);
+  if (argc != 4) {
+    std::fputs("usage: scorer_test <scorer> <model> <repacked weights>\n",
+               stderr);
     return EXIT_FAILURE;
   }
   Scorer scorer(argv[1], argv[2]);
@@ -124,6 +133,17 @@ int main(int argc, char** argv) {
     Expect(Finished(response) && !response.conversion.empty(),
            item.reading + " is converted");
     first.push_back(response.conversion);
+  }
+  {
+    // The same weights, so the same answers.
+    Scorer mapped(argv[1], argv[2], argv[3]);
+    Scorer repacking(argv[1], argv[2]);
+    for (const Item& item : kItems) {
+      const Response a = mapped.Ask(item.context, item.reading);
+      const Response b = repacking.Ask(item.context, item.reading);
+      Expect(Finished(a) && a.conversion == b.conversion,
+             "the mapped weights answer the same: " + a.conversion);
+    }
   }
 
   const Item& item = kItems[1];

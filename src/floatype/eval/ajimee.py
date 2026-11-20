@@ -325,6 +325,11 @@ def committed_after(row: dict, delay_ms: float) -> str:
   return row["final"] if row["final_ms"] <= delay_ms else row["mozc"]
 
 
+# The published model's repacked weights, which the scorer's build makes. The
+# scorer maps them as the app's does; for another model it repacks in memory.
+ZENZ_REPACKED = Path("floatype/scorer/build/zenz-v3.2-small-Q5_K_M.repacked")
+
+
 def convert_with_zenz(
     pairs: list[tuple[str, str]], binary: Path, model: Path, threads: int
 ) -> tuple[list[tuple[str, float, str]], dict]:
@@ -333,7 +338,8 @@ def convert_with_zenz(
   Requests go one at a time because the scorer skips requests superseded by newer ones.
   """
   scorer = subprocess.Popen(
-      [str(binary), "--model", str(model), "--threads", str(threads)],
+      [str(binary), "--model", str(model), "--threads", str(threads),
+       "--repacked", str(ZENZ_REPACKED)],
       stdin=subprocess.PIPE,
       stdout=subprocess.PIPE,
       stderr=subprocess.PIPE,

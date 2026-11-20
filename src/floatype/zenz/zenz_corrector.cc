@@ -1174,10 +1174,14 @@ ScorerClient* ZenzCorrector::DefaultClient() {
   // Never destroyed: the scorer exits when the converter process does.
   static ScorerClient* const client = [] {
     const std::string dir = SystemUtil::GetServerDirectory();
+    // The repacked weights are mapped from their file, so the scorer holds
+    // no copy of the model in memory of its own (scorer_main.cc).
     return new ScorerClient({
         FileUtil::JoinPath(dir, "floatype_scorer"),
         "--model",
         FileUtil::JoinPath(dir, "zenz-v3.2-small-Q5_K_M.gguf"),
+        "--repacked",
+        FileUtil::JoinPath(dir, "zenz-v3.2-small-Q5_K_M.repacked"),
     });
   }();
   return client;

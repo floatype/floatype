@@ -54,6 +54,10 @@ ABSL_FLAG(std::string, scorer, "floatype/scorer/build/floatype_scorer",
 ABSL_FLAG(std::string, model,
           "floatype/scorer/build/zenz-v3.2-small-Q5_K_M.gguf",
           "the zenz model");
+ABSL_FLAG(std::string, repacked,
+          "floatype/scorer/build/zenz-v3.2-small-Q5_K_M.repacked",
+          "the model's repacked weights, which the scorer maps as the app's "
+          "does (empty: it repacks them in memory)");
 ABSL_FLAG(bool, zenz, true, "correct conversions with zenz");
 ABSL_FLAG(int, not_this, 0,
           "press the zenz key (Ctrl+z) this many times after each Space "
@@ -386,9 +390,13 @@ int main(int argc, char** argv) {
 
   std::unique_ptr<mozc::floatype::ScorerClient> client;
   if (absl::GetFlag(FLAGS_zenz)) {
-    client = std::make_unique<mozc::floatype::ScorerClient>(
-        std::vector<std::string>{absl::GetFlag(FLAGS_scorer), "--model",
-                                 absl::GetFlag(FLAGS_model)});
+    std::vector<std::string> command = {absl::GetFlag(FLAGS_scorer), "--model",
+                                        absl::GetFlag(FLAGS_model)};
+    if (const std::string repacked = absl::GetFlag(FLAGS_repacked);
+        !repacked.empty()) {
+      command.insert(command.end(), {"--repacked", repacked});
+    }
+    client = std::make_unique<mozc::floatype::ScorerClient>(std::move(command));
   }
   // Sessions take the scorer when they are created, so set it first.
   mozc::floatype::ZenzCorrector::SetDefaultClientForTesting(client.get());
