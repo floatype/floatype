@@ -35,7 +35,11 @@
 #include <string>
 
 #include "absl/flags/flag.h"
+#include "absl/log/check.h"
+#include "absl/status/statusor.h"
+#include "base/file/temp_dir.h"
 #include "base/init_mozc.h"
+#include "base/system_util.h"
 #include "testing/benchmark.h"
 #include "testing/gunit.h"
 
@@ -66,6 +70,14 @@ int main(int argc, char** argv) {
   // Without this flag, ::RaiseException makes the job stuck.
   // See b/2805521 for details.
   GTEST_FLAG_SET(catch_exceptions, true);
+
+  // floatype: a test that sets no profile of its own gets an empty temporary
+  // one, never the profile of the person running it. Their config1.db made
+  // composition_test fail once it held floatype's half-width digits.
+  absl::StatusOr<mozc::TempDirectory> profile =
+      mozc::TempDirectory::Default().CreateTempDirectory();
+  CHECK_OK(profile);
+  mozc::SystemUtil::SetUserProfileDirectory(profile->path());
 
   const int result = RUN_ALL_TESTS();
   if (result != 0) {

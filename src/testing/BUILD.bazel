@@ -92,7 +92,14 @@ mozc_cc_library(
     ) + mozc_select(
         client = ["//base:init_mozc"],
         linux = [],
-        oss = ["//base:init_mozc"],
+        oss = [
+            "//base:init_mozc",
+            # floatype: the temporary profile of gtest_main.cc.
+            "//base:system_util",
+            "//base/file:temp_dir",
+            "@com_google_absl//absl/log:check",
+            "@com_google_absl//absl/status:statusor",
+        ],
     ) + mozc_select(
         macos = ["@com_google_googletest//:gtest"],
         oss = [],
