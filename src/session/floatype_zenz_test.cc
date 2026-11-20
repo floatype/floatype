@@ -180,6 +180,17 @@ class FloatypeZenzTest : public testing::SessionHandlerTestBase {
     Eval(std::move(input));
   }
 
+  // Sets from how many characters of reading on a remembered correction
+  // shows at once.
+  void SetRememberedMinChars(int chars) {
+    config::Config config = config::ConfigHandler::DefaultConfig();
+    config.set_zenz_remembered_min_chars(chars);
+    commands::Input input;
+    input.set_type(commands::Input::SET_CONFIG);
+    *input.mutable_config() = config;
+    Eval(std::move(input));
+  }
+
   // Converts きかいがきかい, which the fake scorer turns into 機械が機械, and
   // commits zenz's correction.
   void CommitCorrectedSentence() {
@@ -1005,6 +1016,38 @@ TEST_F(FloatypeZenzTest, ACommittedCorrectionShowsAtOnceNextTime) {
   EXPECT_EQ(Preedit(PollWhileAsked(converted)), "機械");
   // Space still shows Mozc's result.
   EXPECT_EQ(Preedit(SendKeys({"Space"})), "機会");
+}
+
+TEST_F(FloatypeZenzTest, ARememberedCorrectionShowsAtOnceFromTheLengthSet) {
+  CommitCorrectedSentence();  // きかいがきかい: seven characters.
+  const auto convert = [this] {
+    return SendKeys(
+        {"k", "i", "k", "a", "i", "g", "a", "k", "i", "k", "a", "i", "Space"});
+  };
+  SetRememberedMinChars(7);
+  StartSession(/*zenz=*/true);
+  EXPECT_EQ(Preedit(convert()), "機械が機械");
+
+  SetRememberedMinChars(8);
+  StartSession(/*zenz=*/true);
+  const commands::Output converted = convert();
+  EXPECT_NE(Preedit(converted), "機械が機械") << "not before zenz answers";
+  EXPECT_EQ(Preedit(PollWhileAsked(converted)), "機械が機械");
+}
+
+TEST_F(FloatypeZenzTest, AShortCorrectionIsRememberedWhileNotShownAtOnce) {
+  SetRememberedMinChars(7);
+  ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機械");
+  StartSession(/*zenz=*/true);
+  const commands::Output converted = ConvertKikai();
+  EXPECT_EQ(Preedit(converted), "機会") << "three characters: not at once";
+  EXPECT_EQ(Preedit(PollWhileAsked(converted)), "機械");
+
+  // It was remembered all along.
+  SetRememberedMinChars(1);
+  StartSession(/*zenz=*/true);
+  EXPECT_EQ(Preedit(ConvertKikai()), "機械");
 }
 
 TEST_F(FloatypeZenzTest, StoppingACommittedCorrectionForgetsIt) {

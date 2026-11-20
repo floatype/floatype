@@ -99,6 +99,10 @@ ABSL_FLAG(bool, zenz_teaches_mozc, false,
           "the setting zenz_teaches_mozc: committing a correction of zenz's "
           "teaches Mozc's conversion ranking its words, and zenz may change "
           "what the user's history ranked first");
+ABSL_FLAG(int, zenz_remembered_min_chars, 1,
+          "the setting zenz_remembered_min_chars: a correction committed "
+          "before shows at once only for a reading of this many characters "
+          "or more");
 ABSL_FLAG(int, zenz_learning_rules, -1,
           "for measuring: which rules about a segment the user's history "
           "ranked are on, as a sum: 1, zenz may not go back to the candidate "
@@ -342,6 +346,8 @@ class Replayer {
     input.mutable_config()->set_suggest_added_words(
         absl::GetFlag(FLAGS_suggest_added_words));
     input.mutable_config()->set_zenz_teaches_mozc(zenz_teaches_mozc);
+    input.mutable_config()->set_zenz_remembered_min_chars(
+        absl::GetFlag(FLAGS_zenz_remembered_min_chars));
     Eval(std::move(input));
   }
 

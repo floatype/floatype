@@ -3545,6 +3545,11 @@ bool Session::ApplyAcceptedCorrection() {
   }
   const Segments& segments = context_->converter().GetSegments();
   const std::string reading = floatype::ConversionReading(segments);
+  // A short reading may be left to zenz, who sees the text before it.
+  if (Util::CharsLen(reading) <
+      context_->GetConfig().zenz_remembered_min_chars()) {
+    return false;
+  }
   const std::string text = floatype::ZenzMemory::Accepted().Latest(reading);
   if (text.empty() || floatype::ZenzMemory::Stopped().Contains(reading, text)) {
     return false;

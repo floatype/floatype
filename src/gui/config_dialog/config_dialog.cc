@@ -769,6 +769,9 @@ void ConfigDialog::SetUpFloatypeSettings() {
       memory,
       "zenz が直した語を、確定したら変換の順位にも覚えさせる（次から zenz "
       "を待たずに出る。zenz は、覚えた語を別の文で直せる）");
+  zenzRememberedMinCharsSpinBox_ = NewSpinBox(1, 20, 1, " 文字以上");
+  memory->addRow(Text("覚えた補正をすぐ出す読みの長さ（1 でいつも）"),
+                 zenzRememberedMinCharsSpinBox_);
   QPushButton* learned = new QPushButton(Text("学習データを見る…"));
   learned->setObjectName(QStringLiteral("zenzMemoryButton"));
   learned->setProperty("changes_nothing", true);
@@ -821,7 +824,8 @@ void ConfigDialog::SetUpFloatypeSettings() {
   for (QWidget* widget : std::initializer_list<QWidget*>{
            zenzTimeoutSpinBox_, zenzSuggestionLearningCheckBox_,
            zenzTeachesMozcCheckBox_, zenzLearningCheckBox_,
-           zenzStopWhenIdleCheckBox_, zenzDelaySpinBox_}) {
+           zenzRememberedMinCharsSpinBox_, zenzStopWhenIdleCheckBox_,
+           zenzDelaySpinBox_}) {
     connect(useZenzCheckBox_, &QCheckBox::toggled, widget,
             &QWidget::setEnabled);
   }
@@ -1306,6 +1310,7 @@ void ConfigDialog::ConvertFromProto(const config::Config& config) {
   SET_CHECKBOX(zenzSuggestionLearningCheckBox_, zenz_suggestion_learning);
   SET_CHECKBOX(zenzLearningCheckBox_, zenz_learning);
   SET_CHECKBOX(zenzTeachesMozcCheckBox_, zenz_teaches_mozc);
+  zenzRememberedMinCharsSpinBox_->setValue(config.zenz_remembered_min_chars());
   SET_CHECKBOX(zenzStopWhenIdleCheckBox_, zenz_stop_when_idle);
   SET_CHECKBOX(liveConversionCheckBox_, use_live_conversion);
   liveConversionDelaySpinBox_->setValue(
@@ -1428,6 +1433,8 @@ void ConfigDialog::ConvertToProto(config::Config* config) const {
   GET_CHECKBOX(zenzSuggestionLearningCheckBox_, zenz_suggestion_learning);
   GET_CHECKBOX(zenzLearningCheckBox_, zenz_learning);
   GET_CHECKBOX(zenzTeachesMozcCheckBox_, zenz_teaches_mozc);
+  config->set_zenz_remembered_min_chars(
+      zenzRememberedMinCharsSpinBox_->value());
   GET_CHECKBOX(zenzStopWhenIdleCheckBox_, zenz_stop_when_idle);
   GET_CHECKBOX(liveConversionCheckBox_, use_live_conversion);
   config->set_live_conversion_delay_millisec(

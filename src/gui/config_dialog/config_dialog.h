@@ -116,6 +116,7 @@ class ConfigDialog : public QDialog, private Ui::ConfigDialog {
   QCheckBox* zenzSuggestionLearningCheckBox_;
   QCheckBox* zenzLearningCheckBox_;
   QCheckBox* zenzTeachesMozcCheckBox_;
+  QSpinBox* zenzRememberedMinCharsSpinBox_;
   QCheckBox* zenzStopWhenIdleCheckBox_;
   QCheckBox* liveConversionCheckBox_;
   QSpinBox* liveConversionDelaySpinBox_;

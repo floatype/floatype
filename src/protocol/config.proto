@@ -513,6 +513,11 @@ message Config {
   // (Mozkey's default). zenz may then change any candidate the history
   // ranked first, since what it taught is among them.
   optional bool zenz_teaches_mozc = 1027 [default = false];
+  // floatype: a correction committed before shows at once, before zenz
+  // answers, only for a reading of this many characters or more. It is
+  // remembered and zenz makes it again whatever the length. 1 is always;
+  // Mozkey's default is 7, as short readings are homophones more often.
+  optional uint32 zenz_remembered_min_chars = 1028 [default = 1];
 
   //////////////////////////////////////////////////////////////
   //
