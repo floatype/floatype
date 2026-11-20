@@ -2236,8 +2236,9 @@ bool Session::CommitInternal(commands::Command* command,
     // have shown; that screen is not this command's.
     KeepEnglishWords(false);
     commands::Command shown;
-    // A name of letters with digits and symbols (v1.2.3, x86_64) is no word
-    // of the list; typed in a kana mode with no kana in it, it is its keys.
+    // Keys that made no kana at all, letters alone (kwsk) or with digits and
+    // symbols (v1.2.3, x86_64), are no word of the list; typed in a kana
+    // mode, they are committed as typed, which is what a pause shows.
     const composer::Composer& composer = context_->composer();
     const std::string query = composer.GetQueryForConversion();
     const transliteration::TransliterationType mode = composer.GetInputMode();

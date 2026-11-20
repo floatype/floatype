@@ -1857,6 +1857,9 @@ TEST_F(FloatypeZenzTest, MixedEnglishEnterBeforeThePauseCommitsTheWord) {
   // A name with digits and symbols is its keys, not their full-width forms.
   SendKeys({"v", "1", ".", "2", ".", "3"});
   EXPECT_EQ(SendKeys({"Enter"}).result().value(), "v1.2.3");
+  // So are letters alone that made no kana.
+  SendKeys({"k", "w", "s", "k"});
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(), "kwsk");
   // Japanese punctuation and digits alone stay as the settings write them.
   const commands::Output typed = SendKeys({"1", ".", "5"});
   EXPECT_EQ(SendKeys({"Enter"}).result().value(), Preedit(typed));
