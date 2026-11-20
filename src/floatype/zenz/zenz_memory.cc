@@ -129,4 +129,10 @@ ZenzMemory& ZenzMemory::TurnedDown() {
   return InProfile(*memory, *path, "floatype_zenz_turned_down.tsv");
 }
 
+ZenzMemory& ZenzMemory::RefusedOnce() {
+  static absl::NoDestructor<std::unique_ptr<ZenzMemory>> memory;
+  static absl::NoDestructor<std::string> path;
+  return InProfile(*memory, *path, "floatype_zenz_refused_once.tsv");
+}
+
 }  // namespace mozc::floatype

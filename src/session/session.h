@@ -49,6 +49,7 @@
 #include "engine/engine_interface.h"
 #include "floatype/english/english_words.h"
 #include "floatype/zenz/zenz_corrector.h"
+#include "floatype/zenz/zenz_memory.h"
 #include "protocol/commands.pb.h"
 #include "protocol/config.pb.h"
 #include "session/ime_context.h"
@@ -307,20 +308,25 @@ class Session {
   // The candidates zenz moved to the top while its correction is on screen;
   // empty otherwise.
   std::vector<int> zenz_indices_;
-  // The words of a correction the user left for Mozc's result with Space,
-  // until the conversion is committed or ends: the segment each was in (its
-  // index and key), and the content key and value of zenz's candidate.
-  struct RefusedWord {
+  // A word zenz changed in a correction: the segment it is in (its index and
+  // key), and the content key and value of zenz's candidate.
+  struct ZenzWord {
     size_t segment;
     std::string segment_key;
     std::string key;
     std::string value;
   };
-  std::vector<RefusedWord> zenz_refused_;
-  // What the last commit changed in ZenzMemory::TurnedDown(), so that undoing
-  // the commit takes it back: whether the word was added (or removed), its
-  // reading and its writing.
+  // The words of the correction on screen. None for a correction on zenz's
+  // own segments, which do not line up with Mozc's.
+  std::vector<ZenzWord> zenz_words_;
+  // The words of a correction the user left for Mozc's result with Space,
+  // until the conversion is committed or ends.
+  std::vector<ZenzWord> zenz_refused_;
+  // What the last commit changed in the memories of refused words, so that
+  // undoing the commit takes it back: the memory, whether the word was added
+  // (or removed), its reading and its writing.
   struct TurnedDownChange {
+    floatype::ZenzMemory* memory;
     bool added;
     std::string key;
     std::string value;
@@ -436,9 +442,6 @@ class Session {
   // else.
   bool CorrectWithZenzNow(commands::Command* command);
   // Space while zenz's correction is shown: Mozc's result again.
-  // Notes the words zenz changed in the correction on screen (the segments
-  // where `zenz_indices` is not 0), before Space brings Mozc's result back.
-  void NoteRefusedWords(absl::Span<const int> zenz_indices);
   bool ShowMozcAgain(bool live, commands::Command* command);
   // Puts Mozc's candidates back on top where zenz's correction moved others,
   // or Mozc's segments back where it segmented the conversion again.
