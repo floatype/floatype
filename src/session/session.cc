@@ -293,6 +293,7 @@ void Session::PushUndoContext() {
 
 void Session::RememberTurnedDown(size_t count) {
   turned_down_changes_.clear();
+  const std::vector<RefusedWord> refused = std::exchange(zenz_refused_, {});
   const config::Config& config = context_->GetConfig();
   // Where the commit teaches Mozc nothing, it tells zenz nothing.
   if (!config.zenz_learning() || config.incognito_mode() ||
@@ -300,22 +301,53 @@ void Session::RememberTurnedDown(size_t count) {
     return;
   }
   floatype::ZenzMemory& memory = floatype::ZenzMemory::TurnedDown();
-  for (const EngineConverterInterface::ReplacedCandidate& replaced :
-       context_->converter().ReplacedCandidates()) {
-    if (replaced.segment >= count || !replaced.learned) {
+  const auto turn_down = [this, &memory](const std::string& key,
+                                         const std::string& value) {
+    if (key.empty() || value.empty()) {
+      return;
+    }
+    if (!memory.Contains(key, value)) {
+      turned_down_changes_.push_back({true, key, value});
+    }
+    memory.Add(key, value);
+  };
+  const std::vector<EngineConverterInterface::ReplacedCandidate> replaced =
+      context_->converter().ReplacedCandidates();
+  for (const EngineConverterInterface::ReplacedCandidate& choice : replaced) {
+    if (choice.segment >= count || !choice.learned) {
       continue;
     }
-    if (!replaced.shown_key.empty() && !replaced.shown_value.empty()) {
-      if (!memory.Contains(replaced.shown_key, replaced.shown_value)) {
-        turned_down_changes_.push_back(
-            {true, replaced.shown_key, replaced.shown_value});
-      }
-      memory.Add(replaced.shown_key, replaced.shown_value);
-    }
-    if (memory.Contains(replaced.chosen_key, replaced.chosen_value)) {
-      memory.Remove(replaced.chosen_key, replaced.chosen_value);
+    turn_down(choice.shown_key, choice.shown_value);
+    if (memory.Contains(choice.chosen_key, choice.chosen_value)) {
+      memory.Remove(choice.chosen_key, choice.chosen_value);
       turned_down_changes_.push_back(
-          {false, replaced.chosen_key, replaced.chosen_value});
+          {false, choice.chosen_key, choice.chosen_value});
+    }
+  }
+  // The words of a correction Space left for Mozc's result, unless the user
+  // chose the word after all.
+  const Segments& segments = context_->converter().GetSegments();
+  for (const RefusedWord& word : refused) {
+    if (word.segment >= count ||
+        word.segment >= segments.conversion_segments_size()) {
+      continue;
+    }
+    const Segment& segment = segments.conversion_segment(word.segment);
+    if (segment.key() != word.segment_key || segment.candidates_size() == 0) {
+      continue;
+    }
+    const auto choice = std::find_if(
+        replaced.begin(), replaced.end(),
+        [&word](const EngineConverterInterface::ReplacedCandidate& choice) {
+          return choice.segment == word.segment;
+        });
+    const converter::Candidate& first = segment.candidate(0);
+    const std::string& key =
+        choice != replaced.end() ? choice->chosen_key : first.content_key;
+    const std::string& value =
+        choice != replaced.end() ? choice->chosen_value : first.content_value;
+    if (key != word.key || value != word.value) {
+      turn_down(word.key, word.value);
     }
   }
 }
@@ -705,7 +737,11 @@ bool Session::SendKey(commands::Command* command) {
     follows_japanese_ = FollowsJapanese(*command);
   }
   const std::vector<int> zenz_indices = std::exchange(zenz_indices_, {});
-  const bool zenz_listed = std::exchange(zenz_listed_, false);
+  // What Space refused of a correction is told at the commit of that
+  // conversion, not of a later one.
+  if (context_->state() != ImeContext::CONVERSION) {
+    zenz_refused_.clear();
+  }
   const bool live = live_conversion_;
   live_conversion_ = false;
   UpdateTime();
@@ -746,26 +782,19 @@ bool Session::SendKey(commands::Command* command) {
   // floatype: Space after an English word commits and types a space.
   const bool spaced = TypeSpaceAfterEnglish(live, command);
 
-  // floatype: while zenz's correction is shown, the first Space (any key for
-  // the next candidate) opens the candidates with the correction still
-  // chosen, so that one Space does not take a correction away. The Space
-  // after it goes on to the next candidate, which is Mozc's own.
+  // floatype: while zenz's correction is shown, Space (any key for the next
+  // candidate) shows Mozc's result again, as Mozkey does; the Space after it
+  // goes through Mozc's candidates in Mozc's order. The words zenz had
+  // changed are noted: committing the conversion without them tells zenz not
+  // to write them again (RememberTurnedDown()).
   if (keymap::ConversionState::Commands key_command;
-      !spaced && !zenz_indices.empty() && !zenz_listed &&
+      !spaced && !zenz_indices.empty() &&
       context_->state() == ImeContext::CONVERSION &&
       context_->GetKeyMapManager().GetCommandConversion(command->input().key(),
                                                         &key_command) &&
       key_command == keymap::ConversionState::CONVERT_NEXT) {
-    command->mutable_output()->set_consumed(true);
-    context_->mutable_converter()->SetCandidateListVisible(true);
-    zenz_indices_ = zenz_indices;
-    zenz_listed_ = true;
-    // A conversion like any other from here: Escape shows the reading.
-    live_reading_.clear();
-    Output(command);
-    SetIndicator(command);
-    SetCandidateLook(command);
-    return true;
+    NoteRefusedWords(zenz_indices);
+    return ShowMozcAgain(live, command);
   }
   // Ctrl+Delete (the key that deletes a suggestion) while zenz's correction is
   // shown stops it, and zenz does not make it again for this reading.
@@ -778,7 +807,7 @@ bool Session::SendKey(commands::Command* command) {
       floatype::ZenzMemory::Stopped().Add(zenz_reading_, zenz_text_);
       floatype::ZenzMemory::Accepted().Remove(zenz_reading_, zenz_text_);
     }
-    return ShowMozcAgain(zenz_indices, live, command);
+    return ShowMozcAgain(live, command);
   }
   // The manual zenz key changes nothing on screen: a live conversion stays
   // live, and zenz's correction stays zenz's until a new answer comes.
@@ -3527,8 +3556,16 @@ bool Session::ShowZenzText(absl::string_view reading, absl::string_view text,
   const uint32_t attributes = context_->GetConfig().zenz_suggestion_learning()
                                   ? converter::Attribute::NO_HISTORY_LEARNING
                                   : converter::Attribute::NO_LEARNING;
-  std::optional<Segments> mozc;
-  if (mapping.segments.has_value()) {
+  const bool recut = mapping.segments.has_value();
+  if (!recut && std::all_of(mapping.candidate_indices.begin(),
+                            mapping.candidate_indices.end(),
+                            [](int index) { return index == 0; })) {
+    return false;
+  }
+  // Mozc's conversion as it is, for Space and Ctrl+Delete to bring back: its
+  // segments, and its candidates in its order.
+  Segments mozc = converter->GetSegments();
+  if (recut) {
     // On new segments, every candidate shown is zenz's choice, the ones Mozc
     // ranks first included.
     for (size_t i = 0; i < mapping.segments->conversion_segments_size(); ++i) {
@@ -3536,18 +3573,13 @@ bool Session::ShowZenzText(absl::string_view reading, absl::string_view text,
           ->mutable_candidate(mapping.candidate_indices[i])
           ->attributes |= attributes;
     }
-    mozc = converter->GetSegments();
     if (!converter->SetSegments(*std::move(mapping.segments))) {
       return false;
     }
-  } else if (std::all_of(mapping.candidate_indices.begin(),
-                         mapping.candidate_indices.end(),
-                         [](int index) { return index == 0; })) {
-    return false;
   }
   if (!converter->PromoteCandidates(mapping.candidate_indices, attributes, 0)) {
-    if (mozc.has_value()) {
-      converter->SetSegments(*std::move(mozc));
+    if (recut) {
+      converter->SetSegments(std::move(mozc));
     }
     return false;
   }
@@ -3594,28 +3626,46 @@ bool Session::CorrectWithZenzNow(commands::Command* command) {
   return true;
 }
 
-void Session::RestoreMozcOrder(absl::Span<const int> zenz_indices) {
+void Session::RestoreMozcOrder() {
+  // zenz's candidates go back where Mozc ranked them, the user's to pick and
+  // learned if picked.
   if (mozc_segments_.has_value()) {
     context_->mutable_converter()->SetSegments(
         *std::exchange(mozc_segments_, std::nullopt));
-    return;
   }
-  // zenz moved its candidate to the top, so Mozc's is second where it moved
-  // one. shortcut: zenz's candidate stays second instead of where Mozc ranked
-  // it, which also keeps it within reach.
-  std::vector<int> mozc_indices;
-  for (const int index : zenz_indices) {
-    mozc_indices.push_back(index == 0 ? 0 : 1);
-  }
-  // zenz's candidate is the user's to pick now, and learned if picked.
-  context_->mutable_converter()->PromoteCandidates(
-      mozc_indices, 0, converter::Attribute::NO_LEARNING);
 }
 
-bool Session::ShowMozcAgain(absl::Span<const int> zenz_indices, bool live,
-                            commands::Command* command) {
+void Session::NoteRefusedWords(absl::Span<const int> zenz_indices) {
+  zenz_refused_.clear();
+  const Segments& shown = context_->converter().GetSegments();
+  // shortcut: a correction on zenz's own segments is not told word by word,
+  // as the commit will be on Mozc's segments; align the two if it matters.
+  if (!mozc_segments_.has_value() ||
+      zenz_indices.size() != shown.conversion_segments_size() ||
+      mozc_segments_->conversion_segments_size() !=
+          shown.conversion_segments_size()) {
+    return;
+  }
+  for (size_t i = 0; i < zenz_indices.size(); ++i) {
+    const Segment& segment = shown.conversion_segment(i);
+    if (segment.key() != mozc_segments_->conversion_segment(i).key()) {
+      zenz_refused_.clear();
+      return;
+    }
+    if (zenz_indices[i] == 0 || segment.candidates_size() == 0) {
+      continue;
+    }
+    const converter::Candidate& word = segment.candidate(0);
+    if (!word.content_key.empty() && !word.content_value.empty()) {
+      zenz_refused_.push_back({i, std::string(segment.key()), word.content_key,
+                               word.content_value});
+    }
+  }
+}
+
+bool Session::ShowMozcAgain(bool live, commands::Command* command) {
   command->mutable_output()->set_consumed(true);
-  RestoreMozcOrder(zenz_indices);
+  RestoreMozcOrder();
   live_conversion_ = live;
   if (live) {
     OutputLiveConversion(command);
@@ -3867,7 +3917,8 @@ bool Session::PollZenz(commands::Command* command) {
     // so that Space still brings back Mozc's result. It may be Mozc's result
     // itself.
     if (!zenz_indices_.empty()) {
-      RestoreMozcOrder(std::exchange(zenz_indices_, {}));
+      zenz_indices_.clear();
+      RestoreMozcOrder();
       mapping =
           floatype::MapWithResegmentation(context_->converter().GetSegments(),
                                           result.text, ZenzResegmenter(),

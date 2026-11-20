@@ -307,8 +307,16 @@ class Session {
   // The candidates zenz moved to the top while its correction is on screen;
   // empty otherwise.
   std::vector<int> zenz_indices_;
-  // Whether the candidates were opened on that correction (the first Space).
-  bool zenz_listed_ = false;
+  // The words of a correction the user left for Mozc's result with Space,
+  // until the conversion is committed or ends: the segment each was in (its
+  // index and key), and the content key and value of zenz's candidate.
+  struct RefusedWord {
+    size_t segment;
+    std::string segment_key;
+    std::string key;
+    std::string value;
+  };
+  std::vector<RefusedWord> zenz_refused_;
   // What the last commit changed in ZenzMemory::TurnedDown(), so that undoing
   // the commit takes it back: whether the word was added (or removed), its
   // reading and its writing.
@@ -428,11 +436,13 @@ class Session {
   // else.
   bool CorrectWithZenzNow(commands::Command* command);
   // Space while zenz's correction is shown: Mozc's result again.
-  bool ShowMozcAgain(absl::Span<const int> zenz_indices, bool live,
-                     commands::Command* command);
+  // Notes the words zenz changed in the correction on screen (the segments
+  // where `zenz_indices` is not 0), before Space brings Mozc's result back.
+  void NoteRefusedWords(absl::Span<const int> zenz_indices);
+  bool ShowMozcAgain(bool live, commands::Command* command);
   // Puts Mozc's candidates back on top where zenz's correction moved others,
   // or Mozc's segments back where it segmented the conversion again.
-  void RestoreMozcOrder(absl::Span<const int> zenz_indices);
+  void RestoreMozcOrder();
   // Tells the client what the indicator next to the composition shows.
   void SetIndicator(commands::Command* command) const;
   // Tells the renderer the candidate window's font scale and colors, when
