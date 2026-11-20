@@ -977,6 +977,8 @@ TEST_F(FloatypeZenzTest, MixedEnglishKeepsAnEnglishWordInLetters) {
   config::Config config = config::ConfigHandler::DefaultConfig();
   config.set_mixed_english(true);
   config.set_use_live_conversion(false);
+  // Its Henkan key converts; Space after an English word types a space.
+  config.set_session_keymap(config::Config::MSIME);
   commands::Input input;
   input.set_type(commands::Input::SET_CONFIG);
   *input.mutable_config() = config;
@@ -986,7 +988,7 @@ TEST_F(FloatypeZenzTest, MixedEnglishKeepsAnEnglishWordInLetters) {
       SendKeys({"k", "e", "y", "b", "o", "a", "r", "d"});
   EXPECT_NE(Preedit(typed), "keyboard") << "still kana while typing";
   EXPECT_TRUE(typed.indicator().english());
-  const commands::Output converted = SendKeys({"Space"});
+  const commands::Output converted = SendKeys({"Henkan"});
   EXPECT_EQ(Preedit(converted), "keyboard");
   EXPECT_TRUE(converted.indicator().english());
   EXPECT_EQ(SendKeys({"Enter"}).result().value(), "keyboard");
@@ -1097,6 +1099,8 @@ TEST_F(FloatypeZenzTest, MixedEnglishKeepsAWordTypedWhollyIntoKana) {
   config::Config config = config::ConfigHandler::DefaultConfig();
   config.set_mixed_english(true);
   config.set_use_live_conversion(false);
+  // Its Henkan key converts; Space after an English word types a space.
+  config.set_session_keymap(config::Config::MSIME);
   commands::Input input;
   input.set_type(commands::Input::SET_CONFIG);
   *input.mutable_config() = config;
@@ -1105,28 +1109,28 @@ TEST_F(FloatypeZenzTest, MixedEnglishKeepsAWordTypedWhollyIntoKana) {
   const commands::Output typed = SendKeys({"b", "e", "f", "o", "r", "e"});
   EXPECT_EQ(Preedit(typed), "べふぉれ") << "still kana while typing";
   EXPECT_TRUE(typed.indicator().english());
-  EXPECT_EQ(Preedit(SendKeys({"Space"})), "before");
+  EXPECT_EQ(Preedit(SendKeys({"Henkan"})), "before");
   EXPECT_EQ(SendKeys({"Enter"}).result().value(), "before");
 
   // before/after: the / after the word is a /, and both words stay letters.
   SendKeys({"b", "e", "f", "o", "r", "e", "/", "a", "f", "t", "e", "r"});
-  EXPECT_EQ(Preedit(SendKeys({"Space"})), "before/after");
+  EXPECT_EQ(Preedit(SendKeys({"Henkan"})), "before/after");
   EXPECT_EQ(SendKeys({"Enter"}).result().value(), "before/after");
 
   // Japanese stays Japanese.
   const commands::Output made = SendKeys({"m", "a", "d", "e"});
   EXPECT_FALSE(made.indicator().english());
-  EXPECT_NE(Preedit(SendKeys({"Space"})), "made");
+  EXPECT_NE(Preedit(SendKeys({"Henkan"})), "made");
   SendKeys({"Escape"});
   SendKeys({"Escape"});
 
   // The Japanese is one key away: F6 writes the keys in hiragana again.
-  SendKeys({"b", "e", "f", "o", "r", "e", "Space"});
+  SendKeys({"b", "e", "f", "o", "r", "e", "Henkan"});
   EXPECT_EQ(Preedit(SendKeys({"F6"})), "べふぉれ");
   SendKeys({"Escape"});
   SendKeys({"Escape"});
-  // Space again goes through the letters' cases, as for any word in letters.
-  SendKeys({"b", "e", "f", "o", "r", "e", "Space"});
+  // Space then goes through the letters' cases, as for any word in letters.
+  SendKeys({"b", "e", "f", "o", "r", "e", "Henkan"});
   EXPECT_EQ(Preedit(SendKeys({"Space"})), "BEFORE");
 }
 
@@ -1215,6 +1219,256 @@ TEST_F(FloatypeZenzTest, MixedEnglishKeepsAKanaWordInsideJapanese) {
   SendKeys({"Enter"});
 }
 
+TEST_F(FloatypeZenzTest, MixedEnglishSpaceAfterAnEnglishWordTypesASpace) {
+  floatype::EnableSessionFeatures(true);
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_mixed_english(true);
+  config.set_use_live_conversion(false);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+  const auto type = [&](absl::string_view keys) {
+    commands::Output output;
+    for (const char key : keys) {
+      output = SendKeys({std::string(1, key)});
+    }
+    return output;
+  };
+
+  // English word by word: each Space commits the word and a half-width space.
+  type("this");
+  commands::Output spaced = SendKeys({"Space"});
+  EXPECT_EQ(spaced.result().value(), "this ");
+  EXPECT_EQ(Preedit(spaced), "");
+  EXPECT_TRUE(spaced.consumed());
+  // A word typed wholly into kana that does not read as Japanese (おぺん).
+  type("open");
+  EXPECT_EQ(SendKeys({"Space"}).result().value(), "open ");
+  // The marks of English prose after the word are typed as they are.
+  type("hello,");
+  EXPECT_EQ(SendKeys({"Space"}).result().value(), "hello, ");
+
+  // After Japanese too: the Japanese converts, and commits with the word.
+  type("korehapull");
+  spaced = PollWhileAsked(SendKeys({"Space"}));
+  EXPECT_EQ(spaced.result().value(), "これはpull ");
+  EXPECT_EQ(Preedit(spaced), "");
+
+  // Japanese still converts: no kana and a space.
+  type("kyouha");
+  spaced = SendKeys({"Space"});
+  EXPECT_FALSE(spaced.has_result());
+  EXPECT_EQ(Preedit(spaced), "今日は");
+  SendKeys({"Enter"});
+  // A word that reads as Japanese is Japanese: まで, not made.
+  type("made");
+  spaced = SendKeys({"Space"});
+  EXPECT_FALSE(spaced.has_result());
+  EXPECT_THAT(Preedit(spaced), ::testing::Not(::testing::HasSubstr("made")));
+  SendKeys({"Enter"});
+  // After Japanese, a mark at the end closes the Japanese sentence.
+  type("korehatest.");
+  spaced = SendKeys({"Space"});
+  EXPECT_FALSE(spaced.has_result());
+  SendKeys({"Enter"});
+}
+
+TEST_F(FloatypeZenzTest, MixedEnglishGoesOnInEnglishAfterAWordAndASpace) {
+  floatype::EnableSessionFeatures(true);
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_mixed_english(true);
+  config.set_use_live_conversion(false);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+  const auto type = [&](absl::string_view keys) {
+    commands::Output output;
+    for (const char key : keys) {
+      output = SendKeys({std::string(1, key)});
+    }
+    return output;
+  };
+
+  // how are you: あれ and よう are Japanese, but not after "how ".
+  type("how");
+  EXPECT_EQ(SendKeys({"Space"}).result().value(), "how ");
+  type("are");
+  EXPECT_EQ(SendKeys({"Space"}).result().value(), "are ");
+  // Space commits the word as typed; Enter commits what shows.
+  type("you.");
+  EXPECT_EQ(SendKeys({"Space"}).result().value(), "you. ");
+  // Japanese after it converts, and ends the run.
+  type("kyouha");
+  commands::Output spaced = SendKeys({"Space"});
+  EXPECT_FALSE(spaced.has_result());
+  EXPECT_EQ(Preedit(spaced), "今日は");
+  SendKeys({"Enter"});
+  type("are");
+  spaced = SendKeys({"Space"});
+  EXPECT_FALSE(spaced.has_result()) << "あれ again";
+  SendKeys({"Enter"});
+
+  // A key that leaves nothing composed ends the run too.
+  type("how");
+  SendKeys({"Space"});
+  SendKeys({"Left"});
+  type("are");
+  spaced = SendKeys({"Space"});
+  EXPECT_FALSE(spaced.has_result());
+  SendKeys({"Enter"});
+
+  // Short words with a letter no kana takes, and commands of letters only.
+  type("of");
+  EXPECT_EQ(SendKeys({"Space"}).result().value(), "of ");
+  type("course");
+  EXPECT_EQ(SendKeys({"Space"}).result().value(), "course ");
+  SendKeys({"Left"});
+  type("ls");
+  EXPECT_EQ(SendKeys({"Space"}).result().value(), "ls ");
+  type("-la");
+  EXPECT_EQ(SendKeys({"Space"}).result().value(), "-la ");
+}
+
+TEST_F(FloatypeZenzTest, MixedEnglishKeepsWordsRunTogetherAndJoinedNames) {
+  floatype::EnableSessionFeatures(true);
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_mixed_english(true);
+  config.set_use_live_conversion(false);
+  // Its Henkan key converts; Space after an English word types a space.
+  config.set_session_keymap(config::Config::MSIME);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+  const auto convert = [&](absl::string_view keys) {
+    for (const char key : keys) {
+      SendKeys({std::string(1, key)});
+    }
+    const std::string shown = Preedit(SendKeys({"Henkan"}));
+    SendKeys({"Enter"});
+    return shown;
+  };
+  EXPECT_EQ(convert("timeismoney"), "timeismoney");
+  EXPECT_EQ(convert("helloworld"), "helloworld");
+  EXPECT_EQ(convert("node_modules"), "node_modules");
+  EXPECT_EQ(convert("main.cc"), "main.cc");
+  EXPECT_EQ(convert("taro@example.com"), "taro@example.com");
+  // Japanese beside a word stays Japanese: まで is a word of the test data.
+  EXPECT_THAT(convert("pushmade"),
+              ::testing::AllOf(::testing::StartsWith("push"),
+                               ::testing::Not(::testing::HasSubstr("made"))));
+  EXPECT_THAT(convert("made.sore"),
+              ::testing::Not(::testing::HasSubstr("made")));
+}
+
+TEST_F(FloatypeZenzTest, MixedEnglishKeepsAWordBeforeACapital) {
+  floatype::EnableSessionFeatures(true);
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_mixed_english(true);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+  // camelCase: Shift+C turns the mode to letters, where nothing converts,
+  // but camel was typed in kana (かめl).
+  commands::Output output;
+  for (const char key : std::string_view("camelCase")) {
+    output = SendKeys({std::string(1, key)});
+  }
+  EXPECT_EQ(Preedit(PollWhileAsked(CallBack(output))), "camelCase");
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(), "camelCase");
+  // Letters after Japanese are left to the user, as before.
+  for (const char key : std::string_view("kikaiOK")) {
+    output = SendKeys({std::string(1, key)});
+  }
+  EXPECT_FALSE(output.has_callback());
+  SendKeys({"Escape"});
+  SendKeys({"Escape"});
+}
+
+TEST_F(FloatypeZenzTest, MixedEnglishUndoTakesBackTheSpaceToo) {
+  floatype::EnableSessionFeatures(true);
+  // A client that lets the converter delete what it committed.
+  commands::Input create;
+  create.set_type(commands::Input::CREATE_SESSION);
+  create.mutable_capability()->set_text_deletion(
+      commands::Capability::DELETE_PRECEDING_TEXT);
+  id_ = Eval(std::move(create)).id();
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_mixed_english(true);
+  config.set_use_live_conversion(false);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+  for (const char key : std::string_view("korehapull")) {
+    SendKeys({std::string(1, key)});
+  }
+  EXPECT_EQ(PollWhileAsked(SendKeys({"Space"})).result().value(),
+            "これはpull ");
+  // The key asks the client to send the command.
+  const commands::Output undone = CallBack(SendKeys({"Ctrl Backspace"}));
+  EXPECT_EQ(undone.deletion_range().length(), 8);
+  EXPECT_EQ(undone.deletion_range().offset(), -8);
+  EXPECT_EQ(Preedit(undone), "これはpull");
+}
+
+TEST_F(FloatypeZenzTest, MixedEnglishSpaceAfterALiveConversionTypesASpace) {
+  floatype::EnableSessionFeatures(true);
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_mixed_english(true);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+  commands::Output output;
+  for (const char key : std::string_view("korehapull")) {
+    output = SendKeys({std::string(1, key)});
+  }
+  // The pause shows これはpull; Space then commits it and a space.
+  EXPECT_EQ(Preedit(PollWhileAsked(CallBack(output))), "これはpull");
+  const commands::Output spaced = PollWhileAsked(SendKeys({"Space"}));
+  EXPECT_EQ(spaced.result().value(), "これはpull ");
+  EXPECT_EQ(Preedit(spaced), "");
+}
+
+TEST_F(FloatypeZenzTest, MixedEnglishKeepsSymbolsBetweenWordsAsTyped) {
+  floatype::EnableSessionFeatures(true);
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_mixed_english(true);
+  config.set_use_live_conversion(false);
+  // Its Henkan key converts; Space after an English word types a space.
+  config.set_session_keymap(config::Config::MSIME);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+  const auto convert = [&](absl::string_view keys) {
+    for (const char key : keys) {
+      SendKeys({std::string(1, key)});
+    }
+    const std::string shown = Preedit(SendKeys({"Henkan"}));
+    SendKeys({"Enter"});
+    return shown;
+  };
+  EXPECT_EQ(convert("config.toml"), "config.toml");
+  EXPECT_EQ(convert("foo_bar"), "foo_bar");
+  EXPECT_EQ(convert("--help"), "--help");
+  EXPECT_EQ(convert("localhost:3000"), "localhost:3000");
+  // Inside Japanese too.
+  EXPECT_EQ(convert("kyouhaconfig.tomlwohiraku"), "今日はconfig.tomlを開く");
+  // Brackets stay Japanese, and so does a mark between kana.
+  EXPECT_EQ(convert("[file]"), "「file」");
+  EXPECT_THAT(convert("kyouha.asita"), ::testing::StartsWith("今日は。"));
+  // Space commits a name as it shows.
+  for (const char key : std::string_view("config.toml")) {
+    SendKeys({std::string(1, key)});
+  }
+  EXPECT_EQ(SendKeys({"Space"}).result().value(), "config.toml ");
+}
+
 TEST_F(FloatypeZenzTest, WithoutMixedEnglishAKanaWordInsideJapaneseIsKana) {
   floatype::EnableSessionFeatures(true);
   config::Config config = config::ConfigHandler::DefaultConfig();
@@ -1290,6 +1544,8 @@ TEST_F(FloatypeZenzTest, MixedEnglishGoesOnInKanaWithTheLongVowelKey) {
 }
 
 // Sets the config for the tests of / after a letter or a digit.
+// The MS-IME key map has a key that converts an English word (Henkan):
+// Space after one types a space.
 #define SET_SLASH_CONFIG(mixed_english, slash)                       \
   floatype::EnableSessionFeatures(true);                             \
   {                                                                  \
@@ -1297,6 +1553,7 @@ TEST_F(FloatypeZenzTest, MixedEnglishGoesOnInKanaWithTheLongVowelKey) {
     config.set_mixed_english(mixed_english);                         \
     config.set_slash_after_ascii(slash);                             \
     config.set_use_live_conversion(false);                           \
+    config.set_session_keymap(config::Config::MSIME);                \
     commands::Input input;                                           \
     input.set_type(commands::Input::SET_CONFIG);                     \
     *input.mutable_config() = config;                                \
@@ -1329,7 +1586,7 @@ TEST_F(FloatypeZenzTest, SlashAfterKanaIsStillTheMiddleDot) {
 TEST_F(FloatypeZenzTest, SlashAfterAnEnglishWordIsASlash) {
   SET_SLASH_CONFIG(true, true);
   SendKeys({"t", "e", "s", "t", "/", "s", "p", "e", "c"});
-  EXPECT_EQ(Preedit(SendKeys({"Space"})), "test/spec");
+  EXPECT_EQ(Preedit(SendKeys({"Henkan"})), "test/spec");
   EXPECT_EQ(SendKeys({"Enter"}).result().value(), "test/spec");
 
   // Loose letters that are no word in the list (src), two or more.
@@ -1341,13 +1598,13 @@ TEST_F(FloatypeZenzTest, SlashAfterAnEnglishWordIsASlash) {
 TEST_F(FloatypeZenzTest, SlashRightAfterCommittingAnEnglishWordIsASlash) {
   SET_SLASH_CONFIG(true, true);
   // No app tells what precedes the caret here, as in a terminal.
-  SendKeys({"k", "e", "y", "b", "o", "a", "r", "d", "Space"});
+  SendKeys({"k", "e", "y", "b", "o", "a", "r", "d", "Henkan"});
   ASSERT_EQ(SendKeys({"Enter"}).result().value(), "keyboard");
   EXPECT_EQ(Preedit(SendKeys({"/"})), "/");
   SendKeys({"Escape"});
 
   // Typing / on the conversion commits it and goes on.
-  SendKeys({"k", "e", "y", "b", "o", "a", "r", "d", "Space"});
+  SendKeys({"k", "e", "y", "b", "o", "a", "r", "d", "Henkan"});
   const commands::Output slash = SendKeys({"/"});
   EXPECT_EQ(slash.result().value(), "keyboard");
   EXPECT_EQ(Preedit(slash), "/");
@@ -1358,7 +1615,7 @@ TEST_F(FloatypeZenzTest, SlashRightAfterCommittingAnEnglishWordIsASlash) {
   ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機会");
   EXPECT_EQ(Preedit(SendKeys({"/"})), "・");
   SendKeys({"Escape"});
-  SendKeys({"k", "e", "y", "b", "o", "a", "r", "d", "Space"});
+  SendKeys({"k", "e", "y", "b", "o", "a", "r", "d", "Henkan"});
   ASSERT_EQ(SendKeys({"Enter"}).result().value(), "keyboard");
   SendKeys({"a", "Backspace"});
   EXPECT_EQ(Preedit(SendKeys({"/"})), "・");

@@ -339,6 +339,20 @@ class Session {
   // After a typed character: when it is one of the direct commit characters,
   // converts, asks zenz, and commits once it answers. Returns whether it did.
   bool MaybeCommitOnCharacter(commands::Command* command);
+  // Converts the composition, asks zenz, and commits once it answers or a
+  // key comes first.
+  bool ConvertAndCommit(commands::Command* command);
+  // Mixed English input: the Space key after an English word commits the
+  // composition and types a half-width space, so English is written word by
+  // word with no mode switch (time is money). The word may end Japanese
+  // (これはpull + Space), which converts first, and may be followed by . , !
+  // ? ; or : where the composition holds no kana (thank you.). `live` says a
+  // live conversion was on screen. Returns whether the key did so.
+  bool TypeSpaceAfterEnglish(bool live, commands::Command* command);
+  // The space that follows what ConvertAndCommit() commits for
+  // TypeSpaceAfterEnglish(), and adding it to the text just committed.
+  bool space_after_commit_ = false;
+  void AppendCommittedSpace(commands::Command* command);
   // floatype: the readings of the dictionary's words that start a key
   // (EngineConverter's LookupWords()).
   floatype::ReadingLookup DictionaryReadings() const;
@@ -358,8 +372,21 @@ class Session {
   // into the letters typed, so it converts, and stays, as typed; words typed
   // wholly into kana inside Japanese too (floatype::KanaSearch). With
   // `undoable` (a live conversion), a word ending the composition in loose
-  // letters can be undone by the next key (see english_undo_).
-  void KeepEnglishWords(bool undoable);
+  // letters can be undone by the next key (see english_undo_). Where no kana
+  // are left, the symbols between the words are typed again as they were
+  // typed (floatype::SymbolsAsTyped(), with its `prose`).
+  void KeepEnglishWords(bool undoable, bool prose = false);
+  // Whether the composition holds an English word still to turn into letters.
+  bool HasEnglishWords() const;
+  // The same in `composer`, which need not be the session's. Returns whether
+  // the word it kept at the end may go on in kana.
+  bool KeepEnglishWordsIn(composer::Composer* composer, bool prose) const;
+  // Mixed English input: English is being written word by word, since the
+  // Space key committed a word and typed a space (TypeSpaceAfterEnglish()).
+  // While the next word is typed, its keys are that word whatever kana they
+  // type (you, are, a). Any other commit, and any key or command that leaves
+  // nothing composed, ends the run.
+  bool english_run_ = false;
   // The composition as typed, before a live conversion kept a word that ends
   // it in loose letters: the user may have paused inside a syllable
   // (きょうは + s reads "has", but may go on to きょうはしる). The next letter

@@ -42,6 +42,7 @@
 #include "absl/log/check.h"
 #include "absl/log/log.h"
 #include "absl/strings/ascii.h"
+#include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
 #include "absl/functional/function_ref.h"
 #include "absl/strings/string_view.h"
@@ -345,6 +346,8 @@ bool Session::SendCommand(commands::Command* command) {
       zenz_.Cancel();
       StopWaitingForZenz();
       commit_after_zenz_ = false;
+      space_after_commit_ = false;
+      english_run_ = false;
       zenz_indices_.clear();
       mozc_segments_.reset();
       live_conversion_ = false;
@@ -616,6 +619,8 @@ bool Session::SendKey(commands::Command* command) {
   zenz_.Cancel();
   zenz_scheduled_ = false;
   StopWaitingForZenz();
+  // The commit waiting for zenz is the word of the Space before this key.
+  const bool space_pending = space_after_commit_;
   // floatype: a key before zenz answered a direct commit commits what is on
   // screen; Enter does only that, other keys go on as typed after it.
   if (std::exchange(commit_after_zenz_, false) &&
@@ -624,11 +629,16 @@ bool Session::SendKey(commands::Command* command) {
     if (context_->GetKeyMapManager().GetCommandConversion(
             command->input().key(), &key_command) &&
         key_command == keymap::ConversionState::COMMIT) {
-      return Commit(command);
+      const bool committed = Commit(command);
+      AppendCommittedSpace(command);
+      return committed;
     }
     CommitNotTriggeringZeroQuerySuggest(command);
+    AppendCommittedSpace(command);
     live_conversion_ = false;
   }
+  space_after_commit_ = false;
+  const bool run_committed = space_pending && command->output().has_result();
   const std::vector<int> zenz_indices = std::exchange(zenz_indices_, {});
   const bool live = live_conversion_;
   live_conversion_ = false;
@@ -666,10 +676,14 @@ bool Session::SendKey(commands::Command* command) {
     ClearUndoContext();
   }
 
+  // floatype: Space after an English word commits and types a space.
+  const bool spaced = TypeSpaceAfterEnglish(live, command);
+
   // floatype: while zenz's correction is shown, Space (any key for the next
   // candidate) shows Mozc's result again. Nothing learns from it.
   if (keymap::ConversionState::Commands key_command;
-      !zenz_indices.empty() && context_->state() == ImeContext::CONVERSION &&
+      !spaced && !zenz_indices.empty() &&
+      context_->state() == ImeContext::CONVERSION &&
       context_->GetKeyMapManager().GetCommandConversion(command->input().key(),
                                                         &key_command) &&
       key_command == keymap::ConversionState::CONVERT_NEXT) {
@@ -717,8 +731,8 @@ bool Session::SendKey(commands::Command* command) {
   const std::vector<std::string> following =
       context_->GetKeyMapManager().GetFollowingCommands(KeymapStateName(),
                                                         command->input().key());
-  bool result = false;
-  switch (context_->state()) {
+  bool result = spaced;
+  switch (spaced ? ImeContext::NONE : context_->state()) {
     case ImeContext::DIRECT:
       result = SendKeyDirectInputState(command);
       break;
@@ -736,12 +750,14 @@ bool Session::SendKey(commands::Command* command) {
       break;
 
     case ImeContext::NONE:
-      result = false;
       break;
   }
   // A later command the state does not have is skipped; the key stays as the
   // first command left it.
   for (const std::string& name : following) {
+    if (spaced) {
+      break;
+    }
     RunNamedCommand(name, command);
   }
 
@@ -765,6 +781,12 @@ bool Session::SendKey(commands::Command* command) {
           japanese::FullWidthAsciiToHalfWidthAscii(zenz_text_)) {
     floatype::ZenzMemory::Accepted().Add(zenz_reading_, zenz_text_);
   }
+  // A run of English goes on while its next word is typed: any other commit,
+  // and any key that leaves nothing composed, ends it.
+  english_run_ = spaced ||
+                 (english_run_ &&
+                  context_->state() != ImeContext::PRECOMPOSITION &&
+                  (run_committed || !command->output().has_result()));
   WarmZenz();
   if (MaybeCommitOnCharacter(command)) {
     SetIndicator(command);
@@ -877,6 +899,12 @@ bool Session::SendKeyPrecompositionState(commands::Command* command) {
     *context_->mutable_client_context() = command->input().context();
   } else {
     context_->mutable_client_context()->Clear();
+  }
+  // floatype: after an English word and the space this session typed, the
+  // next word converts as the start of a phrase. Mozc would take the word
+  // before the space for the one before it: に after "push " came out 二.
+  if (english_run_) {
+    context_->mutable_client_context()->clear_preceding_text();
   }
 
   return RunPrecompositionCommand(key_command, command);
@@ -2698,9 +2726,17 @@ void Session::MaybeScheduleLiveConversion(commands::Command* command) {
       context_->composer().GetInputMode();
   if (!floatype::SessionFeaturesEnabled() || !config.use_live_conversion() ||
       context_->state() != ImeContext::COMPOSITION ||
-      command->output().has_callback() || mode == transliteration::HALF_ASCII ||
+      command->output().has_callback() ||
       mode == transliteration::FULL_ASCII ||
       context_->composer().GetLength() < config.live_conversion_min_chars()) {
+    return;
+  }
+  // In a mode of letters there is nothing to convert, but for an English
+  // word typed in kana before a capital turned the mode (camel of camelCase).
+  if (mode == transliteration::HALF_ASCII &&
+      (!config.mixed_english() ||
+       context_->composer().GetComebackInputMode() == mode ||
+       !HasEnglishWords())) {
     return;
   }
   SetCallback(command, commands::SessionCommand::LIVE_CONVERT,
@@ -2941,14 +2977,26 @@ bool Session::IsSlashAfterAscii(const commands::KeyEvent& key,
          ends_in_ascii(segments.history_segment(history - 1).candidate(0).value);
 }
 
-void Session::KeepEnglishWords(bool undoable) {
+bool Session::HasEnglishWords() const {
+  return !EnglishView(context_->composer(), KanaReadsAsJapanese())
+              .spans.empty();
+}
+
+void Session::KeepEnglishWords(bool undoable, bool prose) {
   english_undo_.reset();
   if (!floatype::SessionFeaturesEnabled() ||
       !context_->GetConfig().mixed_english() ||
       context_->state() != ImeContext::COMPOSITION) {
     return;
   }
-  composer::Composer* composer = context_->mutable_composer();
+  composer::Composer typed = context_->composer();
+  if (KeepEnglishWordsIn(context_->mutable_composer(), prose) && undoable) {
+    english_undo_ = std::move(typed);
+  }
+}
+
+bool Session::KeepEnglishWordsIn(composer::Composer* composer,
+                                 bool prose) const {
   const floatype::KanaSearch search = {
       .lookup = DictionaryReadings(),
       .starts_word =
@@ -2968,11 +3016,12 @@ void Session::KeepEnglishWords(bool undoable) {
           },
   };
   const EnglishView view(*composer, KanaReadsAsJapanese(), &search);
-  const std::vector<floatype::EnglishSpan>& spans = view.spans;
+  std::vector<floatype::EnglishSpan> spans = view.spans;
   // The query writes a loose letter half width; the preedit, full width. A
   // word typed wholly into kana may go on as Japanese too (ばせ of ばせい is
   // base).
-  if (undoable && !spans.empty() && spans.back().end == view.raws.size() &&
+  bool may_go_on =
+      !spans.empty() && spans.back().end == view.raws.size() &&
       ((view.query.back().size() == 1 &&
         absl::ascii_isalpha(
             static_cast<unsigned char>(view.query.back()[0])) &&
@@ -2982,9 +3031,38 @@ void Session::KeepEnglishWords(bool undoable) {
                       return c.size() == 1 &&
                              absl::ascii_isalpha(
                                  static_cast<unsigned char>(c[0]));
-                    }))) {
-    english_undo_ = *composer;
+                    }));
+  // Where English is written word by word, the keys of a word are the word.
+  if (std::optional<floatype::EnglishSpan> word = floatype::WholeEnglishWord(
+          view.raws, view.query, view.preedit,
+          *floatype::CurrentEnglishWords(), english_run_, prose)) {
+    spans = {*std::move(word)};
+    may_go_on = true;
+  } else if (std::optional<floatype::EnglishSpan> together =
+                 floatype::WordsRunTogether(view.raws, view.query, view.preedit,
+                                            *floatype::CurrentEnglishWords(),
+                                            spans, KanaReadsAsJapanese())) {
+    spans = {*std::move(together)};
+    may_go_on = true;
+  } else {
+    for (floatype::EnglishSpan& name : floatype::JoinedNames(
+             view.raws, view.query, view.preedit,
+             *floatype::CurrentEnglishWords(), spans)) {
+      spans.push_back(std::move(name));
+    }
   }
+  // With no kana left, the symbols between the words stay as typed too.
+  for (floatype::EnglishSpan& symbol : floatype::SymbolsAsTyped(
+           view.raws, view.query, view.preedit, spans, prose)) {
+    spans.push_back(std::move(symbol));
+  }
+  if (spans.empty()) {
+    return false;  // Moving the cursor would turn the mode to the letters'.
+  }
+  std::sort(spans.begin(), spans.end(),
+            [](const floatype::EnglishSpan& a, const floatype::EnglishSpan& b) {
+              return a.begin < b.begin;
+            });
   size_t cursor = composer->GetCursor();
   const transliteration::TransliterationType mode = composer->GetInputMode();
   const transliteration::TransliterationType comeback =
@@ -3015,12 +3093,11 @@ void Session::KeepEnglishWords(bool undoable) {
   composer->MoveCursorTo(cursor);
   // Moving the cursor made the mode follow the letters; typing goes on in
   // the mode it was in.
-  if (!spans.empty()) {
-    composer->SetInputMode(comeback);
-    if (mode != comeback) {
-      composer->SetTemporaryInputMode(mode);
-    }
+  composer->SetInputMode(comeback);
+  if (mode != comeback) {
+    composer->SetTemporaryInputMode(mode);
   }
+  return may_go_on;
 }
 
 void Session::PreferTypedLetters() {
@@ -3032,13 +3109,59 @@ void Session::PreferTypedLetters() {
       context_->state() != ImeContext::CONVERSION) {
     return;
   }
+  const auto segments =
+      context_->converter().GetSegments().conversion_segments();
+  // A segment of symbols that join names (. _ @ : = -), typed in a kana mode.
+  const auto joins = [](absl::string_view key) {
+    return !key.empty() && std::all_of(key.begin(), key.end(), [](char c) {
+      return absl::StrContains("._/@:=-$#+&*%^\\|~<>", c);
+    });
+  };
+  const auto alnum = [](char c) {
+    return absl::ascii_isalnum(static_cast<unsigned char>(c));
+  };
+  const auto has_letter = [](absl::string_view key) {
+    return std::any_of(key.begin(), key.end(), [](char c) {
+      return absl::ascii_isalpha(static_cast<unsigned char>(c));
+    });
+  };
   std::vector<int> indices;
   bool promotes = false;
-  for (const Segment& segment :
-       context_->converter().GetSegments().conversion_segments()) {
+  size_t at = 0;
+  for (const Segment& segment : segments) {
+    const size_t i = at++;
     int& index = indices.emplace_back(0);
-    if (segment.candidates_size() == 0 ||
-        std::none_of(segment.key().begin(), segment.key().end(),
+    if (segment.candidates_size() == 0) {
+      continue;
+    }
+    // Symbols between letters typed as they are, or before them at the
+    // start, stay as typed too: config.toml, @src/app.ts, key=value.
+    if (letters && joins(segment.key())) {
+      size_t before = i;
+      while (before > 0 && joins(segments[before - 1].key())) {
+        --before;
+      }
+      size_t after = i + 1;
+      while (after < segments.size() && joins(segments[after].key())) {
+        ++after;
+      }
+      if (after < segments.size() && !segments[after].key().empty() &&
+          alnum(segments[after].key().front()) &&
+          (before == 0 || alnum(segments[before - 1].key().back())) &&
+          (has_letter(segments[after].key()) ||
+           (before > 0 && has_letter(segments[before - 1].key())))) {
+        for (int c = 1; c < segment.candidates_size() && index == 0 &&
+                        segment.candidate(0).value != segment.key();
+             ++c) {
+          if (segment.candidate(c).value == segment.key()) {
+            index = c;
+          }
+        }
+        promotes = promotes || index > 0;
+        continue;
+      }
+    }
+    if (std::none_of(segment.key().begin(), segment.key().end(),
                      [&](char c) {
                        return (letters && absl::ascii_isalpha(
                                               static_cast<unsigned char>(c))) ||
@@ -3048,11 +3171,11 @@ void Session::PreferTypedLetters() {
     }
     const std::string want =
         japanese::FullWidthAsciiToHalfWidthAscii(segment.candidate(0).value);
-    for (int i = 1; i < segment.candidates_size() && index == 0 &&
+    for (int c = 1; c < segment.candidates_size() && index == 0 &&
                     want != segment.candidate(0).value;
-         ++i) {
-      if (segment.candidate(i).value == want) {
-        index = i;
+         ++c) {
+      if (segment.candidate(c).value == want) {
+        index = c;
       }
     }
     promotes = promotes || index > 0;
@@ -3086,6 +3209,10 @@ bool Session::MaybeCommitOnCharacter(commands::Command* command) {
   if (!ends) {
     return false;
   }
+  return ConvertAndCommit(command);
+}
+
+bool Session::ConvertAndCommit(commands::Command* command) {
   // What InsertCharacter showed goes; the conversion is shown afresh.
   commands::Output* output = command->mutable_output();
   output->clear_preedit();
@@ -3097,6 +3224,7 @@ bool Session::MaybeCommitOnCharacter(commands::Command* command) {
   live_suggestions_.reset();
   output->clear_candidate_window();
   if (context_->state() != ImeContext::CONVERSION) {
+    space_after_commit_ = false;
     return true;
   }
   if (zenz_.pending()) {
@@ -3109,7 +3237,97 @@ bool Session::MaybeCommitOnCharacter(commands::Command* command) {
   output->clear_callback();
   live_conversion_ = false;
   CommitNotTriggeringZeroQuerySuggest(command);
+  AppendCommittedSpace(command);
   return true;
+}
+
+void Session::AppendCommittedSpace(commands::Command* command) {
+  if (!std::exchange(space_after_commit_, false) ||
+      !command->output().has_result()) {
+    return;
+  }
+  // The copy the context keeps says how much Undo deletes.
+  for (commands::Output* output :
+       {command->mutable_output(), context_->mutable_output()}) {
+    if (output->has_result()) {
+      output->mutable_result()->mutable_value()->push_back(' ');
+      output->mutable_result()->mutable_key()->push_back(' ');
+    }
+  }
+  // The space stands between the word and what is typed next, which converts
+  // as the start of a phrase: に after "push " is に, not 二.
+  context_->mutable_converter()->Reset();
+}
+
+bool Session::TypeSpaceAfterEnglish(bool live, commands::Command* command) {
+  if (!floatype::SessionFeaturesEnabled() ||
+      !context_->GetConfig().mixed_english() ||
+      !IsPureSpaceKey(command->input().key())) {
+    return false;
+  }
+  const bool shown_live = live && context_->state() == ImeContext::CONVERSION;
+  if (context_->state() != ImeContext::COMPOSITION && !shown_live) {
+    return false;
+  }
+  // In a mode of letters, Space is Mozc's: it joins the composition.
+  const transliteration::TransliterationType mode =
+      context_->composer().GetInputMode();
+  if (mode == transliteration::HALF_ASCII ||
+      mode == transliteration::FULL_ASCII ||
+      context_->composer().GetCursor() != context_->composer().GetLength()) {
+    return false;
+  }
+  // What Space would commit: the composition with its English as typed.
+  composer::Composer kept = context_->composer();
+  KeepEnglishWordsIn(&kept, true);
+  // A letter kept as typed shows as one byte; a loose letter, full width.
+  std::vector<std::string> shown;
+  const std::string preedit = kept.GetStringForPreedit();
+  for (const absl::string_view c : Utf8AsChars(preedit)) {
+    shown.emplace_back(c);
+  }
+  size_t end = shown.size();
+  while (end > 0 &&
+         absl::StrContains(".,!?;:。、．，！？；：", shown[end - 1])) {
+    --end;
+  }
+  const auto ascii = [](const std::string& c) {
+    return c.size() == 1 && absl::ascii_isgraph(static_cast<unsigned char>(c[0]));
+  };
+  if (end == 0 || shown[end - 1].size() != 1 ||
+      !absl::ascii_isalnum(static_cast<unsigned char>(shown[end - 1][0])) ||
+      std::none_of(shown.begin(), shown.begin() + end,
+                   [](const std::string& c) {
+                     return c.size() == 1 &&
+                            absl::ascii_isalpha(
+                                static_cast<unsigned char>(c[0]));
+                   })) {
+    return false;
+  }
+  const bool no_kana = std::all_of(shown.begin(), shown.begin() + end, ascii);
+  // After Japanese, the marks at the end close a Japanese sentence, and
+  // digits are the Japanese sentence's (fileは3 converts).
+  if (!no_kana &&
+      (end < shown.size() ||
+       !absl::ascii_isalpha(static_cast<unsigned char>(shown[end - 1][0])))) {
+    return false;
+  }
+  command->mutable_output()->set_consumed(true);
+  if (shown_live) {
+    context_->mutable_converter()->Cancel();
+    SetSessionState(ImeContext::COMPOSITION, context_.get());
+  }
+  *context_->mutable_composer() = std::move(kept);
+  english_undo_.reset();
+  english_run_ = true;
+  space_after_commit_ = true;
+  if (no_kana) {
+    // As it shows: nothing to convert.
+    const bool committed = Commit(command);
+    AppendCommittedSpace(command);
+    return committed;
+  }
+  return ConvertAndCommit(command);
 }
 
 commands::Preedit Session::ShownPreedit() const {
@@ -3520,7 +3738,9 @@ bool Session::PollZenz(commands::Command* command) {
       result.kind != floatype::ZenzCorrector::PollResult::kWait) {
     commit_after_zenz_ = false;
     live_conversion_ = false;
-    return CommitNotTriggeringZeroQuerySuggest(command);
+    const bool committed = CommitNotTriggeringZeroQuerySuggest(command);
+    AppendCommittedSpace(command);
+    return committed;
   }
   if (waiting_for_zenz_) {
     if (result.kind == floatype::ZenzCorrector::PollResult::kWait &&

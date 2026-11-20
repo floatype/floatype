@@ -6,6 +6,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -108,7 +109,12 @@ struct EnglishSpan {
 // left over, and leave none after it within its span; longer words win, so
 // "has" does not take the s of "slack". A span already shown as typed is left
 // out. Keys retyped start with a consonant, and are not letters still loose at
-// the end, which may yet make a longer word.
+// the end, which may yet make a longer word. With `search`, a word beside
+// which the kana read as Japanese comes before a longer one beside which they
+// do not (きょうはてsとぉ is 今日は + test + を, not きょう + hates + とぉ),
+// a word that ends where a kana begins comes before one that takes that
+// kana's first keys, and the s of し (shi) after a t, which the romaji left a
+// letter, is typed again (てstsひます is test + します, not tests + ひます).
 //
 // With `reads_as_japanese`, a run of kana with no letter beside it whose keys
 // are a word is a span too when the user added the word, or when the kana do
@@ -132,6 +138,64 @@ std::vector<EnglishSpan> EnglishSpans(
     const std::function<bool(absl::string_view kana)>& reads_as_japanese =
         nullptr,
     const KanaSearch* search = nullptr);
+
+// A composition that is one English word from end to end, as a span: its
+// keys are letters only, with . , ! ? ; or : after them at most.
+//   - In a run of English (`run`: a word and a space came just before), a
+//     word of `words` or a short word of prose (a, is, to), whatever kana its
+//     keys type (you is よう, are is あれ), and an option of a command
+//     (-m, --help).
+//   - At the Space key (`space`), such a word with a letter the romaji left
+//     over (of is おf), and keys that typed no kana at all (ls, npm), which
+//     can be nothing else.
+// Nothing where the word already shows as typed.
+std::optional<EnglishSpan> WholeEnglishWord(
+    const std::vector<std::string>& raws, const std::vector<std::string>& query,
+    const std::vector<std::string>& preedit, const EnglishWords& words,
+    bool run, bool space);
+
+// A composition that is English words typed with no space between them
+// (timeismoney, goodmorning), as a span: its keys are letters only and make
+// up two words or more of `words`, or of two letters where a letter stays
+// that no kana takes (is, it, of). Only where the words in `spans` leave
+// something that is not Japanese: letters the romaji left over, or kana
+// that `reads_as_japanese` does not read or that are the keys of a word the
+// user added (frontぱげ). あとでtest and pushして stay as they are, though
+// at + ode + test and push + site are words.
+std::optional<EnglishSpan> WordsRunTogether(
+    const std::vector<std::string>& raws, const std::vector<std::string>& query,
+    const std::vector<std::string>& preedit, const EnglishWords& words,
+    const std::vector<EnglishSpan>& spans,
+    const std::function<bool(absl::string_view kana)>& reads_as_japanese);
+
+// The pieces of a name joined by . _ / @ : = or - that are English too,
+// beside one that is (`spans`, and letters kept as typed):
+//   - a word of `words` whose keys typed kana that read as Japanese
+//     (node_modules, app.name; not a word before a period and a word, それ。
+//     test, which may be two sentences);
+//   - the ending of a file or a host after a period, where a letter stays,
+//     and with it a word before the period (main.cc, example.com);
+//   - what comes before @ (taro@example.com);
+//   - a piece with a letter no kana takes, where more follows (usr/local);
+//   - single letters, one of them no kana and not the last (a.b.c).
+std::vector<EnglishSpan> JoinedNames(
+    const std::vector<std::string>& raws, const std::vector<std::string>& query,
+    const std::vector<std::string>& preedit, const EnglishWords& words,
+    const std::vector<EnglishSpan>& spans);
+
+// The symbols and digits to type again as they were typed, each a span of one
+// character, in a composition that holds no kana: English words (`spans`, and
+// letters kept as typed) with symbols between them, which name a file, a
+// command or an address (config.toml, @src/app.ts, --help, localhost:3000).
+// Symbols that join such names are typed again where something follows them;
+// those at the end may close a Japanese sentence (test。) and stay, unless
+// `prose` says English is being written with spaces, where . , ! ? ; and :
+// are typed again too (hello, world.). Brackets and quotes always stay
+// (「file」).
+std::vector<EnglishSpan> SymbolsAsTyped(
+    const std::vector<std::string>& raws, const std::vector<std::string>& query,
+    const std::vector<std::string>& preedit,
+    const std::vector<EnglishSpan>& spans, bool prose);
 
 }  // namespace mozc::floatype
 

@@ -538,7 +538,8 @@ std::vector<EnglishSpan> SpansInKana(const std::vector<std::string>& raws,
 std::vector<EnglishSpan> SpansWithLetters(
     const std::vector<std::string>& raws, const std::vector<std::string>& query,
     const std::vector<std::string>& preedit, const EnglishWords& words,
-    const std::function<bool(absl::string_view kana)>& reads_as_japanese) {
+    const std::function<bool(absl::string_view kana)>& reads_as_japanese,
+    const KanaSearch* search) {
   const size_t size = raws.size();
   std::vector<EnglishSpan> candidates;
   if (query.size() != size || preedit.size() != size) {
@@ -596,8 +597,13 @@ std::vector<EnglishSpan> SpansWithLetters(
       if (raw.size() > kMaxLetters + 4) {
         break;
       }
-      // Letters after the span would belong to it.
-      if ((end < size && (letter[end] || Joined(query[end], raws[end]))) ||
+      // Letters after the span would belong to it, but for a capital typed
+      // with Shift, which starts the next word of a name (camelCase).
+      const bool capital =
+          end < size && raws[end].size() == 1 && preedit[end] == raws[end] &&
+          absl::ascii_isupper(static_cast<unsigned char>(raws[end][0]));
+      if ((end < size && !capital &&
+           (letter[end] || Joined(query[end], raws[end]))) ||
           shown == raw) {
         continue;
       }
@@ -632,20 +638,114 @@ std::vector<EnglishSpan> SpansWithLetters(
         if (in_word && !after_word) {
           candidates.push_back({begin, end, std::string(word),
                                 raw.substr(letters)});
+          // ts starts つ, so the s of し (shi) after a t stays a letter and
+          // the kana reads ひ: tests + ひます was typed as test + します.
+          if (search != nullptr && letters < raw.size() &&
+              word.ends_with('s') && raw[letters] == 'h' && letters >= 4 &&
+              words.Contains(word.substr(0, letters - 1))) {
+            candidates.push_back({begin, end,
+                                  std::string(word.substr(0, letters - 1)),
+                                  raw.substr(letters - 1)});
+          }
         }
         break;  // The longest word for this span.
       }
     }
   }
-  // Longer words first; for the same word, the span retyping least.
-  std::stable_sort(candidates.begin(), candidates.end(),
-                   [](const EnglishSpan& a, const EnglishSpan& b) {
-                     return a.word.size() != b.word.size()
-                                ? a.word.size() > b.word.size()
-                                : a.end - a.begin < b.end - b.begin;
-                   });
+  // With `search`, a candidate fits when the kana beside it read as Japanese:
+  // those before it, and those after it with its keys typed again.
+  // きょうはてsとぉかきます is 今日は + test + を書きます, not きょう + hates +
+  // とぉ書きます.
+  std::vector<bool> fits(candidates.size(), true);
+  if (search != nullptr) {
+    const absl::Span<const std::string> kana = absl::MakeConstSpan(query);
+    for (size_t c = 0; c < candidates.size(); ++c) {
+      const EnglishSpan& candidate = candidates[c];
+      size_t first = candidate.begin;
+      while (first > 0 && IsKana(query[first - 1])) {
+        --first;
+      }
+      size_t last = candidate.end;
+      while (last < size && IsKana(query[last])) {
+        ++last;
+      }
+      if (first < candidate.begin) {
+        KanaReader before(kana.subspan(first, candidate.begin - first),
+                          search->lookup);
+        fits[c] = before.Reads(0, before.size());
+      }
+      std::string lead;
+      if (!candidate.retyped.empty()) {
+        if (search->kana_of_keys) {
+          lead = search->kana_of_keys(candidate.retyped);
+        }
+        if (lead.empty()) {
+          fits[c] = false;  // No telling what the keys type.
+        }
+      }
+      if (!fits[c] || (lead.empty() && last == candidate.end)) {
+        continue;
+      }
+      KanaReader after(kana.subspan(candidate.end, last - candidate.end),
+                       search->lookup);
+      fits[c] = !lead.empty()
+                    ? after.ReadsAfter(lead, 0, after.size())
+                    : last == size
+                          ? after.ReadsSoFar(0, search->starts_word)
+                          : after.Reads(0, after.size());
+    }
+    // Leaves out the candidates for which `better` names a better one.
+    const auto leave_out =
+        [&](absl::FunctionRef<bool(const EnglishSpan& candidate,
+                                   const EnglishSpan& other)>
+                better) {
+          std::vector<EnglishSpan> kept;
+          std::vector<bool> kept_fits;
+          for (size_t c = 0; c < candidates.size(); ++c) {
+            bool out = false;
+            for (size_t u = 0; u < candidates.size() && !out; ++u) {
+              out = fits[u] && candidates[u].begin == candidates[c].begin &&
+                    better(candidates[c], candidates[u]);
+            }
+            if (!out) {
+              kept.push_back(candidates[c]);
+              kept_fits.push_back(fits[c]);
+            }
+          }
+          candidates = std::move(kept);
+          fits = std::move(kept_fits);
+        };
+    // The s of し is not the word's: test + します, not tests + ひます.
+    leave_out([](const EnglishSpan& candidate, const EnglishSpan& other) {
+      return other.retyped.starts_with("sh") &&
+             candidate.word.size() == other.word.size() + 1 &&
+             candidate.word.ends_with('s') &&
+             candidate.word.starts_with(other.word);
+    });
+    // A word that ends where a kana begins, and fits, keeps that kana whole,
+    // rather than a longer word taking its first keys.
+    leave_out([](const EnglishSpan& candidate, const EnglishSpan& other) {
+      return !candidate.retyped.empty() && other.retyped.empty() &&
+             other.end < candidate.end;
+    });
+  }
+  // Those that fit first, then longer words; for the same word, the span
+  // retyping least.
+  std::vector<size_t> order(candidates.size());
+  for (size_t i = 0; i < order.size(); ++i) {
+    order[i] = i;
+  }
+  std::stable_sort(order.begin(), order.end(), [&](size_t i, size_t j) {
+    const EnglishSpan& a = candidates[i];
+    const EnglishSpan& b = candidates[j];
+    return fits[i] != fits[j] ? fits[i]
+           : a.word.size() != b.word.size()
+               ? a.word.size() > b.word.size()
+               : a.end - a.begin < b.end - b.begin;
+  });
   std::vector<EnglishSpan> spans;
-  for (const EnglishSpan& candidate : candidates) {
+  for (const size_t i : order) {
+    const EnglishSpan& candidate = candidates[i];
     if (std::none_of(spans.begin(), spans.end(), [&](const EnglishSpan& s) {
           return candidate.begin < s.end && s.begin < candidate.end;
         })) {
@@ -667,7 +767,7 @@ std::vector<EnglishSpan> EnglishSpans(
     const std::function<bool(absl::string_view kana)>& reads_as_japanese,
     const KanaSearch* search) {
   std::vector<EnglishSpan> spans =
-      SpansWithLetters(raws, query, preedit, words, reads_as_japanese);
+      SpansWithLetters(raws, query, preedit, words, reads_as_japanese, search);
   const size_t size = raws.size();
   if (search == nullptr || query.size() != size || preedit.size() != size) {
     return spans;
@@ -728,6 +828,333 @@ std::vector<EnglishSpan> EnglishSpans(
               });
   }
   return spans;
+}
+
+std::optional<EnglishSpan> WholeEnglishWord(
+    const std::vector<std::string>& raws, const std::vector<std::string>& query,
+    const std::vector<std::string>& preedit, const EnglishWords& words,
+    bool run, bool space) {
+  const size_t size = raws.size();
+  if ((!run && !space) || query.size() != size || preedit.size() != size) {
+    return std::nullopt;
+  }
+  // The marks of prose after the word are not the word's.
+  size_t end = size;
+  while (end > 0 && raws[end - 1].size() == 1 &&
+         absl::StrContains(".,!?;:", raws[end - 1])) {
+    --end;
+  }
+  std::string word;
+  bool shown = true, loose = false, kana = false;
+  for (size_t i = 0; i < end; ++i) {
+    word += raws[i];
+    shown = shown && preedit[i] == raws[i];
+    const bool letter = IsLetter(query[i]);
+    loose = loose || (letter && preedit[i] != raws[i]);
+    kana = kana || !letter;
+  }
+  if (word.empty() || shown) {
+    return std::nullopt;
+  }
+  // -m, --help, -9: in a run, the option of a command.
+  const size_t dashes = word.starts_with("--") ? 2 : word.starts_with("-");
+  if (run && dashes > 0 && word.size() > dashes &&
+      std::all_of(word.begin() + dashes, word.end(), [](char c) {
+        return absl::ascii_isalnum(static_cast<unsigned char>(c));
+      })) {
+    return EnglishSpan{0, end, word, ""};
+  }
+  if (!IsAsciiLetters(word)) {
+    return std::nullopt;
+  }
+  // The lists hold words of three letters or more.
+  constexpr absl::string_view kShort =
+      " a i am an as at be by do go he hi if in is it me my no of oh ok on or "
+      "so to up us we ";
+  const bool listed =
+      word.size() <= 2
+          ? absl::StrContains(
+                kShort, absl::StrCat(" ", absl::AsciiStrToLower(word), " "))
+          : words.Contains(word);
+  if ((run && listed) || (space && listed && loose) ||
+      (space && !kana && word.size() >= 2)) {
+    return EnglishSpan{0, end, word, ""};
+  }
+  return std::nullopt;
+}
+
+std::optional<EnglishSpan> WordsRunTogether(
+    const std::vector<std::string>& raws, const std::vector<std::string>& query,
+    const std::vector<std::string>& preedit, const EnglishWords& words,
+    const std::vector<EnglishSpan>& spans,
+    const std::function<bool(absl::string_view kana)>& reads_as_japanese) {
+  const size_t size = raws.size();
+  if (query.size() != size || preedit.size() != size || !reads_as_japanese) {
+    return std::nullopt;
+  }
+  std::string keys;
+  // A letter the romaji left over with kana after it: no syllable still
+  // being typed, so the keys are not plain Japanese.
+  bool letter_inside = false, letter_seen = false;
+  bool shown = true;
+  for (size_t i = 0; i < size; ++i) {
+    keys += raws[i];
+    const bool stays = IsLetter(query[i]) && preedit[i] != raws[i];
+    letter_inside = letter_inside || (letter_seen && !stays);
+    letter_seen = letter_seen || stays;
+    shown = shown && preedit[i] == raws[i];
+  }
+  constexpr size_t kMaxKeys = 40;
+  if (shown || keys.size() < 6 || keys.size() > kMaxKeys ||
+      !IsAsciiLetters(keys)) {
+    return std::nullopt;
+  }
+  // What the words found so far leave: letters the romaji left over, but for
+  // those at the end, which may yet make a kana, and stretches of kana.
+  std::vector<bool> covered(size, false);
+  for (const EnglishSpan& span : spans) {
+    if (!span.retyped.empty() || span.end > size) {
+      return std::nullopt;
+    }
+    std::fill(covered.begin() + span.begin, covered.begin() + span.end, true);
+  }
+  const auto loose = [&](size_t i) {
+    return IsLetter(query[i]) && preedit[i] != raws[i];
+  };
+  bool japanese = true;
+  for (size_t i = 0; i < size && japanese;) {
+    if (covered[i] || preedit[i] == raws[i]) {
+      ++i;
+      continue;
+    }
+    if (loose(i)) {
+      japanese = false;
+      break;
+    }
+    // A stretch of kana: Japanese where it reads so, but for the keys of a
+    // word the user added (frontぱげ is frontpage).
+    std::string kana, typed;
+    while (i < size && !covered[i] && IsKana(query[i])) {
+      typed += raws[i];
+      kana += query[i++];
+    }
+    japanese = !kana.empty() && reads_as_japanese(kana) &&
+               !words.ContainsUser(typed);
+  }
+  if (japanese) {
+    return std::nullopt;
+  }
+  // The fewest words that make up the keys: of three letters or more, and
+  // where the keys are surely not plain Japanese, of two that leave a letter
+  // when typed alone (is, it, of; not no, to, go, which are の, と, ご after
+  // an English word). おきてねがおみてた is no ok + it + ...
+  constexpr absl::string_view kShort =
+      " am as at by if is it my of oh ok or up us ";
+  const std::string lower = absl::AsciiStrToLower(keys);
+  constexpr int kNone = 1 << 20;
+  std::vector<int> fewest(lower.size() + 1, kNone);
+  fewest[0] = 0;
+  for (size_t at = 0; at < lower.size(); ++at) {
+    if (fewest[at] == kNone) {
+      continue;
+    }
+    for (size_t length = 2; at + length <= lower.size() && length <= 24;
+         ++length) {
+      const absl::string_view word =
+          absl::string_view(lower).substr(at, length);
+      if (length == 2 ? letter_inside && absl::StrContains(
+                                             kShort, absl::StrCat(" ", word, " "))
+                      : words.Contains(word)) {
+        fewest[at + length] = std::min(fewest[at + length], fewest[at] + 1);
+      }
+    }
+  }
+  if (fewest.back() == kNone || fewest.back() < 2) {
+    return std::nullopt;
+  }
+  return EnglishSpan{0, size, keys, ""};
+}
+
+std::vector<EnglishSpan> JoinedNames(
+    const std::vector<std::string>& raws, const std::vector<std::string>& query,
+    const std::vector<std::string>& preedit, const EnglishWords& words,
+    const std::vector<EnglishSpan>& spans) {
+  const size_t size = raws.size();
+  if (query.size() != size || preedit.size() != size) {
+    return {};
+  }
+  std::vector<bool> covered(size, false);
+  for (const EnglishSpan& span : spans) {
+    if (span.retyped.empty() && span.end <= size) {
+      std::fill(covered.begin() + span.begin, covered.begin() + span.end,
+                true);
+    }
+  }
+  const auto joins = [&](size_t i) {
+    return raws[i].size() == 1 && absl::StrContains("._/@:=-", raws[i]) &&
+           !covered[i] && (query[i] == "ー" || !IsKana(query[i]));
+  };
+  // The names of files and of hosts end in these.
+  constexpr absl::string_view kEndings =
+      " cc cpp hpp mm rs go py rb js ts tsx jsx mjs java kt swift sh zsh pl "
+      "php lua sql md txt csv tsv json yaml yml toml xml html htm css scss svg "
+      "png jpg jpeg gif pdf zip gz tar log lock conf cfg ini env proto bzl "
+      "gguf nix vim tex com org net jp io dev ai app ";
+  struct Piece {
+    size_t begin, end;
+    std::string keys;
+    char before = 0, after = 0;  // The symbols beside it.
+    bool english = true;   // Shows as typed, or will: letters kept, spans.
+    bool plain = true;     // Kana and loose letters only, with keys a to z, 0 to 9.
+    bool loose = false;    // Holds a letter the romaji left over.
+  };
+  std::vector<Piece> pieces;
+  for (size_t i = 0; i < size;) {
+    if (joins(i)) {
+      ++i;
+      continue;
+    }
+    Piece piece = {i, i, ""};
+    piece.before = i > 0 ? raws[i - 1][0] : 0;
+    for (; i < size && !joins(i); ++i) {
+      piece.keys += raws[i];
+      const bool as_typed = covered[i] || preedit[i] == raws[i];
+      const bool letter = IsLetter(query[i]);
+      piece.english = piece.english && as_typed;
+      piece.plain = piece.plain && !covered[i] && (letter || IsKana(query[i]));
+      piece.loose = piece.loose || (letter && !as_typed);
+    }
+    piece.end = i;
+    piece.after = i < size ? raws[i][0] : 0;
+    piece.plain = piece.plain &&
+                  std::all_of(piece.keys.begin(), piece.keys.end(), [](char c) {
+                    return absl::ascii_isalnum(static_cast<unsigned char>(c));
+                  });
+    pieces.push_back(std::move(piece));
+  }
+  if (pieces.size() < 2) {
+    return {};
+  }
+  const auto listed = [&](const Piece& piece) {
+    return piece.plain && piece.keys.size() >= 3 &&
+           IsAsciiLetters(piece.keys) && words.Contains(piece.keys);
+  };
+  const auto ending = [&](const Piece& piece) {
+    return piece.plain && piece.loose && piece.before == '.' &&
+           absl::StrContains(
+               kEndings,
+               absl::StrCat(" ", absl::AsciiStrToLower(piece.keys), " "));
+  };
+  std::vector<EnglishSpan> names;
+  const auto name = [&](Piece& piece) {
+    piece.english = true;
+    names.push_back({piece.begin, piece.end, piece.keys, ""});
+  };
+  // a.b.c: single letters, one of them no kana and not the last.
+  if (pieces.size() >= 3 &&
+      std::all_of(pieces.begin(), pieces.end(),
+                  [](const Piece& piece) {
+                    return piece.keys.size() == 1 &&
+                           absl::ascii_isalpha(
+                               static_cast<unsigned char>(piece.keys[0]));
+                  }) &&
+      std::any_of(pieces.begin(), pieces.end() - 1,
+                  [](const Piece& piece) { return piece.loose; })) {
+    for (Piece& piece : pieces) {
+      if (!piece.english) {
+        name(piece);
+      }
+    }
+    return names;
+  }
+  // Twice, so a name reaches the piece after the next (usr/local/bin).
+  for (int pass = 0; pass < 2; ++pass) {
+    for (size_t p = 0; p < pieces.size(); ++p) {
+      Piece& piece = pieces[p];
+      if (piece.english || !piece.plain) {
+        continue;
+      }
+      Piece* const left = p > 0 ? &pieces[p - 1] : nullptr;
+      Piece* const right = p + 1 < pieces.size() ? &pieces[p + 1] : nullptr;
+      const bool after_english = left != nullptr && left->english;
+      const bool before_english = right != nullptr && right->english;
+      if (ending(piece) && left != nullptr &&
+          (left->english || listed(*left))) {
+        // main.cc: the ending tells that main is a name too.
+        if (!left->english) {
+          name(*left);
+        }
+        name(piece);
+      } else if (listed(piece) &&
+                 (after_english || (before_english && piece.after != '.'))) {
+        // node_modules, app.name; not それ。test, which may be two sentences.
+        name(piece);
+      } else if (before_english && piece.after == '@') {
+        name(piece);  // taro@example.com
+      } else if (piece.loose && right != nullptr &&
+                 (after_english || before_english)) {
+        name(piece);  // usr/local: no kana are typed so, and more follows.
+      }
+    }
+  }
+  return names;
+}
+
+std::vector<EnglishSpan> SymbolsAsTyped(
+    const std::vector<std::string>& raws, const std::vector<std::string>& query,
+    const std::vector<std::string>& preedit,
+    const std::vector<EnglishSpan>& spans, bool prose) {
+  const size_t size = raws.size();
+  if (query.size() != size || preedit.size() != size) {
+    return {};
+  }
+  std::vector<bool> covered(size, false);
+  bool english = false;
+  for (const EnglishSpan& span : spans) {
+    if (!span.retyped.empty() || span.end > size) {
+      return {};  // Kana follow the word.
+    }
+    std::fill(covered.begin() + span.begin, covered.begin() + span.end, true);
+    english = true;
+  }
+  // The symbols at the end may close a Japanese sentence (test。).
+  constexpr absl::string_view kClosing = ".,-~/:!?;";
+  size_t closing = size;
+  while (closing > 0 && !covered[closing - 1] && raws[closing - 1].size() == 1 &&
+         absl::StrContains(kClosing, raws[closing - 1])) {
+    --closing;
+  }
+  std::vector<EnglishSpan> symbols;
+  for (size_t i = 0; i < size; ++i) {
+    if (covered[i]) {
+      continue;
+    }
+    if (raws[i].size() != 1) {
+      return {};
+    }
+    const char c = raws[i][0];
+    if (absl::ascii_isalpha(static_cast<unsigned char>(c))) {
+      if (preedit[i] != raws[i]) {
+        return {};  // A loose letter, or a kana of one key.
+      }
+      english = true;
+      continue;
+    }
+    // With kana input a symbol's key types a kana. ー is the - key's.
+    if (!absl::ascii_isgraph(static_cast<unsigned char>(c)) ||
+        (query[i] == "ー" ? c != '-' : IsKana(query[i]))) {
+      return {};
+    }
+    if (preedit[i] == raws[i]) {
+      continue;
+    }
+    const bool joins = absl::ascii_isdigit(static_cast<unsigned char>(c)) ||
+                       absl::StrContains("._/@:=-$#+&*%^\\|~<>", c);
+    if (i >= closing ? prose && absl::StrContains(".,!?;:", c) : joins) {
+      symbols.push_back({i, i + 1, raws[i], ""});
+    }
+  }
+  return english ? symbols : std::vector<EnglishSpan>();
 }
 
 }  // namespace mozc::floatype

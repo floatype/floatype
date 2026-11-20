@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <utility>
@@ -190,6 +191,19 @@ TEST_F(EnglishWordsTest, EndsAWordInsideTheKanaAfterIt) {
             (Spans_{{0, 3, "test", "su"}}));
 }
 
+TEST_F(EnglishWordsTest, AWordEndsBeforeACapitalTypedWithShift) {
+  const EnglishWords words = EnglishWords("camel\n");
+  // camelCase: Shift+C goes on in letters.
+  EXPECT_EQ(Spans({{"ca", "か"}, {"me", "め"}, {"l", "ｌ"}, {"C", "C"},
+                   {"a", "a"}, {"s", "s"}, {"e", "e"}},
+                  words),
+            (Spans_{{0, 3, "camel", ""}}));
+  // Lower-case letters kept as typed are the word's own: no camel in camels.
+  EXPECT_EQ(Spans({{"ca", "か"}, {"me", "め"}, {"l", "ｌ"}, {"s", "s"}},
+                  words),
+            Spans_{});
+}
+
 TEST_F(EnglishWordsTest, ALongerWordWins) {
   const EnglishWords words = EnglishWords("has\nslack\nlack\n");
   // は slack: "has" would take the s and leave ck over.
@@ -226,9 +240,12 @@ class KanaSearchTest : public ::testing::Test {
             },
         .kana_of_keys =
             [](absl::string_view keys) {
-              return std::string(keys == "wo"   ? "を"
-                                 : keys == "yo" ? "よ"
-                                                : "");
+              return std::string(keys == "wo"    ? "を"
+                                 : keys == "yo"  ? "よ"
+                                 : keys == "hi"  ? "ひ"
+                                 : keys == "shi" ? "し"
+                                 : keys == "two" ? "とぉ"
+                                                 : "");
             },
     };
     std::vector<std::string> raws, query, preedit;
@@ -415,6 +432,278 @@ TEST_F(KanaSearchTest, ALongVowelCountsInAWord) {
                    {"ru", "る"}},
                   words, {"きー"}),
             (Spans_{{3, 6, "save", ""}}));
+}
+
+TEST_F(KanaSearchTest, TheKanaBesideAWordReadAsJapanese) {
+  const EnglishWords words("test\nhates\n");
+  // kyouhatestwokakimasu: 今日は + test + を書きます. "hates" is longer, but
+  // would leave きょう and とぉかきます.
+  EXPECT_EQ(Spans({{"k", "き"},
+                   {"yo", "ょ"},
+                   {"u", "う"},
+                   {"ha", "は"},
+                   {"te", "て"},
+                   {"s", "ｓ"},
+                   {"t", "と"},
+                   {"wo", "ぉ"},
+                   {"ka", "か"},
+                   {"ki", "き"},
+                   {"ma", "ま"},
+                   {"su", "す"}},
+                  words, {"きょう", "かき", "ます"}),
+            (Spans_{{4, 8, "test", "wo"}}));
+}
+
+TEST_F(KanaSearchTest, TheSOfShiIsNotTheWords) {
+  const EnglishWords words("commit\ncommits\n");
+  // nicommitshimasu: ts starts つ, so the romaji leaves t and s letters and
+  // reads ひ. commits + ひます was typed as commit + します.
+  EXPECT_EQ(Spans({{"ni", "に"},
+                   {"co", "こ"},
+                   {"m", "っ"},
+                   {"mi", "み"},
+                   {"t", "ｔ"},
+                   {"s", "ｓ"},
+                   {"hi", "ひ"},
+                   {"ma", "ま"},
+                   {"su", "す"}},
+                  words, {"ます", "ひま"}),
+            (Spans_{{1, 7, "commit", "shi"}}));
+  // commits が: nothing to read as し.
+  EXPECT_EQ(Spans({{"co", "こ"},
+                   {"m", "っ"},
+                   {"mi", "み"},
+                   {"t", "ｔ"},
+                   {"s", "ｓ"},
+                   {"ga", "が"}},
+                  words, {}),
+            (Spans_{{0, 5, "commits", ""}}));
+}
+
+// The symbols typed again as they were typed (SymbolsAsTyped()).
+std::vector<EnglishSpan> Symbols(
+    const std::vector<std::vector<std::string>>& chars,
+    const std::vector<EnglishSpan>& spans, bool prose = false) {
+  std::vector<std::string> raws, query, preedit;
+  for (const std::vector<std::string>& c : chars) {
+    raws.push_back(c[0]);
+    query.push_back(c[1]);
+    preedit.push_back(c.size() > 2 ? c[2] : c[1]);
+  }
+  return SymbolsAsTyped(raws, query, preedit, spans, prose);
+}
+
+TEST(SymbolsAsTypedTest, SymbolsBetweenWordsStayAsTyped) {
+  // foo_bar, its letters kept as typed.
+  EXPECT_EQ(Symbols({{"f", "f"}, {"o", "o"}, {"o", "o"}, {"_", "_", "＿"},
+                     {"b", "b"}, {"a", "a"}, {"r", "r"}},
+                    {}),
+            (Spans_{{3, 4, "_", ""}}));
+  // config.toml, its words found in kana and loose letters.
+  EXPECT_EQ(Symbols({{"co", "こ"}, {"n", "ん"}, {"fi", "ふ"}, {"g", "ｇ"},
+                     {".", ".", "．"}, {"to", "と"}, {"m", "ｍ"}, {"l", "ｌ"}},
+                    {{0, 4, "config", ""}, {5, 8, "toml", ""}}),
+            (Spans_{{4, 5, ".", ""}}));
+  // --help: ー is the - key's.
+  EXPECT_EQ(Symbols({{"-", "ー"}, {"-", "ー"}, {"h", "h"}, {"e", "e"},
+                     {"l", "l"}, {"p", "p"}},
+                    {}),
+            (Spans_{{0, 1, "-", ""}, {1, 2, "-", ""}}));
+  // localhost:3000: digits too.
+  EXPECT_EQ(Symbols({{"a", "a"}, {":", ":", "："}, {"3", "3", "３"}}, {}),
+            (Spans_{{1, 2, ":", ""}, {2, 3, "3", ""}}));
+}
+
+TEST(SymbolsAsTypedTest, SymbolsThatMayBeJapaneseStay) {
+  const std::vector<std::vector<std::string>> test = {
+      {"t", "t"}, {"e", "e"}, {"s", "s"}, {"t", "t"}};
+  // test。 may close a Japanese sentence; in English prose it is a period.
+  std::vector<std::vector<std::string>> closed = test;
+  closed.push_back({".", "。"});
+  EXPECT_EQ(Symbols(closed, {}), Spans_{});
+  EXPECT_EQ(Symbols(closed, {}, true), (Spans_{{4, 5, ".", ""}}));
+  // 「test」 keeps its brackets.
+  std::vector<std::vector<std::string>> quoted = {{"[", "「"}};
+  quoted.insert(quoted.end(), test.begin(), test.end());
+  quoted.push_back({"]", "」"});
+  EXPECT_EQ(Symbols(quoted, {}), Spans_{});
+  EXPECT_EQ(Symbols(quoted, {}, true), Spans_{});
+}
+
+TEST(SymbolsAsTypedTest, NeedsEnglishAndNoKana) {
+  // か_a: kana are left.
+  EXPECT_EQ(Symbols({{"ka", "か"}, {"_", "_", "＿"}, {"a", "a"}}, {}),
+            Spans_{});
+  // b.c in loose letters: not kept as typed.
+  EXPECT_EQ(Symbols({{"b", "ｂ"}, {".", ".", "．"}, {"c", "ｃ"}}, {}),
+            Spans_{});
+  // 1.2: no English.
+  EXPECT_EQ(Symbols({{"1", "1", "１"}, {".", ".", "．"}, {"2", "2", "２"}},
+                    {}),
+            Spans_{});
+  // A word that goes on in kana: event + を.
+  EXPECT_EQ(Symbols({{"e", "え"}, {"ve", "ゔ"}, {"n", "ん"}, {"t", "と"},
+                     {"wo", "ぉ"}, {"_", "_", "＿"}, {"a", "a"}},
+                    {{0, 5, "event", "wo"}}),
+            Spans_{});
+}
+
+// The composed characters as the three lists the functions take.
+struct Typed {
+  std::vector<std::string> raws, query, preedit;
+};
+Typed TypedAs(const std::vector<std::vector<std::string>>& chars) {
+  Typed typed;
+  for (const std::vector<std::string>& c : chars) {
+    typed.raws.push_back(c[0]);
+    typed.query.push_back(c[1]);
+    typed.preedit.push_back(c.size() > 2 ? c[2] : c[1]);
+  }
+  return typed;
+}
+
+std::optional<EnglishSpan> Whole(
+    const std::vector<std::vector<std::string>>& chars, bool run, bool space) {
+  const EnglishWords words("you\nare\nmade\ncourse\n");
+  const Typed typed = TypedAs(chars);
+  return WholeEnglishWord(typed.raws, typed.query, typed.preedit, words, run,
+                          space);
+}
+
+TEST(WholeEnglishWordTest, InARunOfEnglishAWordsKeysAreTheWord) {
+  // you is よう, are is あれ, a is あ: Japanese, but for the run.
+  EXPECT_EQ(Whole({{"yo", "よ"}, {"u", "う"}}, true, false),
+            (EnglishSpan{0, 2, "you", ""}));
+  EXPECT_EQ(Whole({{"a", "あ"}, {"re", "れ"}}, true, true),
+            (EnglishSpan{0, 2, "are", ""}));
+  EXPECT_EQ(Whole({{"a", "あ"}}, true, false), (EnglishSpan{0, 1, "a", ""}));
+  EXPECT_EQ(Whole({{"yo", "よ"}, {"u", "う"}}, false, false), std::nullopt);
+  EXPECT_EQ(Whole({{"yo", "よ"}, {"u", "う"}}, false, true), std::nullopt)
+      << "Space converts よう";
+  // The marks of prose after it are not the word's.
+  EXPECT_EQ(Whole({{"yo", "よ"}, {"u", "う"}, {".", "。"}}, true, true),
+            (EnglishSpan{0, 2, "you", ""}));
+  // No word, and a word already shown as typed.
+  EXPECT_EQ(Whole({{"ka", "か"}, {"i", "い"}}, true, true), std::nullopt);
+  EXPECT_EQ(Whole({{"y", "y"}, {"o", "o"}, {"u", "u"}}, true, true),
+            std::nullopt);
+  // -m and --help after a command.
+  EXPECT_EQ(Whole({{"-", "ー"}, {"m", "ｍ"}}, true, true),
+            (EnglishSpan{0, 2, "-m", ""}));
+  EXPECT_EQ(Whole({{"-", "ー"}, {"m", "ｍ"}}, false, true), std::nullopt);
+}
+
+TEST(WholeEnglishWordTest, AtSpaceKeysThatAreNoJapaneseAreTheWord) {
+  // of is おf: a short word with a letter no kana took.
+  EXPECT_EQ(Whole({{"o", "お"}, {"f", "ｆ"}}, false, true),
+            (EnglishSpan{0, 2, "of", ""}));
+  EXPECT_EQ(Whole({{"o", "お"}, {"f", "ｆ"}}, false, false), std::nullopt)
+      << "a pause: おf may go on to おふ";
+  // ls typed no kana at all.
+  EXPECT_EQ(Whole({{"l", "ｌ"}, {"s", "ｓ"}}, false, true),
+            (EnglishSpan{0, 2, "ls", ""}));
+  EXPECT_EQ(Whole({{"k", "ｋ"}}, false, true), std::nullopt) << "one letter";
+  // おk is no word.
+  EXPECT_EQ(Whole({{"o", "お"}, {"x", "ｘ"}}, false, true), std::nullopt);
+}
+
+std::optional<EnglishSpan> Together(
+    const std::vector<std::vector<std::string>>& chars,
+    const std::vector<EnglishSpan>& spans) {
+  const EnglishWords words("time\nmoney\npush\nsite\nfront\n", "page\n");
+  const ReadingLookup lookup = ReadingsOf({"して", "ぱげ"});
+  const Typed typed = TypedAs(chars);
+  return WordsRunTogether(
+      typed.raws, typed.query, typed.preedit, words, spans,
+      [&](absl::string_view kana) { return ReadsAsJapanese(kana, lookup); });
+}
+
+TEST(WordsRunTogetherTest, KeysThatAreAllWordsAreEnglish) {
+  // timeismoney: ちめいsもねy, with a letter no kana took.
+  EXPECT_EQ(Together({{"ti", "ち"}, {"me", "め"}, {"i", "い"}, {"s", "ｓ"},
+                      {"mo", "も"}, {"ne", "ね"}, {"y", "ｙ"}},
+                     {}),
+            (EnglishSpan{0, 7, "timeismoney", ""}));
+  // frontpage: page is ぱげ, which reads, but the user added the word.
+  EXPECT_EQ(Together({{"f", "ｆ"}, {"ro", "ろ"}, {"n", "ん"}, {"t", "ｔ"},
+                      {"pa", "ぱ"}, {"ge", "げ"}},
+                     {{0, 4, "front", ""}}),
+            (EnglishSpan{0, 6, "frontpage", ""}));
+}
+
+TEST(WordsRunTogetherTest, JapaneseBesideAWordStaysJapanese) {
+  // pushして: site is a word, but して reads as Japanese.
+  EXPECT_EQ(Together({{"pu", "ぷ"}, {"s", "ｓ"}, {"h", "ｈ"}, {"si", "し"},
+                      {"te", "て"}},
+                     {{0, 3, "push", ""}}),
+            std::nullopt);
+  // timeisも: not all words.
+  EXPECT_EQ(Together({{"ti", "ち"}, {"me", "め"}, {"i", "い"}, {"s", "ｓ"},
+                      {"mo", "も"}},
+                     {}),
+            std::nullopt);
+  // One word is no run.
+  EXPECT_EQ(Together({{"mo", "も"}, {"ne", "ね"}, {"y", "ｙ"}, {"s", "ｓ"}},
+                     {}),
+            std::nullopt);
+}
+
+std::vector<EnglishSpan> Names(
+    const std::vector<std::vector<std::string>>& chars,
+    const std::vector<EnglishSpan>& spans) {
+  const EnglishWords words("node\nmain\nmodules\nexample\nlocal\nbin\n"
+                           "sore\ntest\n");
+  const Typed typed = TypedAs(chars);
+  return JoinedNames(typed.raws, typed.query, typed.preedit, words, spans);
+}
+
+TEST(JoinedNamesTest, APieceBesideAnEnglishOneIsEnglish) {
+  // node_modules: ので reads as Japanese, modules does not.
+  EXPECT_EQ(Names({{"no", "の"}, {"de", "で"}, {"_", "_", "＿"}, {"mo", "も"},
+                   {"du", "づ"}, {"le", "ぇ"}, {"s", "ｓ"}},
+                  {{3, 7, "modules", ""}}),
+            (Spans_{{0, 2, "node", ""}}));
+  // main.cc: the ending tells, and main is a name with it.
+  EXPECT_EQ(Names({{"ma", "ま"}, {"i", "い"}, {"n", "ん"}, {".", ".", "．"},
+                   {"c", "っ"}, {"c", "ｃ"}},
+                  {}),
+            (Spans_{{0, 3, "main", ""}, {4, 6, "cc", ""}}));
+  // taro@example.com: what comes before @.
+  EXPECT_EQ(Names({{"ta", "た"}, {"ro", "ろ"}, {"@", "@", "＠"}, {"e", "え"},
+                   {"x", "ｘ"}},
+                  {{3, 5, "example", ""}}),
+            (Spans_{{0, 2, "taro", ""}}));
+  // usr/local/bin: usr typed no kana to speak of, bin follows local.
+  EXPECT_EQ(Names({{"u", "う"}, {"s", "ｓ"}, {"r", "ｒ"}, {"/", "/"},
+                   {"lo", "ぉ"}, {"ca", "か"}, {"l", "ｌ"}, {"/", "/"},
+                   {"bi", "び"}, {"n", "ん"}},
+                  {{4, 7, "local", ""}}),
+            (Spans_{{0, 3, "usr", ""}, {8, 10, "bin", ""}}));
+  // a.b.c
+  EXPECT_EQ(Names({{"a", "あ"}, {".", "。"}, {"b", "ｂ"}, {".", ".", "．"},
+                   {"c", "ｃ"}},
+                  {}),
+            (Spans_{{0, 1, "a", ""}, {2, 3, "b", ""}, {4, 5, "c", ""}}));
+}
+
+TEST(JoinedNamesTest, JapaneseBesideAMarkStaysJapanese) {
+  // それ。test may be two sentences.
+  EXPECT_EQ(Names({{"so", "そ"}, {"re", "れ"}, {".", "。"}, {"te", "て"},
+                   {"s", "ｓ"}, {"t", "ｔ"}},
+                  {{3, 6, "test", ""}}),
+            Spans_{});
+  // まで。それ: two words of the list, neither told to be English.
+  EXPECT_EQ(Names({{"ma", "ま"}, {"de", "で"}, {".", "。"}, {"so", "そ"},
+                   {"re", "れ"}},
+                  {}),
+            Spans_{});
+  // そうです。ts: the ending alone names nothing.
+  EXPECT_EQ(Names({{"so", "そ"}, {"u", "う"}, {".", "。"}, {"t", "ｔ"},
+                   {"s", "ｓ"}},
+                  {}),
+            Spans_{});
+  // No mark: one piece.
+  EXPECT_EQ(Names({{"no", "の"}, {"de", "で"}}, {}), Spans_{});
 }
 
 TEST(EnglishWordsDefaultTest, HasSCOWLsWords) {
