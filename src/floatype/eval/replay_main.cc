@@ -261,6 +261,17 @@ class Replayer {
     reset.set_type(commands::Input::SEND_COMMAND);
     reset.mutable_command()->set_type(commands::SessionCommand::RESET_CONTEXT);
     Eval(std::move(reset));
+    // Nor does what the item taught on the way reach the next: the width a
+    // symbol was last committed in, and with --keys the words that Space
+    // committed before Enter.
+    commands::Input clear;
+    clear.set_type(commands::Input::CLEAR_USER_HISTORY);
+    Eval(std::move(clear));
+    if (absl::GetFlag(FLAGS_keys)) {
+      commands::Input clear_prediction;
+      clear_prediction.set_type(commands::Input::CLEAR_USER_PREDICTION);
+      Eval(std::move(clear_prediction));
+    }
     return before + committed.result().value() + '\t' +
            committed.result().key() + '\t' + std::to_string(polls) + '\t' +
            std::to_string(changes);
