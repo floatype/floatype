@@ -1400,6 +1400,30 @@ TEST_F(FloatypeZenzTest, IncognitoModeShowsNoRememberedCorrectionAtOnce) {
   EXPECT_EQ(Preedit(PollWhileAsked(converted)), "機械") << "zenz still answers";
 }
 
+// With the history read and not written, zenz's memory is not written
+// either, and what it holds is still used.
+TEST_F(FloatypeZenzTest, ReadOnlyLearningWritesNoCorrectionAndShowsOldOnes) {
+  ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機械");
+  ASSERT_TRUE(floatype::ZenzMemory::Accepted().Contains("きかい", "機械"));
+  floatype::ZenzMemory::Accepted().Clear();
+
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_history_learning_level(config::Config::READ_ONLY);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+  StartSession(/*zenz=*/true);
+  ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機械");
+  EXPECT_FALSE(floatype::ZenzMemory::Accepted().Contains("きかい", "機械"));
+
+  floatype::ZenzMemory::Accepted().Add("きかい", "機械");
+  StartSession(/*zenz=*/true);
+  EXPECT_EQ(Preedit(ConvertKikai()), "機械") << "shown from memory";
+}
+
 // What the user stopped stays away in incognito mode too.
 TEST_F(FloatypeZenzTest, IncognitoModeKeepsAStoppedCorrectionAway) {
   ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");

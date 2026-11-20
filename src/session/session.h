@@ -291,10 +291,10 @@ class Session {
   // `not_this`, the user turned down the conversion on screen (see
   // ZenzCorrector::Request()).
   void RequestZenz(commands::Command* command, bool not_this = false);
-  // Whether what the user does with zenz's corrections is written down and
-  // a correction committed before shows at once: the setting zenz_learning,
-  // and never in incognito mode. What was stopped or turned down before is
-  // kept away either way (ZenzCorrector::set_learning()).
+  // Whether what the user does with zenz's corrections is written down: the
+  // setting zenz_learning, and only where Mozc learns too (not in incognito
+  // mode, nor with the history read-only or off). What was stopped or turned
+  // down before is kept away either way (ZenzCorrector::set_learning()).
   bool ZenzRemembers() const;
   // Notes that `command` committed something while secure input was on, for
   // CommittedBefore().

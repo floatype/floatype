@@ -296,8 +296,7 @@ void Session::RememberTurnedDown(size_t count) {
   const std::vector<ZenzWord> refused = std::exchange(zenz_refused_, {});
   const config::Config& config = context_->GetConfig();
   // Where the commit teaches Mozc nothing, it tells zenz nothing.
-  if (!config.zenz_learning() || config.incognito_mode() ||
-      config.history_learning_level() != config::Config::DEFAULT_HISTORY) {
+  if (!ZenzRemembers()) {
     return;
   }
   floatype::ZenzMemory& turned_down = floatype::ZenzMemory::TurnedDown();
@@ -3542,9 +3541,12 @@ commands::Preedit Session::ShownPreedit() const {
 }
 
 bool Session::ApplyAcceptedCorrection() {
-  // What zenz taught comes with zenz: not where it is off or missing, nor in
-  // incognito mode, where Mozc leaves its own history unused too.
-  if (!ZenzRemembers() || !zenz_.available()) {
+  // What zenz taught comes with zenz: not where it is off or missing, nor
+  // where Mozc leaves its own history unused (incognito mode, no history).
+  if (const config::Config& config = context_->GetConfig();
+      !config.zenz_learning() || config.incognito_mode() ||
+      config.history_learning_level() == config::Config::NO_HISTORY ||
+      !zenz_.available()) {
     return false;
   }
   const Segments& segments = context_->converter().GetSegments();
@@ -3880,7 +3882,8 @@ void Session::WarmZenz() {
 
 bool Session::ZenzRemembers() const {
   const config::Config& config = context_->GetConfig();
-  return config.zenz_learning() && !config.incognito_mode();
+  return config.zenz_learning() && !config.incognito_mode() &&
+         config.history_learning_level() == config::Config::DEFAULT_HISTORY;
 }
 
 void Session::RememberSecureCommit(const commands::Command& command) {
