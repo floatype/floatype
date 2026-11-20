@@ -1172,6 +1172,28 @@ TEST_F(FloatypeZenzTest, MixedEnglishUndoesAKanaWordWhenTypingGoesOn) {
   EXPECT_EQ(Preedit(SendKeys({"/"})), "before/");
 }
 
+// の + テーマ starts with のて, the kana of the preset word note.
+TEST_F(FloatypeZenzTest, MixedEnglishGoesOnInKanaWithTheLongVowelKey) {
+  floatype::EnableSessionFeatures(true);
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_mixed_english(true);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+
+  ASSERT_EQ(Preedit(PollWhileAsked(CallBack(SendKeys({"n", "o", "t", "e"})))),
+            "note");
+  EXPECT_EQ(Preedit(SendKeys({"-"})), "のてー");
+  SendKeys({"Escape"});
+  SendKeys({"Escape"});
+
+  // After a word with letters left over, ー does not bring the kana back.
+  ASSERT_EQ(Preedit(PollWhileAsked(CallBack(SendKeys({"t", "e", "s", "t"})))),
+            "test");
+  EXPECT_THAT(Preedit(SendKeys({"-"})), ::testing::StartsWith("test"));
+}
+
 // Sets the config for the tests of / after a letter or a digit.
 #define SET_SLASH_CONFIG(mixed_english, slash)                       \
   floatype::EnableSessionFeatures(true);                             \

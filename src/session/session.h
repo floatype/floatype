@@ -358,7 +358,8 @@ class Session {
   // The composition as typed, before a live conversion kept a word that ends
   // it in loose letters: the user may have paused inside a syllable
   // (きょうは + s reads "has", but may go on to きょうはしる). The next letter
-  // key brings it back; any other key or command drops it.
+  // key brings it back, and after a word typed wholly into kana the ー key
+  // too; any other key or command drops it.
   std::optional<composer::Composer> english_undo_;
   // Mixed English input: after a conversion, shows letters typed in a kana mode
   // half width, as typed, where Mozc offers them so.

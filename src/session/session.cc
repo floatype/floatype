@@ -586,8 +586,17 @@ bool Session::SendKey(commands::Command* command) {
   if (std::optional<composer::Composer> typed = std::exchange(english_undo_, std::nullopt);
       typed.has_value() && live_conversion_) {
     const commands::KeyEvent& key = command->input().key();
+    // ー follows kana, never letters: after a word typed wholly into kana
+    // (のて shown as note), its key goes on in kana too (のてーま).
+    const auto all_kana = [&typed]() {
+      const std::string query = typed->GetQueryForConversion();
+      return std::none_of(query.begin(), query.end(), [](char c) {
+        return absl::ascii_isalpha(static_cast<unsigned char>(c));
+      });
+    };
     if (key.has_key_code() && key.modifier_keys_size() == 0 &&
-        absl::ascii_isalpha(static_cast<unsigned char>(key.key_code()))) {
+        (absl::ascii_isalpha(static_cast<unsigned char>(key.key_code())) ||
+         (key.key_code() == '-' && all_kana()))) {
       *context_->mutable_composer() = *std::move(typed);
     }
   }
