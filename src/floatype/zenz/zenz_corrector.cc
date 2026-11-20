@@ -1021,8 +1021,11 @@ void ZenzCorrector::Warm() {
 }
 
 bool ZenzCorrector::Request(const Segments& segments,
-                            absl::string_view left_context, bool not_this) {
+                            absl::string_view text_before, bool not_this) {
   pending_.reset();
+  // What looks private goes no further than here: not to the scorer, and
+  // not into what is kept of the request.
+  const std::string left_context = SafeContext(text_before);
   if (client_ == nullptr || segments.conversion_segments_size() == 0) {
     return false;
   }
@@ -1105,6 +1108,82 @@ ZenzCorrector::PollResult ZenzCorrector::Poll(const Segments& segments,
     }
   }
   return result;
+}
+
+namespace {
+
+bool IsAsciiGraph(char c) { return c > 0x20 && c < 0x7f; }
+
+// Whether a run of ASCII characters with no space in it looks private.
+bool LooksPrivate(absl::string_view run) {
+  size_t digits = 0;
+  size_t letters = 0;
+  size_t slashes = 0;
+  size_t digits_in_a_row = 0;
+  size_t most_in_a_row = 0;
+  for (const char c : run) {
+    digits_in_a_row = absl::ascii_isdigit(c) ? digits_in_a_row + 1 : 0;
+    most_in_a_row = std::max(most_in_a_row, digits_in_a_row);
+    digits += absl::ascii_isdigit(c);
+    letters += absl::ascii_isalpha(c);
+    slashes += c == '/';
+  }
+  // A URL, or a mail address.
+  if (absl::StrContains(run, "://") ||
+      absl::StartsWithIgnoreCase(run, "www.")) {
+    return true;
+  }
+  if (const size_t at = run.find('@');
+      at != absl::string_view::npos && at > 0 &&
+      run.find('.', at) != absl::string_view::npos) {
+    return true;
+  }
+  // A file path. Two slashes with no letter are a date (2026/11/20).
+  if ((slashes >= 2 && letters > 0) || absl::StrContains(run, "\\") ||
+      absl::StartsWith(run, "~/") || absl::StartsWith(run, "./") ||
+      absl::StartsWith(run, "../")) {
+    return true;
+  }
+  // A key or a token: long with digits among the letters, or very long.
+  if ((run.size() >= 16 && digits > 0 && letters > 0) || run.size() >= 32) {
+    return true;
+  }
+  // A long number: an account, a card, a telephone number with or without
+  // hyphens. A date with hyphens has 8 digits (2026-11-20).
+  return most_in_a_row >= 8 || digits >= 10;
+}
+
+}  // namespace
+
+std::string SafeContext(absl::string_view context) {
+  size_t keep = 0;
+  // Digits of runs of digits a space apart: a card number in fours.
+  size_t spaced_digits = 0;
+  size_t last_end = 0;
+  for (size_t i = 0; i < context.size();) {
+    if (!IsAsciiGraph(context[i])) {
+      ++i;
+      continue;
+    }
+    size_t end = i;
+    while (end < context.size() && IsAsciiGraph(context[end])) {
+      ++end;
+    }
+    const absl::string_view run = context.substr(i, end - i);
+    const bool all_digits = std::all_of(
+        run.begin(), run.end(), [](char c) { return absl::ascii_isdigit(c); });
+    spaced_digits =
+        !all_digits ? 0
+        : spaced_digits > 0 && i == last_end + 1 && context[last_end] == ' '
+            ? spaced_digits + run.size()
+            : run.size();
+    if (LooksPrivate(run) || spaced_digits >= 10) {
+      keep = end;
+    }
+    last_end = end;
+    i = end;
+  }
+  return std::string(absl::StripLeadingAsciiWhitespace(context.substr(keep)));
 }
 
 bool UsesTurnedDown(const Segments& segments, const Mapping& mapping) {

@@ -83,6 +83,11 @@ std::optional<Mapping> MapWithResegmentation(const Segments& segments,
                                              const WordLookup& words = nullptr);
 // The conversion's reading: its segment keys in hiragana.
 std::string ConversionReading(const Segments& segments);
+// The part of the text before the composition that zenz may see: what follows
+// the last run of characters that looks private (a URL, a mail address, a
+// file path, a key or token, a long number). Empty when the text ends in one.
+// ZenzCorrector::Request() sends nothing else.
+std::string SafeContext(absl::string_view context);
 // Whether `mapping` of `segments` shows a word the user chose another
 // candidate over (ZenzMemory::TurnedDown()). On the conversion's own segments
 // the first candidates are Mozc's and are not looked at.
@@ -112,8 +117,9 @@ class ZenzCorrector {
   // `client` may be null, which turns zenz off.
   explicit ZenzCorrector(ScorerClient* client) : client_(client) {}
 
-  // Sends the conversion's reading and `left_context` to the scorer. Returns
-  // true when an answer may follow, so the client should call back.
+  // Sends the conversion's reading and the safe part of `left_context`
+  // (SafeContext()) to the scorer. Returns true when an answer may follow, so
+  // the client should call back.
   //
   // With `not_this`, the user turned down the conversion on screen. zenz is
   // asked for an answer other than it and than every conversion turned down

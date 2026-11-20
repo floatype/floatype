@@ -501,6 +501,44 @@ class ZenzCorrectorTest : public testing::TestWithTempUserProfile {
   std::unique_ptr<ScorerClient> client_;
 };
 
+TEST(SafeContextTest, KeepsWhatFollowsTheLastRunThatLooksPrivate) {
+  EXPECT_EQ(SafeContext("詳細は https://example.com/a?b=1 を見て"), "を見て");
+  EXPECT_EQ(SafeContext("www.example.com に"), "に");
+  EXPECT_EQ(SafeContext("メールはtaro@example.comです"), "です");
+  EXPECT_EQ(SafeContext("src/session/session.cc を直した"), "を直した");
+  EXPECT_EQ(SafeContext("C:\\Users\\me に置く"), "に置く");
+  EXPECT_EQ(SafeContext("鍵は sk-abc123def456ghi789 です"), "です");
+  EXPECT_EQ(SafeContext("番号は09012345678です"), "です");
+  EXPECT_EQ(SafeContext("番号は 090-1234-5678 です"), "です");
+  EXPECT_EQ(SafeContext("カードは 1234 5678 9012 3456 です"), "です");
+  // Nothing is left of a text that ends in one.
+  EXPECT_EQ(SafeContext("場所は ~/dev/notes.txt"), "");
+  // The last one decides.
+  EXPECT_EQ(SafeContext("a@b.jp と ./x と それで"), "と それで");
+}
+
+TEST(SafeContextTest, KeepsOrdinaryWordsAndNumbers) {
+  for (const char* text :
+       {"今日はいい天気ですね", "timeを記録", "2026/11/20 の会議",
+        "2026-11-20に", "gpt-5 と v1.2.3 を", "A/B テストの",
+        "commit 1eb3a62d9 で", "3,000円と 1,000,000 円", "10:30 から 2 時間",
+        "100-0001 東京都", "internationalization と", "@claude に聞く",
+        "1 2 3 4 5 と数える", ""}) {
+    EXPECT_EQ(SafeContext(text), text);
+  }
+}
+
+// The fake scorer answers "<context>|<reading>" only after that context.
+TEST_F(ZenzCorrectorTest, SendsOnlyTheSafePartOfTheContext) {
+  ASSERT_OK(FileUtil::SetContents(answers_, "です|キョウハ\t京歯\n"));
+  const Segments segments = KyouHa();
+  ZenzCorrector corrector(client_.get());
+  ASSERT_TRUE(corrector.Request(segments, "メールはtaro@example.comです"));
+  const ZenzCorrector::PollResult result = PollUntilDone(corrector, segments);
+  ASSERT_EQ(result.kind, ZenzCorrector::PollResult::kApply);
+  EXPECT_THAT(result.candidate_indices, ElementsAre(1, 1));
+}
+
 TEST_F(ZenzCorrectorTest, TellsAMappingThatShowsATurnedDownWord) {
   const Segments segments = KyouHaIshaNiIku();
   ZenzMemory::TurnedDown().Add("きょうは", "強は");
