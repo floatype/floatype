@@ -2861,6 +2861,10 @@ bool Session::IsSlashAfterAscii(const commands::KeyEvent& key,
       key.input_style() != commands::KeyEvent::FOLLOW_MODE) {
     return false;
   }
+  // With kana input the key comes with its kana (め), which it types.
+  if (key.has_key_string() && key.key_string() != "/") {
+    return false;
+  }
   const composer::Composer& composer = context_->composer();
   const transliteration::TransliterationType mode = composer.GetInputMode();
   if (mode == transliteration::HALF_ASCII ||

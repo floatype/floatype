@@ -1260,6 +1260,16 @@ TEST_F(FloatypeZenzTest, SlashAfterALetterTheAppTellsIsASlash) {
   }
 }
 
+TEST_F(FloatypeZenzTest, WithKanaInputTheSlashKeyTypesItsKana) {
+  SET_SLASH_CONFIG(false, true);
+  SendKeys({"2", "0", "2", "6"});
+  commands::Input input;
+  input.set_type(commands::Input::SEND_KEY);
+  input.mutable_key()->set_key_code('/');
+  input.mutable_key()->set_key_string("め");
+  EXPECT_EQ(Preedit(Eval(std::move(input))), "2026め");
+}
+
 TEST_F(FloatypeZenzTest, SlashStaysTheMiddleDotWithTheSettingOff) {
   SET_SLASH_CONFIG(true, false);
   EXPECT_EQ(Preedit(SendKeys({"2", "0", "2", "6", "/"})), "2026・");
