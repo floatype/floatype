@@ -833,7 +833,8 @@ ZenzCorrector::PollResult ZenzCorrector::Poll(const Segments& segments,
   }
   Pending pending = *std::move(pending_);
   Cancel();
-  PollResult result = Judge(segments, *response, resegment);
+  PollResult result =
+      Judge(segments, *response, pending.request.left_context, resegment);
   if (result.kind == PollResult::kApply || response->conversion.empty()) {
     return result;
   }
@@ -853,7 +854,7 @@ ZenzCorrector::PollResult ZenzCorrector::Poll(const Segments& segments,
 
 ZenzCorrector::PollResult ZenzCorrector::Judge(
     const Segments& segments, const Response& response,
-    const Resegmenter& resegment) const {
+    absl::string_view left_context, const Resegmenter& resegment) const {
   // A length cap means zenz did not finish its answer.
   if (response.stop != "eog" && response.stop != "tag") {
     return {PollResult::kDone, {}};
@@ -861,9 +862,13 @@ ZenzCorrector::PollResult ZenzCorrector::Judge(
   // zenz hands the reading back unconverted when it does not know the words,
   // where Mozc's dictionary usually does. On Mozc's regression set this halves
   // the conversions zenz makes worse (20 to 10), at the cost of 2 of 48 wins.
-  if (japanese::FullWidthAsciiToHalfWidthAscii(
+  // Every such harm measured had nothing before it (いく for 行く, けいさん
+  // for 計算); after other text, kana is zenz's reading of the sentence
+  // (なの, not 名の; けますと, not 毛マスト).
+  if (left_context.empty() &&
+      japanese::FullWidthAsciiToHalfWidthAscii(
           japanese::KatakanaToHiragana(response.conversion)) ==
-      japanese::FullWidthAsciiToHalfWidthAscii(Reading(segments))) {
+          japanese::FullWidthAsciiToHalfWidthAscii(Reading(segments))) {
     return {PollResult::kDone, {}};
   }
   if (!KeepsTypedAscii(segments, response.conversion)) {

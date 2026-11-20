@@ -422,6 +422,18 @@ TEST_F(ZenzCorrectorTest, IgnoresTheReadingHandedBackUnconverted) {
             ZenzCorrector::PollResult::kDone);
 }
 
+TEST_F(ZenzCorrectorTest, AfterOtherTextTheReadingInKanaIsZenzsAnswer) {
+  ZenzCorrector corrector(client_.get());
+  Segments segments;
+  AddSegment(segments, "いぬ", {"犬", "イヌ", "いぬ"});
+  // The fake answers イヌ. With text before it, that is zenz's reading of the
+  // sentence (なの, not 名の).
+  ASSERT_TRUE(corrector.Request(segments, "うちの"));
+  const ZenzCorrector::PollResult result = PollUntilDone(corrector, segments);
+  EXPECT_EQ(result.kind, ZenzCorrector::PollResult::kApply);
+  EXPECT_THAT(result.candidate_indices, ElementsAre(1));
+}
+
 TEST_F(ZenzCorrectorTest, KeepsTheDigitsTheUserTyped) {
   ZenzCorrector corrector(client_.get());
   Segments typed;

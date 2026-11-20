@@ -161,9 +161,11 @@ class ZenzCorrector {
     int asks = 1;
   };
 
-  // kApply when `response` changes what is shown, otherwise kDone.
+  // kApply when `response`, the answer to a request with `left_context`,
+  // changes what is shown, otherwise kDone.
   PollResult Judge(const Segments& segments,
                    const ::floatype::scorer::Response& response,
+                   absl::string_view left_context,
                    const Resegmenter& resegment) const;
   void Reject(absl::string_view conversion);
 
