@@ -191,6 +191,11 @@ class ZenzCorrector {
   // cutting as zenz cuts and no writing of zenz's own where there is such a
   // segment. The app has all of them (7) or, where zenz teaches Mozc, none.
   static void SetLearningRulesForMeasuring(std::optional<int> rules);
+  // For measuring only (replay_main --zenz_context_chars): zenz sees no more
+  // than this many characters, the last ones, of the text before the
+  // composition; 0 is none. The app gives all of it, of which the scorer
+  // reads the last 40.
+  static void SetContextCharsForMeasuring(std::optional<size_t> chars);
 
  private:
   struct Pending {

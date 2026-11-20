@@ -104,6 +104,15 @@ ABSL_FLAG(int, zenz_remembered_min_chars, 1,
           "the setting zenz_remembered_min_chars: a correction committed "
           "before shows at once only for a reading of this many characters "
           "or more");
+ABSL_FLAG(int, zenz_context_chars, -1,
+          "for measuring: zenz sees no more than this many characters, the "
+          "last ones, of the text before the composition; 0 is none, -1 the "
+          "app (all of it, of which the scorer reads the last 40)");
+ABSL_FLAG(bool, no_learning, false,
+          "for measuring what the text before a composition does, with "
+          "--commit: nothing committed is learned (the history is read-only "
+          "and zenz remembers no correction), so that only the text carries "
+          "on from line to line");
 ABSL_FLAG(int, zenz_learning_rules, -1,
           "for measuring: which rules about a segment the user's history "
           "ranked are on, as a sum: 1, zenz may not go back to the candidate "
@@ -155,7 +164,12 @@ class Replayer {
     commands::Input first;
     first.set_type(commands::Input::SEND_KEY);
     first.mutable_key()->set_key_code('a');
-    first.mutable_context()->set_preceding_text(left_context);
+    // A context with the field set, even to nothing, tells the session what
+    // precedes the caret, and what was committed before is dropped where it
+    // does not end so.
+    if (!absl::GetFlag(FLAGS_unknown_context)) {
+      first.mutable_context()->set_preceding_text(left_context);
+    }
     Eval(std::move(first));
     commands::Input compose;
     compose.set_type(commands::Input::SEND_COMMAND);
@@ -351,6 +365,11 @@ class Replayer {
     input.mutable_config()->set_zenz_teaches_mozc(zenz_teaches_mozc);
     input.mutable_config()->set_zenz_remembered_min_chars(
         absl::GetFlag(FLAGS_zenz_remembered_min_chars));
+    if (absl::GetFlag(FLAGS_no_learning)) {
+      input.mutable_config()->set_history_learning_level(
+          config::Config::READ_ONLY);
+      input.mutable_config()->set_zenz_learning(false);
+    }
     Eval(std::move(input));
   }
 
@@ -511,6 +530,9 @@ int main(int argc, char** argv) {
   }
   if (const int rules = absl::GetFlag(FLAGS_zenz_learning_rules); rules >= 0) {
     mozc::floatype::ZenzCorrector::SetLearningRulesForMeasuring(rules);
+  }
+  if (const int chars = absl::GetFlag(FLAGS_zenz_context_chars); chars >= 0) {
+    mozc::floatype::ZenzCorrector::SetContextCharsForMeasuring(chars);
   }
 
   std::string line;

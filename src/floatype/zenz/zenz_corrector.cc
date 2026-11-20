@@ -51,6 +51,8 @@ constexpr int kKeepsDisplacedOut = 1;
 constexpr int kKeepsOutOfRuns = 2;
 constexpr int kKeepsCuts = 4;
 std::optional<int> learning_rules_for_measuring;
+// See ZenzCorrector::SetContextCharsForMeasuring().
+std::optional<size_t> context_chars_for_measuring;
 
 // Whether the user's history put another candidate first than Mozc's best,
 // where `rule` about such a segment is on.
@@ -1042,7 +1044,13 @@ bool ZenzCorrector::Request(const Segments& segments,
   pending_.reset();
   // What looks private goes no further than here: not to the scorer, and
   // not into what is kept of the request.
-  const std::string left_context = SafeContext(text_before);
+  std::string left_context = SafeContext(text_before);
+  if (context_chars_for_measuring.has_value()) {
+    const size_t length = Util::CharsLen(left_context);
+    const size_t kept = std::min(length, *context_chars_for_measuring);
+    left_context =
+        std::string(Util::Utf8SubString(left_context, length - kept, kept));
+  }
   if (client_ == nullptr || segments.conversion_segments_size() == 0) {
     return false;
   }
@@ -1331,6 +1339,10 @@ void ZenzCorrector::SetDefaultClientForTesting(ScorerClient* client) {
 
 void ZenzCorrector::SetLearningRulesForMeasuring(std::optional<int> rules) {
   learning_rules_for_measuring = rules;
+}
+
+void ZenzCorrector::SetContextCharsForMeasuring(std::optional<size_t> chars) {
+  context_chars_for_measuring = chars;
 }
 
 void ZenzCorrector::IgnoreSecureInputForTesting(bool ignore) {
