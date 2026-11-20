@@ -269,6 +269,7 @@ bool SessionHandler::ClearUserHistory(commands::Command* command) {
   // floatype: what zenz learned goes too.
   floatype::ZenzMemory::Stopped().Clear();
   floatype::ZenzMemory::Accepted().Clear();
+  floatype::ZenzMemory::TurnedDown().Clear();
   return true;
 }
 

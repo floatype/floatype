@@ -33,6 +33,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -286,6 +287,50 @@ void Session::PushUndoContext() {
     undo_contexts_.pop_front();
   }
   DCHECK_LE(undo_contexts_.size(), kMultipleUndoMaxSize);
+  // What the commit before this one told zenz can no longer be taken back.
+  turned_down_changes_.clear();
+}
+
+void Session::RememberTurnedDown(size_t count) {
+  turned_down_changes_.clear();
+  const config::Config& config = context_->GetConfig();
+  // Where the commit teaches Mozc nothing, it tells zenz nothing.
+  if (!config.zenz_learning() || config.incognito_mode() ||
+      config.history_learning_level() != config::Config::DEFAULT_HISTORY) {
+    return;
+  }
+  floatype::ZenzMemory& memory = floatype::ZenzMemory::TurnedDown();
+  for (const EngineConverterInterface::ReplacedCandidate& replaced :
+       context_->converter().ReplacedCandidates()) {
+    if (replaced.segment >= count || !replaced.learned) {
+      continue;
+    }
+    if (!replaced.shown_key.empty() && !replaced.shown_value.empty()) {
+      if (!memory.Contains(replaced.shown_key, replaced.shown_value)) {
+        turned_down_changes_.push_back(
+            {true, replaced.shown_key, replaced.shown_value});
+      }
+      memory.Add(replaced.shown_key, replaced.shown_value);
+    }
+    if (memory.Contains(replaced.chosen_key, replaced.chosen_value)) {
+      memory.Remove(replaced.chosen_key, replaced.chosen_value);
+      turned_down_changes_.push_back(
+          {false, replaced.chosen_key, replaced.chosen_value});
+    }
+  }
+}
+
+void Session::ForgetLastTurnedDown() {
+  floatype::ZenzMemory& memory = floatype::ZenzMemory::TurnedDown();
+  for (auto change = turned_down_changes_.rbegin();
+       change != turned_down_changes_.rend(); ++change) {
+    if (change->added) {
+      memory.Remove(change->key, change->value);
+    } else {
+      memory.Add(change->key, change->value);
+    }
+  }
+  turned_down_changes_.clear();
 }
 
 void Session::PopUndoContext() {
@@ -296,7 +341,10 @@ void Session::PopUndoContext() {
   undo_contexts_.pop_back();
 }
 
-void Session::ClearUndoContext() { undo_contexts_.clear(); }
+void Session::ClearUndoContext() {
+  undo_contexts_.clear();
+  turned_down_changes_.clear();
+}
 
 bool Session::HasUndoContext() const { return !undo_contexts_.empty(); }
 
@@ -691,6 +739,7 @@ bool Session::SendKey(commands::Command* command) {
       key.modifier_keys_size() == 0 &&
       key.special_key() == commands::KeyEvent::BACKSPACE) {
     context_->mutable_converter()->Revert();
+    ForgetLastTurnedDown();
     ClearUndoContext();
   }
 
@@ -1457,6 +1506,7 @@ bool Session::DoNothing(commands::Command* command) {
 bool Session::Revert(commands::Command* command) {
   if (context_->state() == ImeContext::PRECOMPOSITION) {
     context_->mutable_converter()->Revert();
+    ForgetLastTurnedDown();
     return EchoBackAndClearUndoContext(command);
   }
 
@@ -1620,6 +1670,7 @@ bool Session::Undo(commands::Command* command) {
 
   // Rollback the last user history.
   context_->mutable_converter()->Revert();
+  ForgetLastTurnedDown();
 
   size_t result_size = 0;
   int32_t cursor_offset = 0;
@@ -2129,6 +2180,7 @@ bool Session::CommitInternal(commands::Command* command,
     context_->mutable_converter()->CommitPreedit(context_->composer(),
                                                  command->input().context());
   } else {  // ImeContext::CONVERSION
+    RememberTurnedDown(std::numeric_limits<size_t>::max());
     context_->mutable_converter()->Commit(context_->composer(),
                                           command->input().context());
   }
@@ -2212,6 +2264,10 @@ bool Session::CommitSegment(commands::Command* command) {
 
   PushUndoContext();
 
+  // shortcut: committing up to the focused segment
+  // (CommitHeadToFocusedSegments) tells zenz nothing; count its segments here
+  // if that key comes into use.
+  RememberTurnedDown(1);
   size_t size;
   context_->mutable_converter()->CommitFirstSegment(
       context_->composer(), command->input().context(), &size);
@@ -3445,7 +3501,7 @@ bool Session::ApplyAcceptedCorrection() {
   std::optional<floatype::Mapping> mapping =
       floatype::MapWithResegmentation(segments, text, ZenzResegmenter(),
                                       ZenzWords());
-  return mapping.has_value() &&
+  return mapping.has_value() && !floatype::UsesTurnedDown(segments, *mapping) &&
          ShowZenzText(reading, text, *std::move(mapping));
 }
 

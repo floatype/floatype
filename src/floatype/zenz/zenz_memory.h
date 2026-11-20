@@ -1,7 +1,9 @@
 // floatype: what the user did with zenz's corrections (spec section 2, zenz
-// learning). Two memories: the corrections the user stopped (Ctrl+Delete
-// while one is shown), which zenz does not make again, and the ones the user
-// committed, which are shown at once the next time the reading comes.
+// learning). Three memories: the corrections the user stopped (Ctrl+Delete
+// while one is shown), which zenz does not make again; the ones the user
+// committed, which are shown at once the next time the reading comes; and the
+// words the user chose another candidate over, which zenz does not bring
+// back.
 
 #ifndef MOZC_FLOATYPE_ZENZ_ZENZ_MEMORY_H_
 #define MOZC_FLOATYPE_ZENZ_ZENZ_MEMORY_H_
@@ -37,6 +39,9 @@ class ZenzMemory {
   // tests with a profile of their own get memories of their own.
   static ZenzMemory& Stopped();
   static ZenzMemory& Accepted();
+  // Words, not sentences: the reading and the writing of the content word of
+  // a candidate (かんじ and 完治 for 完治に).
+  static ZenzMemory& TurnedDown();
 
  private:
   void Save() const;

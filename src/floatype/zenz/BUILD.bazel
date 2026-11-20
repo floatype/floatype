@@ -133,6 +133,7 @@ mozc_cc_test(
     deps = [
         ":scorer_client",
         ":zenz_corrector",
+        ":zenz_memory",
         "//base:clock",
         "//base:clock_mock",
         "//base:file_util",

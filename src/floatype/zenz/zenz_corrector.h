@@ -83,6 +83,10 @@ std::optional<Mapping> MapWithResegmentation(const Segments& segments,
                                              const WordLookup& words = nullptr);
 // The conversion's reading: its segment keys in hiragana.
 std::string ConversionReading(const Segments& segments);
+// Whether `mapping` of `segments` shows a word the user chose another
+// candidate over (ZenzMemory::TurnedDown()). On the conversion's own segments
+// the first candidates are Mozc's and are not looked at.
+bool UsesTurnedDown(const Segments& segments, const Mapping& mapping);
 
 // The session calls Request() right after Mozc converts, Poll() whenever the
 // client calls back, and Cancel() on any user action.

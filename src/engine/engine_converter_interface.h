@@ -288,6 +288,23 @@ class EngineConverterInterface {
   // Less means likelier Japanese. Negative where it cannot be converted.
   virtual int ConversionCost(absl::string_view reading) const { return -1; }
 
+  // floatype: a conversion segment where the user chose another candidate
+  // than the one shown first, by the content words of the two (かんじ and 感じ
+  // for 感じに).
+  struct ReplacedCandidate {
+    size_t segment = 0;
+    std::string shown_key;
+    std::string shown_value;
+    std::string chosen_key;
+    std::string chosen_value;
+    // Whether committing the choice teaches the converter.
+    bool learned = false;
+  };
+  // floatype: those segments of the conversion as it is now, in order.
+  virtual std::vector<ReplacedCandidate> ReplacedCandidates() const {
+    return {};
+  }
+
   // Operation for the candidate list.
   virtual void SetCandidateListVisible(bool visible) = 0;
 

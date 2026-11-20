@@ -716,6 +716,7 @@ mozc_cc_test(
         "//engine:mock_data_engine_factory",
         "//floatype/zenz:scorer_client",
         "//floatype/zenz:zenz_corrector",
+        "//floatype/zenz:zenz_memory",
         "//protocol:commands_cc_proto",
         "//protocol:config_cc_proto",
         "//testing:gunit",

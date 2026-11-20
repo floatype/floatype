@@ -24,6 +24,7 @@
 #include "converter/attribute.h"
 #include "converter/segments.h"
 #include "floatype/zenz/scorer_client.h"
+#include "floatype/zenz/zenz_memory.h"
 #include "protocol/config.pb.h"
 #include "testing/gmock.h"
 #include "testing/gunit.h"
@@ -96,11 +97,18 @@ TEST(MapToCandidatesTest, KeepsMozcsWidthOfSymbols) {
   EXPECT_THAT(MapToCandidates(half, "１").value(), ElementsAre(0));
 }
 
-TEST(MapToCandidatesTest, KeepsATopCandidateLearnedFromTheUser) {
+TEST(MapToCandidatesTest, DoesNotBringBackWhatTheUsersHistoryDisplaced) {
+  // The user's history put 今日は first, over Mozc's best, 強は.
   Segments segments = KyouHaIshaNiIku();
-  segments.mutable_conversion_segment(0)->mutable_candidate(0)->attributes |=
+  Segment* learned = segments.mutable_conversion_segment(0);
+  learned->mutable_candidate(0)->attributes |=
       converter::Attribute::USER_SEGMENT_HISTORY_REWRITER;
+  learned->mutable_candidate(1)->attributes |=
+      converter::Attribute::BEST_CANDIDATE;
   EXPECT_EQ(MapToCandidates(segments, "強は医者に行く"), std::nullopt);
+  // Any other candidate is zenz's to choose, there and elsewhere.
+  EXPECT_THAT(MapToCandidates(segments, "教は医者に行く").value(),
+              ElementsAre(2, 0, 0));
   EXPECT_THAT(MapToCandidates(segments, "今日は医者に逝く").value(),
               ElementsAre(0, 0, 1));
 }
@@ -492,6 +500,18 @@ class ZenzCorrectorTest : public testing::TestWithTempUserProfile {
   std::string answers_;
   std::unique_ptr<ScorerClient> client_;
 };
+
+TEST_F(ZenzCorrectorTest, TellsAMappingThatShowsATurnedDownWord) {
+  const Segments segments = KyouHaIshaNiIku();
+  ZenzMemory::TurnedDown().Add("きょうは", "強は");
+  EXPECT_TRUE(UsesTurnedDown(segments, {{1, 0, 0}, std::nullopt}));
+  EXPECT_FALSE(UsesTurnedDown(segments, {{2, 0, 0}, std::nullopt}));
+  // Mozc's own first candidate is not zenz's choice.
+  ZenzMemory::TurnedDown().Add("いしゃに", "医者に");
+  EXPECT_FALSE(UsesTurnedDown(segments, {{0, 0, 1}, std::nullopt}));
+  // On segments cut again, every candidate shown is.
+  EXPECT_TRUE(UsesTurnedDown(Segments(), {{0, 0, 1}, segments}));
+}
 
 TEST_F(ZenzCorrectorTest, AppliesAnAnswerThatDiffersFromMozc) {
   ZenzCorrector corrector(client_.get());

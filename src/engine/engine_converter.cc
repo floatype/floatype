@@ -909,6 +909,10 @@ void EngineConverter::CommitSegmentsInternal(const composer::Composer& composer,
 
   // Commit the [0, segments_to_commit - 1] conversion segment.
   CommitSegmentsSize(segments_to_commit);
+  // floatype: what was shown first goes with its segments.
+  shown_first_.erase(
+      shown_first_.begin(),
+      shown_first_.begin() + std::min(shown_first_.size(), segments_to_commit));
 
   // Adjust the segment_index, since the [0, segment_to_commit - 1] segments
   // disappeared.
@@ -1056,6 +1060,9 @@ void EngineConverter::ResizeSegmentWidth(const composer::Composer& composer,
     return;  // Do nothing.
   }
   ResetResult();
+  // shortcut: the choices fixed before a resize are no longer told from what
+  // was shown first; keep them per segment if resizing after choosing matters.
+  shown_first_.clear();
 
   DCHECK(request_);
   DCHECK(config_);
@@ -1202,6 +1209,9 @@ bool EngineConverter::PromoteCandidates(absl::Span<const int> candidate_indices,
     segment->mutable_candidate(candidate_indices[i])->attributes |= attributes;
     segment->move_candidate(candidate_indices[i], 0);
   }
+  // Moving the focus fixes a segment with no choice made; what is shown first
+  // is what this call leaves there.
+  shown_first_.clear();
   ResetResult();
   UpdateCandidateList();
   return true;
@@ -1282,6 +1292,7 @@ bool EngineConverter::SetSegments(Segments segments) {
   }
   segments_ = std::move(segments);
   segment_index_ = 0;
+  shown_first_.clear();
   ResetResult();
   UpdateCandidateList();
   InitializeSelectedCandidateIndices();
@@ -1452,7 +1463,39 @@ EngineConverter* EngineConverter::Clone() const {
 
 void EngineConverter::ResetResult() { result_.Clear(); }
 
+std::vector<EngineConverterInterface::ReplacedCandidate>
+EngineConverter::ReplacedCandidates() const {
+  std::vector<ReplacedCandidate> replaced;
+  if (!CheckState(CONVERSION)) {
+    return replaced;
+  }
+  const size_t size = segments_.conversion_segments_size();
+  for (size_t i = 0; i < size; ++i) {
+    const Segment& segment = segments_.conversion_segment(i);
+    const int index = GetCandidateIndexForConverter(i);
+    if (segment.candidates_size() == 0 || !segment.is_valid_index(index)) {
+      continue;
+    }
+    const converter::Candidate& chosen = segment.candidate(index);
+    const converter::Candidate& first = segment.candidate(0);
+    const bool fixed = shown_first_.size() == size;
+    const std::string& shown_key =
+        fixed ? shown_first_[i].first : first.content_key;
+    const std::string& shown_value =
+        fixed ? shown_first_[i].second : first.content_value;
+    if (shown_key == chosen.content_key &&
+        shown_value == chosen.content_value) {
+      continue;
+    }
+    replaced.push_back(
+        {i, shown_key, shown_value, chosen.content_key, chosen.content_value,
+         !(chosen.attributes & converter::Attribute::NO_HISTORY_LEARNING)});
+  }
+  return replaced;
+}
+
 void EngineConverter::ResetState() {
+  shown_first_.clear();
   state_ = COMPOSITION;
   segment_index_ = 0;
   previous_suggestions_.clear();
@@ -1473,6 +1516,18 @@ void EngineConverter::SegmentFocus() {
 
 void EngineConverter::SegmentFix() {
   DCHECK(CheckState(SUGGESTION | PREDICTION | CONVERSION));
+  // floatype: fixing a choice moves it first, so what was shown first is
+  // noted before the first one (ReplacedCandidates()).
+  if (CheckState(CONVERSION) && shown_first_.empty()) {
+    for (const Segment& segment : segments_.conversion_segments()) {
+      if (segment.candidates_size() == 0) {
+        shown_first_.clear();
+        break;
+      }
+      shown_first_.emplace_back(segment.candidate(0).content_key,
+                                segment.candidate(0).content_value);
+    }
+  }
   if (!converter_->CommitSegmentValue(
           &segments_, segment_index_,
           GetCandidateIndexForConverter(segment_index_))) {

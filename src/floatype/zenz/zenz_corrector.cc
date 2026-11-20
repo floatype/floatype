@@ -47,7 +47,8 @@ bool default_client_enabled = false;
 ScorerClient* default_client_for_testing = nullptr;
 bool ignore_secure_input_for_testing = false;
 
-bool KeepsTopCandidate(const Segment& segment) {
+// Whether the user's history put another candidate first than Mozc's best.
+bool LearnedFromUser(const Segment& segment) {
   return segment.candidates_size() > 0 &&
          (segment.candidate(0).attributes &
           converter::Attribute::USER_SEGMENT_HISTORY_REWRITER);
@@ -180,14 +181,27 @@ std::vector<std::vector<std::string>> CandidateValues(
   std::vector<std::vector<std::string>> values;
   for (const Segment& segment : segments.conversion_segments()) {
     std::vector<std::string>& folded = values.emplace_back();
-    const int limit = KeepsTopCandidate(segment)
-                          ? 1
-                          : static_cast<int>(segment.candidates_size());
-    for (int i = 0; i < limit; ++i) {
+    // Where the user's history put another candidate first, the user chose
+    // it over Mozc's best, which zenz does not bring back (機械 learned over
+    // 機会). Any other candidate zenz may choose: a word learned by mistake
+    // does not shut zenz out of the segment.
+    // The same writing may be several candidates (感じ of 感じる and the
+    // noun), so it is the writing that is kept out.
+    std::string displaced;
+    for (size_t i = 1; LearnedFromUser(segment) && displaced.empty() &&
+                       i < segment.candidates_size();
+         ++i) {
+      if (segment.candidate(i).attributes &
+          converter::Attribute::BEST_CANDIDATE) {
+        displaced = segment.candidate(i).value;
+      }
+    }
+    for (size_t i = 0; i < segment.candidates_size(); ++i) {
       const converter::Candidate& candidate = segment.candidate(i);
       // A candidate with another key covers a different part of the reading.
       folded.push_back(
-          candidate.key == segment.key()
+          candidate.key == segment.key() &&
+                  (displaced.empty() || candidate.value != displaced)
               ? japanese::FullWidthAsciiToHalfWidthAscii(candidate.value)
               : "");
     }
@@ -288,7 +302,7 @@ std::optional<Resegmentation> ResegmentationFor(const Segments& segments,
               return Util::IsScriptType(value, Util::KANJI) &&
                      NumberUtil::NormalizeNumbers(value, true, &kanji, &digits);
             });
-        if (KeepsTopCandidate(segment) || numeral == values[j].end()) {
+        if (LearnedFromUser(segment) || numeral == values[j].end()) {
           break;
         }
         numerals += *numeral;
@@ -305,7 +319,7 @@ std::optional<Resegmentation> ResegmentationFor(const Segments& segments,
       for (size_t j = i; j <= n; ++j) {
         if (j > i) {
           // A segment the user's history decided keeps its candidate.
-          if (KeepsTopCandidate(segments.conversion_segment(j - 1))) {
+          if (LearnedFromUser(segments.conversion_segment(j - 1))) {
             break;
           }
           run_chars += segments.conversion_segment(j - 1).key_len();
@@ -386,7 +400,7 @@ std::optional<Resegmentation> ResegmentationFor(const Segments& segments,
   const auto alone = [&](size_t k) {
     return group[k] == k && (k + 1 == n || group[k + 1] != k) &&
            numbers[k].empty() &&
-           !KeepsTopCandidate(segments.conversion_segment(k));
+           !LearnedFromUser(segments.conversion_segment(k));
   };
   for (size_t k = 0; k < n; ++k) {
     if (!in_run[k] || !alone(k)) {
@@ -904,11 +918,10 @@ std::optional<Mapping> MapWithResegmentation(const Segments& segments,
   // Cutting as zenz cuts lets Mozc's dictionary write what Mozc's own
   // boundaries hid (がかんせいど|たかい: が|完成度高い). The user's history
   // decided the segments it ranked, so those stay.
-  if (std::any_of(segments.conversion_segments().begin(),
-                  segments.conversion_segments().end(),
-                  [](const Segment& segment) {
-                    return KeepsTopCandidate(segment);
-                  })) {
+  if (std::any_of(
+          segments.conversion_segments().begin(),
+          segments.conversion_segments().end(),
+          [](const Segment& segment) { return LearnedFromUser(segment); })) {
     return std::nullopt;
   }
   const std::string reading = Reading(segments);
@@ -1094,6 +1107,27 @@ ZenzCorrector::PollResult ZenzCorrector::Poll(const Segments& segments,
   return result;
 }
 
+bool UsesTurnedDown(const Segments& segments, const Mapping& mapping) {
+  const Segments& shown =
+      mapping.segments.has_value() ? *mapping.segments : segments;
+  const ZenzMemory& memory = ZenzMemory::TurnedDown();
+  for (size_t i = 0; i < mapping.candidate_indices.size() &&
+                     i < shown.conversion_segments_size();
+       ++i) {
+    const int index = mapping.candidate_indices[i];
+    const Segment& segment = shown.conversion_segment(i);
+    if ((index == 0 && !mapping.segments.has_value()) ||
+        !segment.is_valid_index(index)) {
+      continue;
+    }
+    const converter::Candidate& candidate = segment.candidate(index);
+    if (memory.Contains(candidate.content_key, candidate.content_value)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 ZenzCorrector::PollResult ZenzCorrector::Judge(
     const Segments& segments, const Response& response,
     absl::string_view left_context, const Resegmenter& resegment,
@@ -1143,10 +1177,12 @@ ZenzCorrector::PollResult ZenzCorrector::Judge(
                    [](int index) { return index == 0; }))) {
     return {PollResult::kDone, {}};
   }
-  // A correction the user stopped before is not made again.
+  // A correction the user stopped before is not made again, nor one that
+  // writes a word the user chose another candidate over.
   std::string reading = Reading(segments);
   if (learning_ &&
-      ZenzMemory::Stopped().Contains(reading, response.conversion)) {
+      (ZenzMemory::Stopped().Contains(reading, response.conversion) ||
+       UsesTurnedDown(segments, *mapping))) {
     return {PollResult::kDone, {}};
   }
   return {PollResult::kApply, std::move(mapping->candidate_indices),

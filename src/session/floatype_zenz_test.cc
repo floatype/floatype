@@ -21,6 +21,7 @@
 #include "engine/mock_data_engine_factory.h"
 #include "floatype/zenz/scorer_client.h"
 #include "floatype/zenz/zenz_corrector.h"
+#include "floatype/zenz/zenz_memory.h"
 #include "protocol/commands.pb.h"
 #include "protocol/config.pb.h"
 #include "session/keymap.h"
@@ -281,6 +282,24 @@ TEST_F(FloatypeZenzTest, DoesNotTeachMozcTheSegmentsOfZenzsCorrection) {
                 {"h", "y", "a", "k", "u", "n", "a", "n", "a", "Space"}))),
             "107");
   ASSERT_EQ(SendKeys({"Enter"}).result().value(), "107");
+
+  StartSession(/*zenz=*/false);
+  const commands::Output mozc =
+      SendKeys({"h", "y", "a", "k", "u", "n", "a", "n", "a", "Space"});
+  EXPECT_EQ(Preedit(mozc), "百ナナ");
+  EXPECT_EQ(mozc.preedit().segment_size(), 2) << "ひゃく|なな, not ひゃくなな";
+}
+
+TEST_F(FloatypeZenzTest, ChoosingOnZenzsSegmentsTeachesMozcNoSegments) {
+  ASSERT_OK(FileUtil::SetContents(answers_, "ヒャクナナ\t107\n"));
+  ASSERT_EQ(Preedit(PollWhileAsked(SendKeys(
+                {"h", "y", "a", "k", "u", "n", "a", "n", "a", "Space"}))),
+            "107");
+  // The next candidate of zenz's one segment.
+  const commands::Output next = SendKeys({"Space", "Space"});
+  ASSERT_NE(Preedit(next), "107");
+  ASSERT_EQ(next.preedit().segment_size(), 1);
+  ASSERT_TRUE(SendKeys({"Enter"}).has_result());
 
   StartSession(/*zenz=*/false);
   const commands::Output mozc =
@@ -933,6 +952,122 @@ TEST_F(FloatypeZenzTest, CommittingMozcsCandidateRemembersNoCorrection) {
   ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機会");
   StartSession(/*zenz=*/true);
   EXPECT_EQ(Preedit(ConvertKikai()), "機会") << "not shown before zenz answers";
+}
+
+TEST_F(FloatypeZenzTest, DoesNotBringBackAWordTheUserChoseAnotherOver) {
+  ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
+  ASSERT_EQ(Preedit(SendKeys({"Space", "Space"})), "機会");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機会");
+
+  // zenz still answers 機械, which is no longer shown.
+  const commands::Output converted = ConvertKikai();
+  ASSERT_TRUE(converted.has_callback());
+  EXPECT_EQ(Preedit(PollWhileAsked(converted)), "機会");
+}
+
+TEST_F(FloatypeZenzTest, ATurnedDownWordStaysAwayInAnotherSentence) {
+  // 機械 is turned down in きかい alone.
+  ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
+  ASSERT_EQ(Preedit(SendKeys({"Space", "Space"})), "機会");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機会");
+
+  // It is the word that is remembered, so 機械が is not written either.
+  ASSERT_OK(FileUtil::SetContents(answers_, "キカイガキカイ\t機械が機械\n"));
+  const commands::Output corrected = PollWhileAsked(SendKeys(
+      {"k", "i", "k", "a", "i", "g", "a", "k", "i", "k", "a", "i", "Space"}));
+  EXPECT_EQ(Preedit(corrected), "機会が機会");
+}
+
+TEST_F(FloatypeZenzTest, ChoosingATurnedDownWordLetsZenzWriteItAgain) {
+  ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
+  ASSERT_EQ(Preedit(SendKeys({"Space", "Space"})), "機会");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機会");
+  ASSERT_TRUE(floatype::ZenzMemory::TurnedDown().Contains("きかい", "機械"));
+
+  // Choosing 機械 over 機会 turns the two around.
+  ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機会");
+  ASSERT_EQ(Preedit(SendKeys({"Space"})), "機械");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機械");
+  EXPECT_FALSE(floatype::ZenzMemory::TurnedDown().Contains("きかい", "機械"));
+  EXPECT_TRUE(floatype::ZenzMemory::TurnedDown().Contains("きかい", "機会"));
+}
+
+TEST_F(FloatypeZenzTest, CommittingTheFirstCandidateForgetsNothing) {
+  ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
+  ASSERT_EQ(Preedit(SendKeys({"Space", "Space"})), "機会");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機会");
+  // 機会 as Mozc shows it, with no choice made.
+  ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機会");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機会");
+  EXPECT_TRUE(floatype::ZenzMemory::TurnedDown().Contains("きかい", "機械"));
+}
+
+TEST_F(FloatypeZenzTest, BackspaceRightAfterTheCommitTakesBackWhatItToldZenz) {
+  ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
+  ASSERT_EQ(Preedit(SendKeys({"Space", "Space"})), "機会");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機会");
+  ASSERT_TRUE(floatype::ZenzMemory::TurnedDown().Contains("きかい", "機械"));
+
+  SendKeys({"Backspace"});
+  EXPECT_FALSE(floatype::ZenzMemory::TurnedDown().Contains("きかい", "機械"));
+  EXPECT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
+}
+
+TEST_F(FloatypeZenzTest,
+       ARememberedCorrectionIsNotShownOnceItsWordIsTurnedDown) {
+  ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機械");
+  StartSession(/*zenz=*/true);
+  ASSERT_EQ(Preedit(ConvertKikai()), "機械") << "shown from memory";
+  ASSERT_EQ(Preedit(SendKeys({"Space", "Space"})), "機会");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機会");
+
+  StartSession(/*zenz=*/true);
+  const commands::Output converted = ConvertKikai();
+  EXPECT_EQ(Preedit(converted), "機会");
+  EXPECT_EQ(Preedit(PollWhileAsked(converted)), "機会");
+}
+
+TEST_F(FloatypeZenzTest, ZenzMayChangeALearnedCandidateToAnother) {
+  // Picking 機械 by hand makes Mozc put it first, over its own 機会.
+  StartSession(/*zenz=*/false);
+  ASSERT_EQ(Preedit(SendKeys({"k", "i", "k", "a", "i", "Space", "Space"})),
+            "機械");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機械");
+
+  // A candidate that is neither is zenz's to choose: a word learned by
+  // mistake does not shut zenz out.
+  ASSERT_OK(FileUtil::SetContents(answers_, "キカイ\t既介\n"));
+  StartSession(/*zenz=*/true);
+  EXPECT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "既介");
+}
+
+TEST_F(FloatypeZenzTest, KeepsALearnedCandidateWithNothingRemembered) {
+  StartSession(/*zenz=*/false);
+  ASSERT_EQ(Preedit(SendKeys({"k", "i", "k", "a", "i", "Space", "Space"})),
+            "機械");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機械");
+  // As a word learned before the memory of turned-down words was kept.
+  floatype::ZenzMemory::TurnedDown().Clear();
+
+  // Mozc's own first candidate is what the learning displaced.
+  ASSERT_OK(FileUtil::SetContents(answers_, "キカイ\t機会\n"));
+  StartSession(/*zenz=*/true);
+  EXPECT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
+}
+
+TEST_F(FloatypeZenzTest, TurnsNothingDownWithLearningOff) {
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_zenz_learning(false);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+
+  ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
+  ASSERT_EQ(Preedit(SendKeys({"Space", "Space"})), "機会");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機会");
+  EXPECT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
 }
 
 TEST_F(FloatypeZenzTest, CtrlDeleteForgetsNothingWithLearningOff) {

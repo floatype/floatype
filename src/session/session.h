@@ -309,6 +309,15 @@ class Session {
   std::vector<int> zenz_indices_;
   // Whether the candidates were opened on that correction (the first Space).
   bool zenz_listed_ = false;
+  // What the last commit changed in ZenzMemory::TurnedDown(), so that undoing
+  // the commit takes it back: whether the word was added (or removed), its
+  // reading and its writing.
+  struct TurnedDownChange {
+    bool added;
+    std::string key;
+    std::string value;
+  };
+  std::vector<TurnedDownChange> turned_down_changes_;
   // The reading and zenz's text of the correction on screen, for Ctrl+Delete.
   std::string zenz_reading_;
   std::string zenz_text_;
@@ -450,6 +459,12 @@ class Session {
       const EngineInterface& engine) const;
 
   void PushUndoContext();
+  // floatype: tells zenz what committing the first `count` segments of the
+  // conversion says: a word the user chose another candidate over is not for
+  // zenz to bring back, and a word the user chose is.
+  void RememberTurnedDown(size_t count);
+  // Takes back what the last commit told zenz.
+  void ForgetLastTurnedDown();
   void PopUndoContext();
   // Clear the undo context.
   // This should be called when the composer's preedit or cursor position

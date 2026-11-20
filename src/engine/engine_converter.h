@@ -244,6 +244,7 @@ class EngineConverter : public EngineConverterInterface {
   void set_word_lookup(WordLookup lookup) { word_lookup_ = std::move(lookup); }
   bool StartsWord(absl::string_view reading) const override;
   int ConversionCost(absl::string_view reading) const override;
+  std::vector<ReplacedCandidate> ReplacedCandidates() const override;
   // floatype: what StartsWord() calls; the engine gives its dictionary's.
   using WordStartLookup = std::function<bool(absl::string_view reading)>;
   void set_word_start_lookup(WordStartLookup lookup) {
@@ -439,6 +440,11 @@ class EngineConverter : public EngineConverterInterface {
 
   // Selected index data of each segments for usage stats.
   std::vector<int> selected_candidate_indices_;
+
+  // floatype: the content key and value of the first candidate of each
+  // conversion segment as they were before the user fixed a choice; empty
+  // while no choice is fixed.
+  std::vector<std::pair<std::string, std::string>> shown_first_;
 
   // Indicates whether config_ will be updated by the command candidate.
   converter::Candidate::Command updated_command_;
