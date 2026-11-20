@@ -2230,6 +2230,32 @@ bool Session::CommitInternal(commands::Command* command,
   PushUndoContext();
 
   if (context_->state() == ImeContext::COMPOSITION) {
+    // floatype: an English word is committed in its letters though the key
+    // came before the pause that shows them (mixed English input): update,
+    // not うｐだて, and v1.2.3, not ｖ1．2．3. It is what the pause would
+    // have shown; that screen is not this command's.
+    KeepEnglishWords(false);
+    commands::Command shown;
+    // A name of letters with digits and symbols (v1.2.3, x86_64) is no word
+    // of the list; typed in a kana mode with no kana in it, it is its keys.
+    const composer::Composer& composer = context_->composer();
+    const std::string query = composer.GetQueryForConversion();
+    const transliteration::TransliterationType mode = composer.GetInputMode();
+    if (!MaybeConvertAsEnglish(&shown) && floatype::SessionFeaturesEnabled() &&
+        context_->GetConfig().mixed_english() &&
+        mode != transliteration::HALF_ASCII &&
+        mode != transliteration::FULL_ASCII &&
+        std::all_of(query.begin(), query.end(),
+                    [](char c) {
+                      return absl::ascii_isgraph(static_cast<unsigned char>(c));
+                    }) &&
+        std::any_of(query.begin(), query.end(), [](char c) {
+          return absl::ascii_isalpha(static_cast<unsigned char>(c));
+        })) {
+      ConvertToHalfASCII(&shown);
+    }
+  }
+  if (context_->state() == ImeContext::COMPOSITION) {
     context_->mutable_converter()->CommitPreedit(context_->composer(),
                                                  command->input().context());
   } else {  // ImeContext::CONVERSION

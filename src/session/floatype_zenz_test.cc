@@ -1838,6 +1838,89 @@ TEST_F(FloatypeZenzTest, MixedEnglishKeepsAWordWhenTypingOn) {
   EXPECT_EQ(SendKeys({"Enter"}).result().value(), "updat");
 }
 
+// Enter before the pause that would show the word in letters commits the
+// letters too, not the kana and the letters left over of them (あｐだて).
+TEST_F(FloatypeZenzTest, MixedEnglishEnterBeforeThePauseCommitsTheWord) {
+  floatype::EnableSessionFeatures(true);
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_mixed_english(true);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+
+  SendKeys({"u", "p", "d", "a", "t", "e"});
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(), "update");
+  // Japanese is committed as typed: nothing converted it yet.
+  SendKeys({"k", "i", "k", "a", "i"});
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(), "きかい");
+  // A name with digits and symbols is its keys, not their full-width forms.
+  SendKeys({"v", "1", ".", "2", ".", "3"});
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(), "v1.2.3");
+  // Japanese punctuation and digits alone stay as the settings write them.
+  const commands::Output typed = SendKeys({"1", ".", "5"});
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(), Preedit(typed));
+}
+
+// English written word by word: the last word, with Enter before the pause,
+// is committed as the pause would have shown it.
+TEST_F(FloatypeZenzTest, MixedEnglishEnterBeforeThePauseEndsARunOfEnglish) {
+  floatype::EnableSessionFeatures(true);
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_mixed_english(true);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+
+  const auto type = [this](bool pause) {
+    std::string committed;
+    for (const absl::string_view key : {"m", "e", "e", "t", "Space"}) {
+      committed += SendKeys({key}).result().value();
+    }
+    commands::Output last = SendKeys({"y", "o", "u"});
+    if (pause) {
+      last = PollWhileAsked(CallBack(last));
+    }
+    committed += SendKeys({"Enter"}).result().value();
+    return committed;
+  };
+  const std::string paused = type(/*pause=*/true);
+  EXPECT_EQ(paused, "meet you");
+  EXPECT_EQ(type(/*pause=*/false), paused);
+}
+
+// Undo after such a commit brings the composition back.
+TEST_F(FloatypeZenzTest, MixedEnglishUndoAfterEnterBeforeThePause) {
+  floatype::EnableSessionFeatures(true);
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_mixed_english(true);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+  // The client can delete what was committed, as most apps can; it says so
+  // with its first key.
+  commands::Input first;
+  first.set_type(commands::Input::SEND_KEY);
+  ASSERT_TRUE(KeyParser::ParseKey("u", first.mutable_key()));
+  first.mutable_capability()->set_text_deletion(
+      commands::Capability::DELETE_PRECEDING_TEXT);
+  Eval(std::move(first));
+  SendKeys({"p", "d", "a", "t", "e"});
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "update");
+  const commands::Output undone = CallBack(SendKeys({"Ctrl Backspace"}));
+  EXPECT_TRUE(undone.has_deletion_range());
+  EXPECT_FALSE(Preedit(undone).empty()) << "the composition is back";
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(), "update");
+}
+
+TEST_F(FloatypeZenzTest, WithoutMixedEnglishEnterCommitsWhatWasTyped) {
+  floatype::EnableSessionFeatures(true);
+  const commands::Output typed = SendKeys({"u", "p", "d", "a", "t", "e"});
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(), Preedit(typed));
+}
+
 TEST_F(FloatypeZenzTest, MixedEnglishKeepsAWordInsideASentence) {
   floatype::EnableSessionFeatures(true);
   config::Config config = config::ConfigHandler::DefaultConfig();
