@@ -246,7 +246,7 @@ class Replayer {
            std::to_string(polls) + '\t' + std::to_string(changes);
   }
 
-  void SetLiveConfig(int wait_for_zenz) {
+  void SetConfig(int wait_for_zenz) {
     commands::Input input;
     input.set_type(commands::Input::SET_CONFIG);
     *input.mutable_config() = config::ConfigHandler::DefaultConfig();
@@ -384,9 +384,9 @@ int main(int argc, char** argv) {
   const bool live = absl::GetFlag(FLAGS_live);
   mozc::floatype::EnableSessionFeatures(live);
   mozc::Replayer replayer(*std::move(engine));
-  if (live || absl::GetFlag(FLAGS_suggest_added_words)) {
-    replayer.SetLiveConfig(absl::GetFlag(FLAGS_wait_for_zenz));
-  }
+  // Without a config, CharacterFormManager falls back to Mozc's own rules,
+  // not Floatype's defaults (half-width digits) that the converter reads.
+  replayer.SetConfig(absl::GetFlag(FLAGS_wait_for_zenz));
 
   // The first conversion starts the scorer and loads the model.
   replayer.Replay("", "きょうはいしゃにいく");
