@@ -21,6 +21,15 @@ Engines:
         client does, and also scores what a user who commits a given time after
         Space gets. Build the scorer as for zenz, and bazelisk build
         --config release_build //floatype/eval:replay_main.
+  azookey  converts with azooKey's (AzooKeyKanaKanjiConverter) `CliTool
+        evaluate` and Zenzai, with azooKeyMac's defaults (n_best 10, inference
+        limit 5); scores outputs[0]. Requires --binary (CliTool) and --zenz_model
+        (the gguf), or --no_zenzai for azooKey without Zenzai. Build CliTool with
+        swift build -c release --product CliTool. Where Metal init aborts, build
+        with --traits ZenzaiCPU -Xcxx -xobjective-c++ and ZenzContext.swift
+        patched to use no devices; the model check looks for llama.cpp's
+        "CPU_Mapped model buffer" log line. evaluate does not report per-item
+        time, only the total.
 
 Run from src/, for example:
 
@@ -313,9 +322,47 @@ def convert_with_zenz(
   return results, json.loads(stderr.strip().splitlines()[-1])
 
 
+# azooKeyMac's defaults.
+AZOOKEY_N_BEST = 10
+AZOOKEY_INFERENCE_LIMIT = 5
+
+
+def azookey_top1(result: dict, queries: list[str]) -> list[str]:
+  """Takes outputs[0] per item from `CliTool evaluate`'s JSON; "" when it has no output."""
+  items = result["items"]
+  if [item["query"] for item in items] != queries:
+    raise SystemExit(f"evaluate returned other queries than the {len(queries)} sent")
+  return [item["outputs"][0]["text"] if item["outputs"] else "" for item in items]
+
+
+def convert_with_azookey(
+    pairs: list[tuple[str, str]], binary: Path, model: Path | None
+) -> tuple[list[str], float]:
+  """Returns the top-1 per (left context, hiragana reading) and evaluate's total seconds."""
+  with tempfile.TemporaryDirectory() as tmp:
+    items = Path(tmp) / "items.json"
+    output = Path(tmp) / "out.json"
+    # evaluate fails to load items without tag; its own answer matching is unused.
+    items.write_text(json.dumps(
+        [{"query": r, "answer": [], "left_context": c, "tag": []} for c, r in pairs],
+        ensure_ascii=False), encoding="utf-8")
+    done = subprocess.run(
+        [str(binary), "evaluate", str(items), f"--config_n_best={AZOOKEY_N_BEST}",
+         f"--output={output}"]
+        + ([f"--zenz={model.resolve()}",
+            f"--config_zenzai_inference_limit={AZOOKEY_INFERENCE_LIMIT}"] if model else []),
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding="utf-8", errors="replace",
+        check=True)
+    # evaluate exits 0 without Zenzai when the model fails to load.
+    if model and "CPU_Mapped model buffer" not in done.stdout:
+      raise SystemExit(f"zenz did not load:\n{done.stdout[-2000:]}")
+    result = json.loads(output.read_text(encoding="utf-8"))
+  return azookey_top1(result, [r for _, r in pairs]), result["execution_time"]
+
+
 def main() -> None:
   parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-  parser.add_argument("--engine", choices=["mozc", "zenz", "replay", "live"], default="mozc")
+  parser.add_argument("--engine", choices=["mozc", "zenz", "replay", "live", "azookey"], default="mozc")
   parser.add_argument(
       "--pause_every", type=int, default=0,
       help="live: also pause after every this many kana")
@@ -323,14 +370,18 @@ def main() -> None:
       "--wait_for_zenz", type=int, default=0,
       help="live: wait up to this many ms for zenz before showing a live conversion")
   parser.add_argument(
-      "--binary", type=Path, help="default: the engine's tool under bazel-bin or floatype/scorer/build"
+      "--binary", type=Path,
+      help="default: the engine's tool under bazel-bin or floatype/scorer/build; azookey: required (CliTool)"
   )
   parser.add_argument(
       "--data_file", type=Path, default=Path("bazel-bin/data_manager/oss/mozc.data")
   )
   parser.add_argument("--no_context", action="store_true", help="zenz: ignore the left context")
   parser.add_argument("--threads", type=int, default=4, help="zenz: inference threads")
-  parser.add_argument("--zenz_model", type=Path, help="replay: the zenz model (default: replay_main's)")
+  parser.add_argument(
+      "--zenz_model", type=Path,
+      help="replay: the zenz model (default: replay_main's); azookey: required unless --no_zenzai")
+  parser.add_argument("--no_zenzai", action="store_true", help="azookey: run without Zenzai")
   parser.add_argument("--out", type=Path, help="write per-item results as JSON lines")
   parser.add_argument(
       "--set", choices=["v1", "extended", "anthy"], default="v1",
@@ -389,6 +440,17 @@ def main() -> None:
         for delay in COMMIT_DELAYS_MS
     }
     report["mozc_after_space"] = summarize([score(item, r["mozc"]) for item, r in zip(items, replayed)])
+  elif args.engine == "azookey":
+    if not args.binary or not (args.zenz_model or args.no_zenzai):
+      parser.error("azookey needs --binary and --zenz_model (or --no_zenzai)")
+    pairs = [
+        ("" if args.no_context else item.get("context_text", ""), katakana_to_hiragana(item["input"]))
+        for item in items
+    ]
+    top1, seconds = convert_with_azookey(pairs, args.binary, None if args.no_zenzai else args.zenz_model)
+    extras = [{"empty": not t} for t in top1]
+    report.update(context=not args.no_context, zenzai=not args.no_zenzai, execution_s=seconds)
+    report["empty"] = sum(not t for t in top1)
   else:
     binary = args.binary or Path("floatype/scorer/build/floatype_scorer")
     model = fetch(ZENZ_URL, f"zenz-v3.2-small-{ZENZ_REVISION[:12]}-Q5_K_M.gguf", ZENZ_SHA256)

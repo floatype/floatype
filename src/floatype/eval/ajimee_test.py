@@ -67,6 +67,15 @@ class AjimeeTest(unittest.TestCase):
     self.assertEqual(ajimee.committed_after(row, 25), "機械")
     self.assertEqual(ajimee.committed_after(row, 100), "機械")
 
+  def test_azookey_top1_takes_the_first_output_or_empty(self):
+    result = {"items": [
+        {"query": "かんじ", "outputs": [{"text": "漢字", "score": -2.0}, {"text": "感じ", "score": -1.0}]},
+        {"query": "０なんて", "outputs": []},
+    ]}
+    self.assertEqual(ajimee.azookey_top1(result, ["かんじ", "０なんて"]), ["漢字", ""])
+    with self.assertRaises(SystemExit):
+      ajimee.azookey_top1(result, ["かんじ"])
+
   def test_latency_summary(self):
     summary = ajimee.latency_summary([float(i) for i in range(1, 101)])
     self.assertEqual(summary["p50_ms"], 51.0)
