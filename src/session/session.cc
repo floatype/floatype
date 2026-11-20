@@ -760,6 +760,8 @@ bool Session::SendKey(commands::Command* command) {
     context_->mutable_converter()->SetCandidateListVisible(true);
     zenz_indices_ = zenz_indices;
     zenz_listed_ = true;
+    // A conversion like any other from here: Escape shows the reading.
+    live_reading_.clear();
     Output(command);
     SetIndicator(command);
     SetCandidateLook(command);

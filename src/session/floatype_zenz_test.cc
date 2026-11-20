@@ -399,6 +399,41 @@ TEST_F(FloatypeZenzTest, TheFirstSpaceOnALiveCorrectionKeepsItToo) {
   EXPECT_EQ(SendKeys({"Enter"}).result().value(), "機会");
 }
 
+TEST_F(FloatypeZenzTest, CommittingALiveCorrectionAfterTheFirstSpaceTeachesIt) {
+  floatype::EnableSessionFeatures(true);
+  const commands::Output live = CallBack(SendKeys({"k", "i", "k", "a", "i"}));
+  ASSERT_EQ(Preedit(PollWhileAsked(CallBack(live))), "機械");
+  ASSERT_EQ(Preedit(SendKeys({"Space"})), "機械");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機械");
+
+  // The commit went through the conversion: zenz remembers the correction.
+  EXPECT_TRUE(floatype::ZenzMemory::Accepted().Contains("きかい", "機械"));
+  EXPECT_EQ(Preedit(ConvertKikai()), "機械") << "before zenz answers";
+}
+
+TEST_F(FloatypeZenzTest,
+       ChoosingAnotherCandidateOverALiveCorrectionTurnsItDown) {
+  floatype::EnableSessionFeatures(true);
+  const commands::Output live = CallBack(SendKeys({"k", "i", "k", "a", "i"}));
+  ASSERT_EQ(Preedit(PollWhileAsked(CallBack(live))), "機械");
+  ASSERT_EQ(Preedit(SendKeys({"Space", "Space"})), "機会");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機会");
+  EXPECT_TRUE(floatype::ZenzMemory::TurnedDown().Contains("きかい", "機械"));
+
+  // The next live conversion keeps Mozc's 機会.
+  const commands::Output again = CallBack(SendKeys({"k", "i", "k", "a", "i"}));
+  EXPECT_EQ(Preedit(PollWhileAsked(CallBack(again))), "機会");
+}
+
+TEST_F(FloatypeZenzTest,
+       EscapeAfterTheFirstSpaceOnALiveCorrectionShowsTheReading) {
+  floatype::EnableSessionFeatures(true);
+  const commands::Output live = CallBack(SendKeys({"k", "i", "k", "a", "i"}));
+  ASSERT_EQ(Preedit(PollWhileAsked(CallBack(live))), "機械");
+  ASSERT_EQ(Preedit(SendKeys({"Space"})), "機械");
+  EXPECT_EQ(Preedit(SendKeys({"Escape"})), "きかい");
+}
+
 TEST_F(FloatypeZenzTest, CommittingTheCorrectionAfterTheFirstSpaceTeachesIt) {
   ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
   ASSERT_EQ(Preedit(SendKeys({"Space"})), "機械");
