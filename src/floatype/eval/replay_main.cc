@@ -104,6 +104,9 @@ ABSL_FLAG(int, zenz_remembered_min_chars, 1,
           "the setting zenz_remembered_min_chars: a correction committed "
           "before shows at once only for a reading of this many characters "
           "or more");
+ABSL_FLAG(bool, show_pauses, false,
+          "live mode: print to stderr what the screen shows at each pause "
+          "that has three letters or more in a row");
 ABSL_FLAG(bool, enter_after_commit, false,
           "replay (not live), with --commit: Enter once more after the "
           "commit, as a user who ends the line after each sentence");
@@ -337,6 +340,9 @@ class Replayer {
           longest = std::max(longest, run);
         }
         words += longest >= 3;
+        if (longest >= 3 && absl::GetFlag(FLAGS_show_pauses)) {
+          std::cerr << reading << "\t" << Preedit(output) << std::endl;
+        }
       }
     }
     commands::Input enter;
