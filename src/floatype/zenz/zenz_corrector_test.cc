@@ -1,5 +1,6 @@
 #include "floatype/zenz/zenz_corrector.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <initializer_list>
@@ -17,9 +18,11 @@
 #include "base/clock_mock.h"
 #include "base/file_util.h"
 #include "base/system_util.h"
+#include "config/character_form_manager.h"
 #include "converter/attribute.h"
 #include "converter/segments.h"
 #include "floatype/zenz/scorer_client.h"
+#include "protocol/config.pb.h"
 #include "testing/gmock.h"
 #include "testing/gunit.h"
 #include "testing/mozctest.h"
@@ -180,6 +183,137 @@ TEST(ResegmentationForTest, KeepsATopCandidateLearnedFromTheUser) {
 
 // The fake scorer's answers file (see ZenzCorrectorTest) turns キョウハ into
 // 京歯, which these candidates can write.
+TEST(ZenzSegmentSizesTest, CutsWhereTheTextLeavesHiragana) {
+  EXPECT_THAT(*ZenzSegmentSizes("がかんせいどたかい", "が完成度高い"),
+              ElementsAre(1, 8));
+  EXPECT_THAT(*ZenzSegmentSizes("つくえにものをおく", "机に物を置く"),
+              ElementsAre(4, 3, 2));
+  // Katakana starts a word; ー belongs to what it follows.
+  EXPECT_THAT(*ZenzSegmentSizes("それはかれーです", "それはカレーです"),
+              ElementsAre(3, 5));
+}
+
+TEST(ZenzSegmentSizesTest, CutsAroundANumberSaidInKana) {
+  EXPECT_THAT(*ZenzSegmentSizes("せつりつごじゅっしゅうねんをむかえる",
+                                "設立50周年を迎える"),
+              ElementsAre(4, 4, 6, 4));
+  EXPECT_THAT(*ZenzSegmentSizes("せんきゅうひゃくきゅうじゅういちねんに",
+                                "１９９１年に"),
+              ElementsAre(16, 3));
+}
+
+TEST(ZenzSegmentSizesTest, DigitsTheUserTypedStayWhereTheyAre) {
+  EXPECT_THAT(*ZenzSegmentSizes("2026ねんのよてい", "2026年の予定"),
+              ElementsAre(7, 3));
+}
+
+TEST(ZenzSegmentSizesTest, MatchesNothingWhenTheTextReadsOtherwise) {
+  // Digits zenz made up.
+  EXPECT_FALSE(
+      ZenzSegmentSizes("いちにちさいちょうはちじかん", "1日最長0時間")
+          .has_value());
+  // Kana the reading does not have.
+  EXPECT_FALSE(
+      ZenzSegmentSizes("きょうはいしゃにいく", "今日が医者に行く").has_value());
+  // Nowhere to cut.
+  EXPECT_FALSE(ZenzSegmentSizes("あめ", "雨").has_value());
+}
+
+// Answers a request for segments of `sizes` with `segments`, and any other
+// with nullopt; `asked` collects every request.
+Resegmenter ResegmenterFor(std::vector<uint8_t> sizes, Segments segments,
+                           std::vector<std::vector<uint8_t>>* asked) {
+  return [sizes = std::move(sizes), segments = std::move(segments),
+          asked](absl::Span<const uint8_t> request) -> std::optional<Segments> {
+    asked->emplace_back(request.begin(), request.end());
+    if (!std::equal(request.begin(), request.end(), sizes.begin(),
+                    sizes.end())) {
+      return std::nullopt;
+    }
+    return segments;
+  };
+}
+
+TEST(MapWithResegmentationTest, CutsAsZenzCutsWhereMozcsSegmentsCannotWrite) {
+  Segments segments;
+  AddSegment(segments, "がかんせいど", {"掛かんせいど", "がかんせいど"});
+  AddSegment(segments, "たかい", {"高い", "他界"});
+  Segments cut;
+  AddSegment(cut, "が", {"が", "我"});
+  AddSegment(cut, "かんせいどたかい", {"かんせいどたかい", "完成度高い"});
+  std::vector<std::vector<uint8_t>> asked;
+  const std::optional<Mapping> mapping = MapWithResegmentation(
+      segments, "が完成度高い", ResegmenterFor({1, 8}, cut, &asked));
+  ASSERT_TRUE(mapping.has_value());
+  EXPECT_THAT(mapping->candidate_indices, ElementsAre(0, 1));
+  ASSERT_TRUE(mapping->segments.has_value());
+  EXPECT_EQ(mapping->segments->conversion_segment(1).key(), "かんせいどたかい");
+}
+
+TEST(MapWithResegmentationTest, CutsWhereMozcCutTooWhenZenzsCutsDoNotWrite) {
+  Segments segments;
+  AddSegment(segments, "がかんせいど", {"掛かんせいど", "がかんせいど"});
+  AddSegment(segments, "たかい", {"高い", "他界"});
+  Segments cut;
+  AddSegment(cut, "が", {"が", "我"});
+  AddSegment(cut, "かんせいど", {"肝制度", "完成度"});
+  AddSegment(cut, "たかい", {"高い", "他界"});
+  std::vector<std::vector<uint8_t>> asked;
+  const std::optional<Mapping> mapping = MapWithResegmentation(
+      segments, "が完成度高い", ResegmenterFor({1, 5, 3}, cut, &asked));
+  ASSERT_TRUE(mapping.has_value());
+  EXPECT_THAT(mapping->candidate_indices, ElementsAre(0, 1, 0));
+  EXPECT_THAT(asked, ::testing::Contains(ElementsAre(1, 8)))
+      << "zenz's own cuts come first";
+}
+
+TEST(MapWithResegmentationTest, AddsTheDigitsOfANumberSaidInKana) {
+  Segments segments;
+  AddSegment(segments, "せつりつご", {"設立後"});
+  AddSegment(segments, "じゅっ", {"十"});
+  AddSegment(segments, "しゅうねんを", {"周年を"});
+  AddSegment(segments, "むかえる", {"迎える"});
+  Segments cut;
+  AddSegment(cut, "せつりつ", {"設立"});
+  AddSegment(cut, "ごじゅっ", {"後十", "五十"});
+  AddSegment(cut, "しゅうねんを", {"周年を"});
+  AddSegment(cut, "むかえる", {"迎える"});
+  config::CharacterFormManager* forms =
+      config::CharacterFormManager::GetCharacterFormManager();
+  for (const auto& [form, digits] :
+       {std::pair{config::Config::HALF_WIDTH, "50"},
+        std::pair{config::Config::FULL_WIDTH, "５０"}}) {
+    forms->SetDefaultRule();
+    forms->AddConversionRule("0", form);
+    std::vector<std::vector<uint8_t>> asked;
+    const std::optional<Mapping> mapping = MapWithResegmentation(
+        segments, "設立50周年を迎える",
+        ResegmenterFor({4, 4, 6, 4}, cut, &asked));
+    ASSERT_TRUE(mapping.has_value());
+    EXPECT_THAT(mapping->candidate_indices, ElementsAre(0, 2, 0, 0));
+    EXPECT_EQ(mapping->segments->conversion_segment(1).candidate(2).value,
+              digits)
+        << "in the width the settings give digits";
+  }
+  forms->SetDefaultRule();
+}
+
+TEST(MapWithResegmentationTest, DoesNotCutWhatTheUsersHistoryDecided) {
+  Segments segments;
+  AddSegment(segments, "がかんせいど", {"掛かんせいど", "がかんせいど"});
+  AddSegment(segments, "たかい", {"高い", "他界"});
+  segments.mutable_conversion_segment(0)->mutable_candidate(0)->attributes |=
+      converter::Attribute::USER_SEGMENT_HISTORY_REWRITER;
+  Segments cut;
+  AddSegment(cut, "が", {"が"});
+  AddSegment(cut, "かんせいどたかい", {"完成度高い"});
+  std::vector<std::vector<uint8_t>> asked;
+  EXPECT_FALSE(MapWithResegmentation(segments, "が完成度高い",
+                                     ResegmenterFor({1, 8}, cut, &asked))
+                   .has_value());
+  EXPECT_THAT(asked, ::testing::Not(::testing::Contains(ElementsAre(1, 8))));
+}
+
 Segments KyouHa() {
   Segments segments;
   AddSegment(segments, "きょう", {"今日", "京"});

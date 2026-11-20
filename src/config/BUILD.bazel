@@ -95,6 +95,7 @@ mozc_cc_library(
     hdrs = ["character_form_manager.h"],
     visibility = [
         "//composer:__pkg__",
+        "//floatype/zenz:__pkg__",
         "//prediction:__pkg__",
         "//rewriter:__pkg__",
         "//session:__pkg__",

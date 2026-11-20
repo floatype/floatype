@@ -53,6 +53,22 @@ mozc_cc_test(
 )
 
 mozc_cc_library(
+    name = "number_reading",
+    srcs = ["number_reading.cc"],
+    hdrs = ["number_reading.h"],
+    deps = ["@com_google_absl//absl/strings"],
+)
+
+mozc_cc_test(
+    name = "number_reading_test",
+    srcs = ["number_reading_test.cc"],
+    deps = [
+        ":number_reading",
+        "//testing:gunit_main",
+    ],
+)
+
+mozc_cc_library(
     name = "zenz_corrector",
     srcs = ["zenz_corrector.cc"],
     hdrs = ["zenz_corrector.h"],
@@ -67,6 +83,7 @@ mozc_cc_library(
         "//session:__pkg__",
     ],
     deps = [
+        ":number_reading",
         ":scorer_client",
         ":zenz_memory",
         "//base:clock",
@@ -75,6 +92,8 @@ mozc_cc_library(
         "//base:system_util",
         "//base:util",
         "//base/strings:japanese",
+        "//base/strings:unicode",
+        "//config:character_form_manager",
         "//converter:attribute",
         "//converter:segments",
         "//floatype/scorer:protocol",
@@ -96,8 +115,10 @@ mozc_cc_test(
         "//base:clock_mock",
         "//base:file_util",
         "//base:system_util",
+        "//config:character_form_manager",
         "//converter:attribute",
         "//converter:segments",
+        "//protocol:config_cc_proto",
         "//testing:gunit",
         "//testing:gunit_main",
         "//testing:mozctest",

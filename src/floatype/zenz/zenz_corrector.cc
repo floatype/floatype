@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <limits>
 #include <optional>
 #include <string>
@@ -16,17 +17,21 @@
 #include "absl/container/flat_hash_set.h"
 #include "absl/strings/ascii.h"
 #include "absl/strings/match.h"
+#include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "base/clock.h"
 #include "base/file_util.h"
 #include "base/number_util.h"
 #include "base/strings/japanese.h"
+#include "base/strings/unicode.h"
 #include "base/system_util.h"
 #include "base/util.h"
+#include "config/character_form_manager.h"
 #include "converter/attribute.h"
 #include "converter/segments.h"
 #include "floatype/scorer/protocol.h"
+#include "floatype/zenz/number_reading.h"
 #include "floatype/zenz/scorer_client.h"
 #include "floatype/zenz/zenz_memory.h"
 
@@ -418,6 +423,226 @@ std::optional<Resegmentation> ResegmentationFor(const Segments& segments,
   return resegmentation;
 }
 
+namespace {
+
+// The hiragana a kana character of zenz's text reads as, or "" for others.
+std::string KanaReading(absl::string_view ch) {
+  if (ch == "ー") {
+    return std::string(ch);
+  }
+  std::string hiragana = japanese::KatakanaToHiragana(ch);
+  return Util::IsScriptType(hiragana, Util::HIRAGANA) ? hiragana : "";
+}
+
+bool IsHiragana(absl::string_view ch) {
+  return Util::IsScriptType(ch, Util::HIRAGANA);
+}
+
+// Key lengths, in characters, of segments ending at `cuts` (character
+// positions in a reading of `length` characters, increasing, inside it).
+std::optional<std::vector<uint8_t>> SizesAt(absl::Span<const size_t> cuts,
+                                            size_t length) {
+  std::vector<uint8_t> sizes;
+  size_t start = 0;
+  for (const size_t cut : cuts) {
+    sizes.push_back(static_cast<uint8_t>(cut - start));
+    start = cut;
+  }
+  sizes.push_back(static_cast<uint8_t>(length - start));
+  for (const size_t size : sizes) {
+    if (size == 0) {
+      return std::nullopt;
+    }
+  }
+  if (length - start > std::numeric_limits<uint8_t>::max() ||
+      std::any_of(cuts.begin(), cuts.end(), [&](size_t cut) {
+        return cut > std::numeric_limits<uint8_t>::max();
+      })) {
+    return std::nullopt;
+  }
+  return sizes;
+}
+
+// Where zenz's text cuts a reading, and the numbers it writes in digits.
+struct ZenzCutting {
+  // Character positions in the reading, increasing, inside it.
+  std::vector<size_t> cuts;
+  // A number the reading says in kana, characters [begin, end), and `text`
+  // writes in digits.
+  struct Number {
+    size_t begin;
+    size_t end;
+    std::string digits;
+  };
+  std::vector<Number> numbers;
+};
+
+// A piece of zenz's text: a kana, a run of digits, or a run of other
+// characters (kanji, letters, symbols).
+struct TextPiece {
+  enum Kind { kKana, kDigits, kOther };
+  Kind kind;
+  // kKana: the hiragana it reads as. kDigits: the digits, half width.
+  std::string text;
+  // Written in hiragana; ー counts as what it follows.
+  bool hiragana;
+};
+
+std::vector<TextPiece> TextPieces(absl::string_view text) {
+  std::vector<TextPiece> pieces;
+  const std::string folded = japanese::FullWidthAsciiToHalfWidthAscii(text);
+  for (const absl::string_view ch : Utf8AsChars(folded)) {
+    if (ch.size() == 1 && absl::ascii_isdigit(static_cast<unsigned char>(ch[0]))) {
+      if (pieces.empty() || pieces.back().kind != TextPiece::kDigits) {
+        pieces.push_back({TextPiece::kDigits, "", false});
+      }
+      pieces.back().text += ch;
+    } else if (std::string kana = KanaReading(ch); !kana.empty()) {
+      const bool hiragana = ch == "ー"
+                                ? !pieces.empty() && pieces.back().hiragana
+                                : IsHiragana(ch);
+      pieces.push_back({TextPiece::kKana, std::move(kana), hiragana});
+    } else if (pieces.empty() || pieces.back().kind != TextPiece::kOther) {
+      pieces.push_back({TextPiece::kOther, "", false});
+    }
+  }
+  return pieces;
+}
+
+// The value of a run of digits, or nullopt for one written with a leading
+// zero (a code, not a number said aloud) or too long to say.
+std::optional<uint64_t> ValueOfDigits(absl::string_view digits) {
+  uint64_t value = 0;
+  if (digits.size() > 12 || (digits.size() > 1 && digits[0] == '0') ||
+      !absl::SimpleAtoi(digits, &value)) {
+    return std::nullopt;
+  }
+  return value;
+}
+
+// Matches `text` to `reading` (hiragana): each kana of `text` reads as the
+// next character; digits read as the same digits, typed, or as kana that say
+// their number (ReadsAsNumber()), and as nothing else; a run of other
+// characters reads as one or more characters. The first match found,
+// shortest runs first, decides.
+// Cuts where `text` goes from hiragana to another script, and around the
+// numbers said in kana. Returns nullopt when nothing matches.
+std::optional<ZenzCutting> ZenzCuttingFor(absl::string_view reading,
+                                          absl::string_view text) {
+  std::vector<std::string> r;
+  const std::string folded = japanese::FullWidthAsciiToHalfWidthAscii(reading);
+  for (const absl::string_view ch : Utf8AsChars(folded)) {
+    r.emplace_back(ch);
+  }
+  const std::vector<TextPiece> pieces = TextPieces(text);
+  ZenzCutting cutting;
+  const auto cut_at = [&](size_t position) {
+    if (position > 0 && position < r.size() &&
+        (cutting.cuts.empty() || cutting.cuts.back() != position)) {
+      cutting.cuts.push_back(position);
+    }
+  };
+  absl::flat_hash_set<std::pair<size_t, size_t>> dead_ends;
+  std::function<bool(size_t, size_t)> match = [&](size_t i, size_t j) -> bool {
+    if (i == pieces.size()) {
+      return j == r.size();
+    }
+    if (j == r.size() || dead_ends.contains({i, j})) {
+      return false;
+    }
+    const size_t cuts_before = cutting.cuts.size();
+    const size_t numbers_before = cutting.numbers.size();
+    const TextPiece& piece = pieces[i];
+    if (i > 0 && pieces[i - 1].hiragana && !piece.hiragana) {
+      cut_at(j);
+    }
+    if (piece.kind == TextPiece::kKana) {
+      if (r[j] == piece.text && match(i + 1, j + 1)) {
+        return true;
+      }
+    } else if (piece.kind == TextPiece::kDigits) {
+      // Digits read as nothing else, so those zenz made up (８時間 as ０時間)
+      // match nowhere. Digits the user typed are in the reading as they are.
+      size_t typed = 0;
+      while (typed < piece.text.size() && j + typed < r.size() &&
+             r[j + typed] == piece.text.substr(typed, 1)) {
+        ++typed;
+      }
+      if (typed == piece.text.size() && match(i + 1, j + typed)) {
+        return true;
+      }
+      if (const std::optional<uint64_t> value = ValueOfDigits(piece.text);
+          value.has_value()) {
+        const size_t cuts_here = cutting.cuts.size();
+        std::string said;
+        for (size_t m = j + 1; m <= r.size(); ++m) {
+          said += r[m - 1];
+          if (!ReadsAsNumber(said, *value)) {
+            continue;
+          }
+          cut_at(j);
+          cut_at(m);
+          cutting.numbers.push_back({j, m, piece.text});
+          if (match(i + 1, m)) {
+            return true;
+          }
+          cutting.cuts.resize(cuts_here);
+          cutting.numbers.resize(numbers_before);
+        }
+      }
+    } else {
+      for (size_t m = j + 1; m <= r.size(); ++m) {
+        if (match(i + 1, m)) {
+          return true;
+        }
+      }
+    }
+    cutting.cuts.resize(cuts_before);
+    cutting.numbers.resize(numbers_before);
+    dead_ends.insert({i, j});
+    return false;
+  };
+  if (r.empty() || !match(0, 0)) {
+    return std::nullopt;
+  }
+  return cutting;
+}
+
+// The digits to add to each segment of a reading cut at `cuts`: those of the
+// number that is the whole segment, in the width the config gives digits, or
+// "".
+std::vector<std::string> NumbersOfSegments(
+    absl::Span<const size_t> cuts, size_t length,
+    absl::Span<const ZenzCutting::Number> numbers) {
+  std::vector<std::string> digits;
+  size_t begin = 0;
+  for (size_t i = 0; i <= cuts.size(); ++i) {
+    const size_t end = i < cuts.size() ? cuts[i] : length;
+    const auto number = std::find_if(
+        numbers.begin(), numbers.end(), [&](const ZenzCutting::Number& n) {
+          return n.begin == begin && n.end == end;
+        });
+    digits.push_back(
+        number == numbers.end()
+            ? ""
+            : config::CharacterFormManager::GetCharacterFormManager()
+                  ->ConvertConversionString(number->digits));
+    begin = end;
+  }
+  return digits;
+}
+
+}  // namespace
+
+std::optional<std::vector<uint8_t>> ZenzSegmentSizes(absl::string_view reading,
+                                                     absl::string_view text) {
+  const std::optional<ZenzCutting> cutting = ZenzCuttingFor(reading, text);
+  if (!cutting.has_value() || cutting->cuts.empty()) {
+    return std::nullopt;
+  }
+  return SizesAt(cutting->cuts, Util::CharsLen(reading));
+}
+
 std::optional<Mapping> MapWithResegmentation(const Segments& segments,
                                              absl::string_view text,
                                              const Resegmenter& resegment) {
@@ -425,36 +650,100 @@ std::optional<Mapping> MapWithResegmentation(const Segments& segments,
       indices.has_value()) {
     return Mapping{*std::move(indices), std::nullopt};
   }
-  const std::optional<Resegmentation> resegmentation =
-      ResegmentationFor(segments, text);
-  if (!resegment || !resegmentation.has_value()) {
+  if (!resegment) {
     return std::nullopt;
   }
-  std::optional<Segments> resegmented = resegment(resegmentation->sizes);
-  if (!resegmented.has_value() || resegmented->conversion_segments_size() !=
-                                      resegmentation->numbers.size()) {
-    return std::nullopt;
-  }
-  // The digits of a number Mozc wrote in kanji numerals, one per segment,
-  // are a candidate of the segment that now holds all of it.
-  for (size_t i = 0; i < resegmentation->numbers.size(); ++i) {
-    if (resegmentation->numbers[i].empty()) {
-      continue;
+  // Converts again with segments of `sizes` and, where given, digits added
+  // to each new segment's candidates, and maps `text` onto them.
+  const auto map_resized =
+      [&](absl::Span<const uint8_t> sizes,
+          absl::Span<const std::string> numbers) -> std::optional<Mapping> {
+    std::optional<Segments> resegmented = resegment(sizes);
+    if (!resegmented.has_value() ||
+        resegmented->conversion_segments_size() != sizes.size()) {
+      return std::nullopt;
     }
-    Segment* segment = resegmented->mutable_conversion_segment(i);
-    converter::Candidate* candidate = segment->add_candidate();
-    candidate->key = candidate->content_key = segment->key();
-    candidate->value = candidate->content_value = resegmentation->numbers[i];
-    if (segment->candidates_size() > 1) {
-      candidate->lid = segment->candidate(0).lid;
-      candidate->rid = segment->candidate(0).rid;
+    // The digits of a number Mozc wrote in kanji numerals, one per segment,
+    // are a candidate of the segment that now holds all of it.
+    for (size_t i = 0; i < numbers.size(); ++i) {
+      if (numbers[i].empty()) {
+        continue;
+      }
+      Segment* segment = resegmented->mutable_conversion_segment(i);
+      converter::Candidate* candidate = segment->add_candidate();
+      candidate->key = candidate->content_key = segment->key();
+      candidate->value = candidate->content_value = numbers[i];
+      if (segment->candidates_size() > 1) {
+        candidate->lid = segment->candidate(0).lid;
+        candidate->rid = segment->candidate(0).rid;
+      }
+    }
+    std::optional<std::vector<int>> indices =
+        MapToCandidates(*resegmented, text);
+    if (!indices.has_value()) {
+      return std::nullopt;
+    }
+    return Mapping{*std::move(indices), *std::move(resegmented)};
+  };
+  if (const std::optional<Resegmentation> resegmentation =
+          ResegmentationFor(segments, text);
+      resegmentation.has_value()) {
+    if (std::optional<Mapping> mapping =
+            map_resized(resegmentation->sizes, resegmentation->numbers);
+        mapping.has_value()) {
+      return mapping;
     }
   }
-  std::optional<std::vector<int>> indices = MapToCandidates(*resegmented, text);
-  if (!indices.has_value()) {
+  // Cutting as zenz cuts lets Mozc's dictionary write what Mozc's own
+  // boundaries hid (がかんせいど|たかい: が|完成度高い). The user's history
+  // decided the segments it ranked, so those stay.
+  if (std::any_of(segments.conversion_segments().begin(),
+                  segments.conversion_segments().end(),
+                  [](const Segment& segment) {
+                    return KeepsTopCandidate(segment);
+                  })) {
     return std::nullopt;
   }
-  return Mapping{*std::move(indices), *std::move(resegmented)};
+  const std::string reading = Reading(segments);
+  const std::optional<ZenzCutting> cutting = ZenzCuttingFor(reading, text);
+  if (!cutting.has_value() || cutting->cuts.empty()) {
+    return std::nullopt;
+  }
+  const size_t length = Util::CharsLen(reading);
+  if (const std::optional<std::vector<uint8_t>> sizes =
+          SizesAt(cutting->cuts, length);
+      sizes.has_value()) {
+    if (std::optional<Mapping> mapping = map_resized(
+            *sizes, NumbersOfSegments(cutting->cuts, length, cutting->numbers));
+        mapping.has_value()) {
+      return mapping;
+    }
+  }
+  // A segment zenz did not cut may still hold words Mozc cut apart. A number
+  // stays whole.
+  std::vector<size_t> both = cutting->cuts;
+  size_t end = 0;
+  for (const Segment& segment : segments.conversion_segments()) {
+    end += segment.key_len();
+    if (end < length &&
+        std::none_of(cutting->numbers.begin(), cutting->numbers.end(),
+                     [&](const ZenzCutting::Number& number) {
+                       return number.begin < end && end < number.end;
+                     })) {
+      both.push_back(end);
+    }
+  }
+  std::sort(both.begin(), both.end());
+  both.erase(std::unique(both.begin(), both.end()), both.end());
+  if (both == cutting->cuts) {
+    return std::nullopt;
+  }
+  const std::optional<std::vector<uint8_t>> sizes = SizesAt(both, length);
+  if (!sizes.has_value()) {
+    return std::nullopt;
+  }
+  return map_resized(*sizes,
+                     NumbersOfSegments(both, length, cutting->numbers));
 }
 
 void ZenzCorrector::Configure(bool stop_when_idle, bool low_memory) {

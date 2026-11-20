@@ -43,6 +43,12 @@ struct Resegmentation {
 };
 std::optional<Resegmentation> ResegmentationFor(const Segments& segments,
                                                 absl::string_view text);
+// The key lengths, in characters, of segments that end where `text` goes
+// from hiragana to another script (が|完成度高い, 机に|物を|置く), found by
+// matching the kana in `text` to `reading` (hiragana). Returns nullopt when
+// the kana do not match the reading or there is nowhere to cut.
+std::optional<std::vector<uint8_t>> ZenzSegmentSizes(absl::string_view reading,
+                                                     absl::string_view text);
 // Converts the conversion again with conversion segments of the given key
 // lengths, in characters (EngineConverter's ResizedSegments()), or returns
 // nullopt.
@@ -55,8 +61,9 @@ struct Mapping {
   std::optional<Segments> segments;
 };
 // MapToCandidates(), or where that fails, the same on the conversion that
-// `resegment` (when given) converts again as ResegmentationFor() says, with
-// the digits added. Returns nullopt when neither writes `text`.
+// `resegment` (when given) converts again: as ResegmentationFor() says, with
+// the digits added; then cut as zenz cuts (ZenzSegmentSizes()); then cut
+// there and where Mozc cut. Returns nullopt when none writes `text`.
 std::optional<Mapping> MapWithResegmentation(const Segments& segments,
                                              absl::string_view text,
                                              const Resegmenter& resegment);
