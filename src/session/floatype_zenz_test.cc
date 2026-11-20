@@ -297,6 +297,41 @@ TEST_F(FloatypeZenzTest, ACommittedCorrectionOnNewSegmentsShowsAtOnceNextTime) {
   EXPECT_EQ(Preedit(SendKeys({"Space"})), "百ナナ");
 }
 
+// Mozc's test data leaves ひゃくせんねん in kana, with no candidate in kanji,
+// but 百, 千 and 年 are words of its dictionary with those readings, so zenz's
+// 百千年 shows as zenz wrote it.
+TEST_F(FloatypeZenzTest, ShowsZenzsOwnWritingWhereTheDictionaryReadsIt) {
+  ASSERT_OK(FileUtil::SetContents(answers_, "ヒャクセンネン\t百千年\n"));
+  const commands::Output converted = SendKeys(
+      {"h", "y", "a", "k", "u", "s", "e", "n", "n", "n", "e", "n", "n", "Space"});
+  ASSERT_EQ(Preedit(converted), "ひゃくせんねん");
+  EXPECT_EQ(Preedit(PollWhileAsked(converted)), "百千年");
+  EXPECT_EQ(Preedit(SendKeys({"Space"})), "ひゃくせんねん")
+      << "Space brings back Mozc's conversion";
+}
+
+TEST_F(FloatypeZenzTest, DoesNotShowWritingTheDictionaryDoesNotRead) {
+  // 念 is not a word read せん in the test data.
+  ASSERT_OK(FileUtil::SetContents(answers_, "ヒャクセンネン\t百念年\n"));
+  const commands::Output converted = SendKeys(
+      {"h", "y", "a", "k", "u", "s", "e", "n", "n", "n", "e", "n", "n", "Space"});
+  EXPECT_EQ(Preedit(PollWhileAsked(converted)), "ひゃくせんねん");
+}
+
+TEST_F(FloatypeZenzTest, DoesNotTeachMozcZenzsOwnWriting) {
+  ASSERT_OK(FileUtil::SetContents(answers_, "ヒャクセンネン\t百千年\n"));
+  ASSERT_EQ(Preedit(PollWhileAsked(SendKeys({"h", "y", "a", "k", "u", "s", "e",
+                                             "n", "n", "n", "e", "n", "n",
+                                             "Space"}))),
+            "百千年");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "百千年");
+
+  StartSession(/*zenz=*/false);
+  EXPECT_EQ(Preedit(SendKeys({"h", "y", "a", "k", "u", "s", "e", "n", "n", "n",
+                              "e", "n", "n", "Space"})),
+            "ひゃくせんねん");
+}
+
 TEST_F(FloatypeZenzTest, PickingZenzsCandidateAfterShowingMozcIsLearned) {
   ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
   ASSERT_EQ(Preedit(SendKeys({"Space"})), "機会");
