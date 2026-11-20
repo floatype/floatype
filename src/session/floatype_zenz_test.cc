@@ -1124,6 +1124,11 @@ TEST_F(FloatypeZenzTest, MixedEnglishKeepsAWordTypedWhollyIntoKana) {
   // The Japanese is one key away: F6 writes the keys in hiragana again.
   SendKeys({"b", "e", "f", "o", "r", "e", "Space"});
   EXPECT_EQ(Preedit(SendKeys({"F6"})), "べふぉれ");
+  SendKeys({"Escape"});
+  SendKeys({"Escape"});
+  // Space again goes through the letters' cases, as for any word in letters.
+  SendKeys({"b", "e", "f", "o", "r", "e", "Space"});
+  EXPECT_EQ(Preedit(SendKeys({"Space"})), "BEFORE");
 }
 
 TEST_F(FloatypeZenzTest, WithoutMixedEnglishAWordTypedIntoKanaIsKana) {
