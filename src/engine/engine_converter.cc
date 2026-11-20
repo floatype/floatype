@@ -1236,6 +1236,10 @@ void EngineConverter::LookupWords(absl::string_view key,
   }
 }
 
+bool EngineConverter::StartsWord(absl::string_view reading) const {
+  return word_start_lookup_ && word_start_lookup_(reading);
+}
+
 bool EngineConverter::SetSegments(Segments segments) {
   if (!CheckState(CONVERSION) ||
       std::any_of(selected_candidate_indices_.begin(),

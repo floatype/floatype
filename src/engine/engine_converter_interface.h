@@ -280,6 +280,9 @@ class EngineConverterInterface {
   using WordCallback = absl::FunctionRef<void(absl::string_view reading,
                                               absl::string_view writing)>;
   virtual void LookupWords(absl::string_view key, WordCallback word) const {}
+  // floatype: whether the reading of some word of the dictionary starts with
+  // `reading` (きょ starts きょう). False where there is no dictionary.
+  virtual bool StartsWord(absl::string_view reading) const { return false; }
 
   // Operation for the candidate list.
   virtual void SetCandidateListVisible(bool visible) = 0;

@@ -1172,6 +1172,102 @@ TEST_F(FloatypeZenzTest, MixedEnglishUndoesAKanaWordWhenTypingGoesOn) {
   EXPECT_EQ(Preedit(SendKeys({"/"})), "before/");
 }
 
+// The test data reads それ, は, と, おなじ, です, を, ひらく, あたらしい and
+// みる, but nothing like ふぃぇ, べふぉれ or えゔぇん.
+TEST_F(FloatypeZenzTest, MixedEnglishKeepsAKanaWordInsideJapanese) {
+  floatype::EnableSessionFeatures(true);
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_mixed_english(true);
+  config.set_use_live_conversion(false);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+  const auto type = [&](absl::string_view keys) {
+    commands::Output output;
+    for (const char key : keys) {
+      output = SendKeys({std::string(1, key)});
+    }
+    return output;
+  };
+
+  // filewohiraku: the kana stay while typing, and Space keeps file.
+  EXPECT_EQ(Preedit(type("filewohiraku")), "ふぃぇをひらく");
+  EXPECT_THAT(Preedit(SendKeys({"Space"})), ::testing::StartsWith("fileを"));
+  EXPECT_THAT(SendKeys({"Enter"}).result().value(),
+              ::testing::StartsWith("fileを"));
+
+  // The word may come anywhere: それはbeforeとおなじです.
+  type("sorehabeforetoonajidesu");
+  EXPECT_THAT(Preedit(SendKeys({"Space"})),
+              ::testing::AllOf(::testing::StartsWith("それはbeforeと"),
+                               ::testing::Not(::testing::HasSubstr("ふぉ"))));
+  SendKeys({"Enter"});
+
+  // A word may end in the kana after it: eventwomiru is えゔぇんとぉみる.
+  EXPECT_EQ(Preedit(type("eventwomiru")), "えゔぇんとぉみる");
+  EXPECT_THAT(Preedit(SendKeys({"Space"})), ::testing::StartsWith("eventを"));
+  SendKeys({"Enter"});
+
+  // What reads as Japanese stays Japanese: して is no site.
+  type("atarasiisitewomiru");
+  EXPECT_THAT(Preedit(SendKeys({"Space"})),
+              ::testing::Not(::testing::HasSubstr("site")));
+  SendKeys({"Enter"});
+}
+
+TEST_F(FloatypeZenzTest, WithoutMixedEnglishAKanaWordInsideJapaneseIsKana) {
+  floatype::EnableSessionFeatures(true);
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_use_live_conversion(false);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+  for (const char key : std::string("filewohiraku")) {
+    SendKeys({std::string(1, key)});
+  }
+  EXPECT_THAT(Preedit(SendKeys({"Space"})),
+              ::testing::Not(::testing::HasSubstr("file")));
+}
+
+TEST_F(FloatypeZenzTest, MixedEnglishKeepsAKanaWordInsideJapaneseAtAPause) {
+  floatype::EnableSessionFeatures(true);
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_mixed_english(true);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+  const auto pause_after = [&](absl::string_view keys) {
+    commands::Output output;
+    for (const char key : keys) {
+      output = SendKeys({std::string(1, key)});
+    }
+    return Preedit(PollWhileAsked(CallBack(output)));
+  };
+
+  // A word still being typed is left alone: べ may go on to べんり.
+  EXPECT_THAT(pause_after("sorehabe"),
+              ::testing::Not(::testing::HasSubstr("sore")));
+  SendKeys({"Escape"});
+  SendKeys({"Escape"});
+
+  // file with を after it is kept for good: typing on does not bring ふぃぇ
+  // back, and a second word is found beside the kept one.
+  EXPECT_THAT(pause_after("filewo"), ::testing::StartsWith("fileを"));
+  EXPECT_THAT(pause_after("deletesuru"),
+              ::testing::AllOf(::testing::StartsWith("fileをdelete"),
+                               ::testing::Not(::testing::HasSubstr("ぇ"))));
+  SendKeys({"Escape"});
+  SendKeys({"Escape"});
+
+  // A word that ends the composition can still go on in kana.
+  EXPECT_THAT(pause_after("sorehabefore"),
+              ::testing::StartsWith("それはbefore"));
+  EXPECT_THAT(Preedit(SendKeys({"n", "i"})), ::testing::EndsWith("べふぉれに"));
+}
+
 // の + テーマ starts with のて, the kana of the preset word note.
 TEST_F(FloatypeZenzTest, MixedEnglishGoesOnInKanaWithTheLongVowelKey) {
   floatype::EnableSessionFeatures(true);

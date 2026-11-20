@@ -242,6 +242,12 @@ class EngineConverter : public EngineConverterInterface {
   using WordLookup =
       std::function<void(absl::string_view key, WordCallback word)>;
   void set_word_lookup(WordLookup lookup) { word_lookup_ = std::move(lookup); }
+  bool StartsWord(absl::string_view reading) const override;
+  // floatype: what StartsWord() calls; the engine gives its dictionary's.
+  using WordStartLookup = std::function<bool(absl::string_view reading)>;
+  void set_word_start_lookup(WordStartLookup lookup) {
+    word_start_lookup_ = std::move(lookup);
+  }
 
   // Operation for the candidate list.
   void SetCandidateListVisible(bool visible) override;
@@ -394,6 +400,7 @@ class EngineConverter : public EngineConverterInterface {
 
   std::shared_ptr<const ConverterInterface> converter_;
   WordLookup word_lookup_;
+  WordStartLookup word_start_lookup_;
 
   // Conversion stats used by converter_.
   Segments segments_;

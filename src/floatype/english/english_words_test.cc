@@ -1,5 +1,6 @@
 #include "floatype/english/english_words.h"
 
+#include <algorithm>
 #include <memory>
 #include <set>
 #include <string>
@@ -205,6 +206,215 @@ TEST_F(EnglishWordsTest, DoesNotCutAKanaInTwo) {
                    {"r", "ｒ"}, {"d", "ど"}, {"wo", "ぉ"}},
                   words),
             (Spans_{{0, 7, "keyboard", "wo"}}));
+}
+
+// Words inside Japanese, typed wholly into kana (KanaSearch).
+class KanaSearchTest : public ::testing::Test {
+ protected:
+  // The spans of `chars` with a dictionary of `readings`.
+  static std::vector<EnglishSpan> Spans(
+      const std::vector<std::vector<std::string>>& chars,
+      const EnglishWords& words, std::vector<std::string> readings) {
+    const ReadingLookup lookup = ReadingsOf(readings);
+    const KanaSearch search = {
+        .lookup = lookup,
+        .starts_word =
+            [readings](absl::string_view kana) {
+              return std::any_of(
+                  readings.begin(), readings.end(),
+                  [&](const std::string& r) { return r.starts_with(kana); });
+            },
+        .kana_of_keys =
+            [](absl::string_view keys) {
+              return std::string(keys == "wo"   ? "を"
+                                 : keys == "yo" ? "よ"
+                                                : "");
+            },
+    };
+    std::vector<std::string> raws, query, preedit;
+    for (const std::vector<std::string>& c : chars) {
+      raws.push_back(c[0]);
+      query.push_back(c[1]);
+      preedit.push_back(c.size() > 2 ? c[2] : c[1]);
+    }
+    return EnglishSpans(
+        raws, query, preedit, words,
+        [&](absl::string_view kana) { return ReadsAsJapanese(kana, lookup); },
+        &search);
+  }
+};
+
+TEST_F(KanaSearchTest, FindsAWordInsideJapanese) {
+  const EnglishWords words("file\nsite\n");
+  // filewohiraku: ふぃぇ is no Japanese; を and ひらく are.
+  EXPECT_EQ(Spans({{"f", "ふ"},
+                   {"i", "ぃ"},
+                   {"le", "ぇ"},
+                   {"wo", "を"},
+                   {"hi", "ひ"},
+                   {"ra", "ら"},
+                   {"ku", "く"}},
+                  words, {"ひらく"}),
+            (Spans_{{0, 3, "file", ""}}));
+  // atarasiisitewotukuru: all of it reads as Japanese (し and て too), so
+  // site stays して.
+  EXPECT_EQ(Spans({{"a", "あ"},
+                   {"ta", "た"},
+                   {"ra", "ら"},
+                   {"si", "し"},
+                   {"i", "い"},
+                   {"si", "し"},
+                   {"te", "て"},
+                   {"wo", "を"},
+                   {"tu", "つ"},
+                   {"ku", "く"},
+                   {"ru", "る"}},
+                  words, {"あたらしい", "つくる"}),
+            Spans_());
+  // What is left must read as Japanese: べふぉ does not.
+  EXPECT_EQ(Spans({{"f", "ふ"},
+                   {"i", "ぃ"},
+                   {"le", "ぇ"},
+                   {"be", "べ"},
+                   {"f", "ふ"},
+                   {"o", "ぉ"}},
+                  words, {}),
+            Spans_());
+}
+
+TEST_F(KanaSearchTest, TakesTheFewestAndThenTheLongestWords) {
+  const EnglishWords words("online\nline\n");
+  // onlinede: online, not お + ん + line.
+  EXPECT_EQ(
+      Spans(
+          {{"o", "お"}, {"n", "ん"}, {"li", "ぃ"}, {"ne", "ね"}, {"de", "で"}},
+          words, {}),
+      (Spans_{{0, 4, "online", ""}}));
+}
+
+TEST_F(KanaSearchTest, AWordMayEndInTheKanaAfterIt) {
+  const EnglishWords words("event\ntwo\n");
+  // eventwomiru: two made とぉ, split t|wo; wo is typed again as を.
+  EXPECT_EQ(Spans({{"e", "え"},
+                   {"v", "ゔ"},
+                   {"e", "ぇ"},
+                   {"n", "ん"},
+                   {"t", "と"},
+                   {"wo", "ぉ"},
+                   {"mi", "み"},
+                   {"ru", "る"}},
+                  words, {"みる"}),
+            (Spans_{{0, 6, "event", "wo"}}));
+}
+
+TEST_F(KanaSearchTest, AWordStillBeingTypedIsJapanese) {
+  const EnglishWords words("sore\n");
+  // sorehabe may go on to べんり: nothing yet.
+  EXPECT_EQ(Spans({{"so", "そ"}, {"re", "れ"}, {"ha", "は"}, {"be", "べ"}},
+                  words, {"それ", "べんり"}),
+            Spans_());
+}
+
+TEST_F(KanaSearchTest, LeavesKanaBesideALooseLetterAlone) {
+  const EnglishWords words("file\n");
+  // filewohoz: z may still make a kana.
+  EXPECT_EQ(Spans({{"f", "ふ"},
+                   {"i", "ぃ"},
+                   {"le", "ぇ"},
+                   {"wo", "を"},
+                   {"ho", "ほ"},
+                   {"z", "z", "ｚ"}},
+                  words, {}),
+            Spans_());
+}
+
+TEST_F(KanaSearchTest, FindsAWordAfterOneKeptAsTyped) {
+  const EnglishWords words("file\ndelete\ntwo\n");
+  // file was kept at a pause; then wodeletesuru.
+  EXPECT_EQ(Spans({{"f", "f"},
+                   {"i", "i"},
+                   {"l", "l"},
+                   {"e", "e"},
+                   {"wo", "を"},
+                   {"de", "で"},
+                   {"le", "ぇ"},
+                   {"te", "て"},
+                   {"su", "す"},
+                   {"ru", "る"}},
+                  words, {}),
+            (Spans_{{5, 8, "delete", ""}}));
+  // Letters do not run on unspaced: no two right after file.
+  EXPECT_EQ(Spans({{"f", "f"},
+                   {"i", "i"},
+                   {"l", "l"},
+                   {"e", "e"},
+                   {"t", "と"},
+                   {"wo", "ぉ"},
+                   {"mi", "み"},
+                   {"ru", "る"}},
+                  words, {"みる"}),
+            Spans_());
+}
+
+TEST_F(KanaSearchTest, FindsAWordBesideOneWithLooseLetters) {
+  const EnglishWords words("file\nupdate\n");
+  // konofilewoupdatesuru.
+  EXPECT_EQ(Spans({{"ko", "こ"},
+                   {"no", "の"},
+                   {"f", "ふ"},
+                   {"i", "ぃ"},
+                   {"le", "ぇ"},
+                   {"wo", "を"},
+                   {"u", "う"},
+                   {"p", "p", "ｐ"},
+                   {"da", "だ"},
+                   {"te", "て"},
+                   {"su", "す"},
+                   {"ru", "る"}},
+                  words, {"この"}),
+            (Spans_{{2, 5, "file", ""}, {6, 10, "update", ""}}));
+}
+
+TEST_F(KanaSearchTest, ARunThatIsAWordIsLookedAtAsAWhole) {
+  const EnglishWords words("made\ncha\n");
+  EXPECT_EQ(Spans({{"ma", "ま"}, {"de", "で"}}, words, {"まで"}), Spans_());
+  // てぇ is a word of the dictionary, though of one mora.
+  EXPECT_EQ(Spans({{"th", "て"}, {"e", "ぇ"}}, EnglishWords("the\n"), {"てぇ"}),
+            Spans_());
+}
+
+TEST_F(KanaSearchTest, AKanaWithASmallYaYuYoIsAWord) {
+  const EnglishWords words("six\nsave\n");
+  // しょをえる (書を得る), typed si + xyo: not six + よ.
+  EXPECT_EQ(Spans({{"si", "し"},
+                   {"xyo", "ょ"},
+                   {"wo", "を"},
+                   {"e", "え"},
+                   {"ru", "る"}},
+                  words, {"しょ"}),
+            Spans_());
+  // ゔぇ is in the dictionary too, but is no word: さゔぇする keeps save.
+  EXPECT_EQ(
+      Spans(
+          {{"sa", "さ"}, {"v", "ゔ"}, {"e", "ぇ"}, {"su", "す"}, {"ru", "る"}},
+          words, {"ゔぇ"}),
+      (Spans_{{0, 3, "save", ""}}));
+}
+
+TEST_F(KanaSearchTest, ALongVowelCountsInAWord) {
+  const EnglishWords words("save\n");
+  // きーをさゔぇする (キーをsaveする): きー is two morae, so what is left of
+  // save reads as Japanese.
+  EXPECT_EQ(Spans({{"ki", "き"},
+                   {"-", "ー"},
+                   {"wo", "を"},
+                   {"sa", "さ"},
+                   {"v", "ゔ"},
+                   {"e", "ぇ"},
+                   {"su", "す"},
+                   {"ru", "る"}},
+                  words, {"きー"}),
+            (Spans_{{3, 6, "save", ""}}));
 }
 
 TEST(EnglishWordsDefaultTest, HasSCOWLsWords) {

@@ -167,6 +167,21 @@ TEST_F(EngineTest, EngineConvertersLookUpTheDictionarysWords) {
   }
 }
 
+// floatype: a reading typed halfway still starts a word.
+TEST_F(EngineTest, EngineConvertersTellWhetherAReadingStartsAWord) {
+  EXPECT_FALSE(engine_->CreateEngineConverter()->StartsWord("きょ"))
+      << "no dictionary yet";
+
+  CHECK_OK(engine_->ReloadModules(
+      engine::Modules::Create(std::make_unique<testing::MockDataManager>())
+          .value()));
+  const std::unique_ptr<engine::EngineConverterInterface> converter =
+      engine_->CreateEngineConverter();
+  EXPECT_TRUE(converter->StartsWord("きょ")) << "きょう";
+  EXPECT_TRUE(converter->StartsWord("きょう"));
+  EXPECT_FALSE(converter->StartsWord("べふぉれ"));
+}
+
 // Tests the interaction with DataLoader for successful Engine
 // reload event.
 TEST_F(EngineTest, DataLoadSuccessfulScenarioTest) {

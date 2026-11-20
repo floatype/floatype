@@ -47,6 +47,7 @@
 #include "composer/table.h"
 #include "converter/segments.h"
 #include "engine/engine_interface.h"
+#include "floatype/english/english_words.h"
 #include "floatype/zenz/zenz_corrector.h"
 #include "protocol/commands.pb.h"
 #include "protocol/config.pb.h"
@@ -338,6 +339,9 @@ class Session {
   // After a typed character: when it is one of the direct commit characters,
   // converts, asks zenz, and commits once it answers. Returns whether it did.
   bool MaybeCommitOnCharacter(commands::Command* command);
+  // floatype: the readings of the dictionary's words that start a key
+  // (EngineConverter's LookupWords()).
+  floatype::ReadingLookup DictionaryReadings() const;
   // floatype: whether a run of kana reads as Japanese by the dictionary's
   // words (floatype::ReadsAsJapanese()), for words typed wholly into kana.
   std::function<bool(absl::string_view)> KanaReadsAsJapanese() const;
@@ -351,7 +355,8 @@ class Session {
   // were an English word. Returns whether it did.
   bool MaybeConvertAsEnglish(commands::Command* command);
   // Mixed English input: turns each English word inside the composition back
-  // into the letters typed, so it converts, and stays, as typed. With
+  // into the letters typed, so it converts, and stays, as typed; words typed
+  // wholly into kana inside Japanese too (floatype::KanaSearch). With
   // `undoable` (a live conversion), a word ending the composition in loose
   // letters can be undone by the next key (see english_undo_).
   void KeepEnglishWords(bool undoable);

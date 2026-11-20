@@ -147,6 +147,19 @@ class WordLister : public dictionary::DictionaryInterface::Callback {
   engine::EngineConverterInterface::WordCallback word_;
 };
 
+// floatype: stops a predictive lookup at its first key.
+class FirstKey : public dictionary::DictionaryInterface::Callback {
+ public:
+  ResultType OnKey(absl::string_view key) override {
+    found_ = true;
+    return TRAVERSE_DONE;
+  }
+  bool found() const { return found_; }
+
+ private:
+  bool found_ = false;
+};
+
 }  // namespace
 
 std::unique_ptr<engine::EngineConverterInterface>
@@ -162,6 +175,12 @@ Engine::CreateEngineConverter() const {
           WordLister lister(word);
           converter->modules().GetDictionary().LookupPrefix(key, &lister);
         });
+    engine_converter->set_word_start_lookup([converter = converter_](
+                                                absl::string_view reading) {
+      FirstKey first;
+      converter->modules().GetDictionary().LookupPredictive(reading, &first);
+      return first.found();
+    });
   }
   return engine_converter;
 }

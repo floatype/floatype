@@ -2778,17 +2778,18 @@ bool Session::MaybeConvertAsEnglish(commands::Command* command) {
 namespace {
 
 // The composition one character at a time, and the English words in it.
-// With `reads_as_japanese`, words typed wholly into kana count too
-// (EnglishSpans()).
+// With `reads_as_japanese`, words typed wholly into kana count too, and with
+// `search`, those inside Japanese (EnglishSpans()).
 struct EnglishView {
   explicit EnglishView(
       const composer::Composer& composer,
-      const std::function<bool(absl::string_view)>& reads_as_japanese =
-          nullptr) {
+      const std::function<bool(absl::string_view)>& reads_as_japanese = nullptr,
+      const floatype::KanaSearch* search = nullptr) {
     // Without a letter, kept or loose, and without the keys of a word, there
     // is no English word: the common case, cut short on every key.
     const std::string query_text = composer.GetQueryForConversion();
-    if (std::none_of(query_text.begin(), query_text.end(), [](char c) {
+    if (search == nullptr &&
+        std::none_of(query_text.begin(), query_text.end(), [](char c) {
           return absl::ascii_isalpha(static_cast<unsigned char>(c));
         })) {
       if (!reads_as_japanese) {
@@ -2825,7 +2826,7 @@ struct EnglishView {
     }
     spans = floatype::EnglishSpans(raws, query, preedit,
                                    *floatype::CurrentEnglishWords(),
-                                   reads_as_japanese);
+                                   reads_as_japanese, search);
   }
   // Whether the word before `position` is English: one found, or letters kept
   // as typed.
@@ -2848,16 +2849,19 @@ struct EnglishView {
 
 }  // namespace
 
+floatype::ReadingLookup Session::DictionaryReadings() const {
+  return [this](absl::string_view key,
+                absl::FunctionRef<void(absl::string_view)> reading) {
+    context_->converter().LookupWords(
+        key, [&](absl::string_view word_reading, absl::string_view) {
+          reading(word_reading);
+        });
+  };
+}
+
 std::function<bool(absl::string_view)> Session::KanaReadsAsJapanese() const {
   return [this](absl::string_view kana) {
-    return floatype::ReadsAsJapanese(
-        kana, [this](absl::string_view key,
-                     absl::FunctionRef<void(absl::string_view)> reading) {
-          context_->converter().LookupWords(
-              key, [&](absl::string_view word_reading, absl::string_view) {
-                reading(word_reading);
-              });
-        });
+    return floatype::ReadsAsJapanese(kana, DictionaryReadings());
   };
 }
 
@@ -2945,7 +2949,25 @@ void Session::KeepEnglishWords(bool undoable) {
     return;
   }
   composer::Composer* composer = context_->mutable_composer();
-  const EnglishView view(*composer, KanaReadsAsJapanese());
+  const floatype::KanaSearch search = {
+      .lookup = DictionaryReadings(),
+      .starts_word =
+          [this](absl::string_view kana) {
+            return context_->converter().StartsWord(kana);
+          },
+      .kana_of_keys =
+          [composer](absl::string_view keys) {
+            composer::Composer typed = *composer;
+            typed.EditErase();
+            for (const char c : keys) {
+              typed.InsertCharacter(std::string(1, c));
+            }
+            std::string kana = typed.GetQueryForConversion();
+            return Util::IsScriptType(kana, Util::HIRAGANA) ? kana
+                                                            : std::string();
+          },
+  };
+  const EnglishView view(*composer, KanaReadsAsJapanese(), &search);
   const std::vector<floatype::EnglishSpan>& spans = view.spans;
   // The query writes a loose letter half width; the preedit, full width. A
   // word typed wholly into kana may go on as Japanese too (ばせ of ばせい is

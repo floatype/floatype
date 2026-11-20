@@ -77,6 +77,19 @@ using ReadingLookup = std::function<void(
 // always some word, so it counts only as a particle.
 bool ReadsAsJapanese(absl::string_view kana, const ReadingLookup& lookup);
 
+// What EnglishSpans() asks to find words typed wholly into kana inside
+// Japanese (ふぃぇをほぞんした for fileを保存した).
+struct KanaSearch {
+  // The dictionary's readings, as for ReadsAsJapanese().
+  ReadingLookup lookup;
+  // Whether the reading of some dictionary word starts with `kana`
+  // (EngineConverter's StartsWord()): a word still being typed.
+  std::function<bool(absl::string_view kana)> starts_word;
+  // The kana that `keys` type on their own (を for wo), or "" where a letter
+  // stays.
+  std::function<std::string(absl::string_view keys)> kana_of_keys;
+};
+
 // An English word inside a composition: characters [begin, end), typed as
 // `word` and then `retyped`, keys the romaji joined to the kana after the
 // word (test + する shows てsつる; email + を shows えまいlwお). The
@@ -101,12 +114,24 @@ struct EnglishSpan {
 // are a word is a span too when the user added the word, or when the kana do
 // not read as Japanese (べふぉれ for before, between other characters or the
 // ends; not まで for made). Without it, kana stay kana.
+//
+// With `search`, words inside a stretch of kana are spans too, where the
+// stretch does not read as Japanese: one-kana particles, endings and stems
+// (は, た, い) and dictionary words of two morae or more, or of a kana with
+// ゃ, ゅ or ょ, do not cover it, nor cover it up to a word still being typed
+// at the end of the composition (それはべ may go on to べんり). The spans are
+// then the fewest words, and among those the longest, between which every
+// stretch does read as Japanese: ふぃぇをほぞんした keeps file,
+// あたらしいしてをつくる (site) stays kana. A word may end in the kana after
+// it (えゔぇんとぉ is event + wo), whose other keys are typed again. No word
+// touches a letter or another word, and a stretch beside a loose letter is
+// left alone.
 std::vector<EnglishSpan> EnglishSpans(
-    const std::vector<std::string>& raws,
-    const std::vector<std::string>& query,
+    const std::vector<std::string>& raws, const std::vector<std::string>& query,
     const std::vector<std::string>& preedit, const EnglishWords& words,
     const std::function<bool(absl::string_view kana)>& reads_as_japanese =
-        nullptr);
+        nullptr,
+    const KanaSearch* search = nullptr);
 
 }  // namespace mozc::floatype
 
