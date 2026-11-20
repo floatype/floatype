@@ -26,9 +26,11 @@ mozc_cc_library(
     ],
     deps = [
         "//base:file_util",
+        "//base:util",
         "//base/strings:unicode",
         "//floatype/config:settings_file",
         "@com_google_absl//absl/base:no_destructor",
+        "@com_google_absl//absl/functional:function_ref",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
@@ -47,6 +49,8 @@ mozc_cc_test(
         "//base/file:temp_dir",
         "//floatype/config:settings_file",
         "//testing:gunit_main",
+        "@com_google_absl//absl/functional:function_ref",
+        "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
     ],
 )

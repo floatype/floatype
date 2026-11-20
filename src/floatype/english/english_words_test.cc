@@ -1,5 +1,12 @@
 #include "floatype/english/english_words.h"
 
+#include <string>
+#include <utility>
+#include <vector>
+
+#include "absl/functional/function_ref.h"
+#include "absl/strings/string_view.h"
+
 #include <memory>
 #include <string>
 #include <utility>
@@ -56,6 +63,67 @@ std::vector<EnglishSpan> Spans(
 }
 
 using Spans_ = std::vector<EnglishSpan>;
+
+// A dictionary with words of these readings, for ReadsAsJapanese().
+ReadingLookup ReadingsOf(std::vector<std::string> readings) {
+  return [readings = std::move(readings)](
+             absl::string_view key,
+             absl::FunctionRef<void(absl::string_view)> reading) {
+    for (const std::string& r : readings) {
+      if (key.starts_with(r)) {
+        reading(r);
+      }
+    }
+  };
+}
+
+TEST_F(EnglishWordsTest, KanaReadAsJapaneseByWordsAndParticles) {
+  const ReadingLookup lookup =
+      ReadingsOf({"まで", "ぺん", "おん", "べ", "れ", "お", "せ", "ば"});
+  EXPECT_TRUE(ReadsAsJapanese("まで", lookup));    // made
+  EXPECT_TRUE(ReadsAsJapanese("わね", lookup));    // wane: two particles
+  EXPECT_TRUE(ReadsAsJapanese("もおん", lookup));  // moon: も + おん
+  // Single kana are words of the dictionary too, but nearly any kana is.
+  EXPECT_FALSE(ReadsAsJapanese("べふぉれ", lookup));  // before
+  EXPECT_FALSE(ReadsAsJapanese("おぺん", lookup));    // open
+  EXPECT_FALSE(ReadsAsJapanese("ばせ", lookup));      // base
+  EXPECT_TRUE(ReadsAsJapanese("", lookup));
+  EXPECT_TRUE(ReadsAsJapanese("べふぉれ", nullptr)) << "no dictionary to ask";
+}
+
+TEST_F(EnglishWordsTest, FindsAWordTypedWhollyIntoKana) {
+  const EnglishWords words("before\nmade\nafter\ntime\nopen\n", "time\n");
+  const auto japanese = [](absl::string_view kana) {
+    return kana == "まで" || kana == "ちめ";
+  };
+  const auto spans = [&](const std::vector<std::vector<std::string>>& chars) {
+    std::vector<std::string> raws, query, preedit;
+    for (const std::vector<std::string>& c : chars) {
+      raws.push_back(c[0]);
+      query.push_back(c[1]);
+      preedit.push_back(c.size() > 2 ? c[2] : c[1]);
+    }
+    return EnglishSpans(raws, query, preedit, words, japanese);
+  };
+  // before, alone and before a symbol.
+  EXPECT_EQ(spans({{"be", "べ"}, {"fo", "ふぉ"}, {"re", "れ"}}),
+            (Spans_{{0, 3, "before", ""}}));
+  EXPECT_EQ(spans({{"be", "べ"}, {"fo", "ふぉ"}, {"re", "れ"}, {"/", "/"},
+                   {"a", "あ"}, {"f", "f", "ｆ"}, {"te", "て"},
+                   {"r", "r", "ｒ"}}),
+            (Spans_{{0, 3, "before", ""}, {4, 8, "after", ""}}));
+  // A trailing n is ん in the query.
+  EXPECT_EQ(spans({{"o", "お"}, {"pe", "ぺ"}, {"n", "ん", "ｎ"}}),
+            (Spans_{{0, 3, "open", ""}}));
+  // made reads as Japanese; time does too, but the user added it.
+  EXPECT_EQ(spans({{"ma", "ま"}, {"de", "で"}}), Spans_{});
+  EXPECT_EQ(spans({{"ti", "ち"}, {"me", "め"}}), (Spans_{{0, 2, "time", ""}}));
+  // Inside a longer run of kana the keys are no word.
+  EXPECT_EQ(spans({{"be", "べ"}, {"fo", "ふぉ"}, {"re", "れ"}, {"ni", "に"}}),
+            Spans_{});
+  // Without a way to tell Japanese, kana stay kana.
+  EXPECT_EQ(Spans({{"be", "べ"}, {"fo", "ふぉ"}, {"re", "れ"}}, words), Spans_{});
+}
 
 TEST_F(EnglishWordsTest, FindsAWordInsideJapanese) {
   const EnglishWords words = Words();

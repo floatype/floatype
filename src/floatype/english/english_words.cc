@@ -1,6 +1,7 @@
 #include "floatype/english/english_words.h"
 
 #include <algorithm>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -18,6 +19,7 @@
 #include "absl/synchronization/mutex.h"
 #include "base/file_util.h"
 #include "base/strings/unicode.h"
+#include "base/util.h"
 #include "floatype/config/settings_file.h"
 
 namespace mozc::floatype {
@@ -26,7 +28,16 @@ namespace {
 #include "floatype/english/english_words.inc"
 }  // namespace
 
-EnglishWords::EnglishWords(absl::string_view text) {
+EnglishWords::EnglishWords(absl::string_view text,
+                           absl::string_view user_text) {
+  for (const absl::string_view line :
+       absl::StrSplit(user_text, '\n', absl::SkipEmpty())) {
+    user_words_.push_back(absl::AsciiStrToLower(line));
+  }
+  std::sort(user_words_.begin(), user_words_.end());
+  user_words_.erase(std::unique(user_words_.begin(), user_words_.end()),
+                    user_words_.end());
+  words_ = user_words_;
   for (const absl::string_view line :
        absl::StrSplit(text, '\n', absl::SkipEmpty())) {
     words_.push_back(absl::AsciiStrToLower(line));
@@ -37,6 +48,11 @@ EnglishWords::EnglishWords(absl::string_view text) {
 
 bool EnglishWords::Contains(absl::string_view word) const {
   return std::binary_search(words_.begin(), words_.end(),
+                            absl::AsciiStrToLower(word));
+}
+
+bool EnglishWords::ContainsUser(absl::string_view word) const {
+  return std::binary_search(user_words_.begin(), user_words_.end(),
                             absl::AsciiStrToLower(word));
 }
 
@@ -98,8 +114,7 @@ std::shared_ptr<const EnglishWords> CurrentEnglishWords() {
                      absl::StrJoin(user.left_out, "、"),
                      "：英字だけの 3〜32 文字の語が使えます"));
   }
-  state->words = std::make_shared<const EnglishWords>(
-      absl::StrCat(kEnglishWords, "\n", user.words));
+  state->words = std::make_shared<const EnglishWords>(kEnglishWords, user.words);
   return state->words;
 }
 
@@ -118,6 +133,44 @@ bool LooksEnglish(absl::string_view raw, absl::string_view preedit,
                (c >= U'Ａ' && c <= U'Ｚ');
   }
   return leftover && words.Contains(raw);
+}
+
+bool ReadsAsJapanese(absl::string_view kana, const ReadingLookup& lookup) {
+  // Particles a sentence may end or go on with, one kana each.
+  constexpr absl::string_view kParticles =
+      "はがをにでともへやかねよわなのさぞぜてば";
+  std::vector<size_t> starts;  // Where each character starts.
+  for (const absl::string_view ch : Utf8AsChars(kana)) {
+    starts.push_back(ch.data() - kana.data());
+  }
+  starts.push_back(kana.size());
+  const size_t n = starts.size() - 1;
+  if (n == 0 || !lookup) {
+    return true;
+  }
+  // reads[i]: the characters before i are covered.
+  std::vector<bool> reads(n + 1, false);
+  reads[0] = true;
+  for (size_t i = 0; i < n; ++i) {
+    if (!reads[i]) {
+      continue;
+    }
+    if (absl::StrContains(
+            kParticles, kana.substr(starts[i], starts[i + 1] - starts[i]))) {
+      reads[i + 1] = true;
+    }
+    lookup(kana.substr(starts[i]), [&](absl::string_view reading) {
+      const size_t end = starts[i] + reading.size();
+      const auto it = std::lower_bound(starts.begin(), starts.end(), end);
+      if (it != starts.end() && *it == end) {
+        const size_t j = it - starts.begin();
+        if (j >= i + 2) {
+          reads[j] = true;
+        }
+      }
+    });
+  }
+  return reads[n];
 }
 
 namespace {
@@ -141,10 +194,10 @@ bool Joined(absl::string_view read, absl::string_view raw) {
 
 }  // namespace
 
-std::vector<EnglishSpan> EnglishSpans(const std::vector<std::string>& raws,
-                                      const std::vector<std::string>& query,
-                                      const std::vector<std::string>& preedit,
-                                      const EnglishWords& words) {
+std::vector<EnglishSpan> EnglishSpans(
+    const std::vector<std::string>& raws, const std::vector<std::string>& query,
+    const std::vector<std::string>& preedit, const EnglishWords& words,
+    const std::function<bool(absl::string_view kana)>& reads_as_japanese) {
   // Longer than any word worth keeping; bounds the work per key.
   constexpr size_t kMaxLetters = 32;
   const size_t size = raws.size();
@@ -158,7 +211,38 @@ std::vector<EnglishSpan> EnglishSpans(const std::vector<std::string>& raws,
     letter[i] = IsLetter(query[i]);
     loose[i] = letter[i] && preedit[i] != raws[i];
   }
-  // Plain Japanese, the common case, has no word to find.
+  // A run of kana with no letter beside it, typed with the keys of a word.
+  if (reads_as_japanese) {
+    const auto kana = [&](size_t i) {
+      return Util::IsScriptType(query[i], Util::HIRAGANA) || query[i] == "ー";
+    };
+    for (size_t begin = 0; begin < size;) {
+      if (!kana(begin) || (begin > 0 && letter[begin - 1])) {
+        ++begin;
+        continue;
+      }
+      size_t end = begin;
+      std::string raw, reading;
+      while (end < size && kana(end)) {
+        raw += raws[end];
+        reading += query[end];
+        ++end;
+      }
+      if ((end == size || !letter[end]) && raw.size() >= 3 &&
+          raw.size() <= kMaxLetters &&
+          std::all_of(raw.begin(), raw.end(),
+                      [](char c) {
+                        return absl::ascii_isalpha(
+                            static_cast<unsigned char>(c));
+                      }) &&
+          words.Contains(raw) &&
+          (words.ContainsUser(raw) || !reads_as_japanese(reading))) {
+        candidates.push_back({begin, end, raw, ""});
+      }
+      begin = end;
+    }
+  }
+  // Plain Japanese, the common case, has no other word to find.
   if (std::none_of(loose.begin(), loose.end(), [](bool b) { return b; })) {
     return candidates;
   }

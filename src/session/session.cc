@@ -2769,15 +2769,40 @@ bool Session::MaybeConvertAsEnglish(commands::Command* command) {
 namespace {
 
 // The composition one character at a time, and the English words in it.
+// With `reads_as_japanese`, words typed wholly into kana count too
+// (EnglishSpans()).
 struct EnglishView {
-  explicit EnglishView(const composer::Composer& composer) {
-    // Without a letter, kept or loose, there is no English word: the common
-    // case, cut short on every key.
+  explicit EnglishView(
+      const composer::Composer& composer,
+      const std::function<bool(absl::string_view)>& reads_as_japanese =
+          nullptr) {
+    // Without a letter, kept or loose, and without the keys of a word, there
+    // is no English word: the common case, cut short on every key.
     const std::string query_text = composer.GetQueryForConversion();
     if (std::none_of(query_text.begin(), query_text.end(), [](char c) {
           return absl::ascii_isalpha(static_cast<unsigned char>(c));
         })) {
-      return;
+      if (!reads_as_japanese) {
+        return;
+      }
+      const std::shared_ptr<const floatype::EnglishWords> words =
+          floatype::CurrentEnglishWords();
+      // The keys between characters that are no letter.
+      const std::string raw = composer.GetRawString();
+      bool word = false;
+      for (size_t begin = 0; begin < raw.size() && !word;) {
+        size_t end = begin;
+        while (end < raw.size() &&
+               absl::ascii_isalpha(static_cast<unsigned char>(raw[end]))) {
+          ++end;
+        }
+        word = end - begin >= 3 &&
+               words->Contains(absl::string_view(raw).substr(begin, end - begin));
+        begin = end + 1;
+      }
+      if (!word) {
+        return;
+      }
     }
     for (size_t i = 0; i < composer.GetLength(); ++i) {
       raws.push_back(composer.GetRawSubString(i, 1));
@@ -2790,7 +2815,8 @@ struct EnglishView {
       preedit.emplace_back(c);
     }
     spans = floatype::EnglishSpans(raws, query, preedit,
-                                   *floatype::CurrentEnglishWords());
+                                   *floatype::CurrentEnglishWords(),
+                                   reads_as_japanese);
   }
   // Whether the word before `position` is English: one found, or letters kept
   // as typed.
@@ -2812,6 +2838,19 @@ struct EnglishView {
 };
 
 }  // namespace
+
+std::function<bool(absl::string_view)> Session::KanaReadsAsJapanese() const {
+  return [this](absl::string_view kana) {
+    return floatype::ReadsAsJapanese(
+        kana, [this](absl::string_view key,
+                     absl::FunctionRef<void(absl::string_view)> reading) {
+          context_->converter().LookupWords(
+              key, [&](absl::string_view word_reading, absl::string_view) {
+                reading(word_reading);
+              });
+        });
+  };
+}
 
 bool Session::IsSlashAfterAscii(const commands::KeyEvent& key,
                                 absl::string_view committed) const {
@@ -2854,7 +2893,7 @@ bool Session::IsSlashAfterAscii(const commands::KeyEvent& key,
     }
     // An English word still in kana and loose letters (てst for test), or
     // two or more loose letters (src). One alone may start a rule (z/).
-    if (EnglishView(composer).EnglishBefore(cursor)) {
+    if (EnglishView(composer, KanaReadsAsJapanese()).EnglishBefore(cursor)) {
       return true;
     }
     const auto loose = [](const std::string& c) {
@@ -2893,13 +2932,22 @@ void Session::KeepEnglishWords(bool undoable) {
     return;
   }
   composer::Composer* composer = context_->mutable_composer();
-  const EnglishView view(*composer);
+  const EnglishView view(*composer, KanaReadsAsJapanese());
   const std::vector<floatype::EnglishSpan>& spans = view.spans;
-  // The query writes a loose letter half width; the preedit, full width.
+  // The query writes a loose letter half width; the preedit, full width. A
+  // word typed wholly into kana may go on as Japanese too (ばせ of ばせい is
+  // base).
   if (undoable && !spans.empty() && spans.back().end == view.raws.size() &&
-      view.query.back().size() == 1 &&
-      absl::ascii_isalpha(static_cast<unsigned char>(view.query.back()[0])) &&
-      view.preedit.back() != view.raws.back()) {
+      ((view.query.back().size() == 1 &&
+        absl::ascii_isalpha(
+            static_cast<unsigned char>(view.query.back()[0])) &&
+        view.preedit.back() != view.raws.back()) ||
+       std::none_of(view.query.begin() + spans.back().begin,
+                    view.query.end(), [](const std::string& c) {
+                      return c.size() == 1 &&
+                             absl::ascii_isalpha(
+                                 static_cast<unsigned char>(c[0]));
+                    }))) {
     english_undo_ = *composer;
   }
   size_t cursor = composer->GetCursor();
@@ -3238,7 +3286,8 @@ void Session::SetIndicator(commands::Command* command) const {
         context_->state() == ImeContext::CONVERSION
             ? !shown.empty() &&
                   absl::ascii_isalpha(static_cast<unsigned char>(shown.back()))
-            : EnglishView(composer).EnglishBefore(composer.GetCursor()));
+            : EnglishView(composer, KanaReadsAsJapanese())
+                  .EnglishBefore(composer.GetCursor()));
   }
 }
 

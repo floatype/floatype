@@ -1091,6 +1091,82 @@ TEST_F(FloatypeZenzTest, WithoutMixedEnglishAWordInsideJapaneseIsKana) {
   EXPECT_EQ(Preedit(SendKeys({"Space"})).find("update"), std::string::npos);
 }
 
+// The test data has no word read べふぉれ, so the keys of "before" are the
+// word; まで is a word of the dictionary, so "made" stays Japanese.
+TEST_F(FloatypeZenzTest, MixedEnglishKeepsAWordTypedWhollyIntoKana) {
+  floatype::EnableSessionFeatures(true);
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_mixed_english(true);
+  config.set_use_live_conversion(false);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+
+  const commands::Output typed = SendKeys({"b", "e", "f", "o", "r", "e"});
+  EXPECT_EQ(Preedit(typed), "べふぉれ") << "still kana while typing";
+  EXPECT_TRUE(typed.indicator().english());
+  EXPECT_EQ(Preedit(SendKeys({"Space"})), "before");
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(), "before");
+
+  // before/after: the / after the word is a /, and both words stay letters.
+  SendKeys({"b", "e", "f", "o", "r", "e", "/", "a", "f", "t", "e", "r"});
+  EXPECT_EQ(Preedit(SendKeys({"Space"})), "before/after");
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(), "before/after");
+
+  // Japanese stays Japanese.
+  const commands::Output made = SendKeys({"m", "a", "d", "e"});
+  EXPECT_FALSE(made.indicator().english());
+  EXPECT_NE(Preedit(SendKeys({"Space"})), "made");
+  SendKeys({"Escape"});
+  SendKeys({"Escape"});
+
+  // The Japanese is one key away: F6 writes the keys in hiragana again.
+  SendKeys({"b", "e", "f", "o", "r", "e", "Space"});
+  EXPECT_EQ(Preedit(SendKeys({"F6"})), "べふぉれ");
+}
+
+TEST_F(FloatypeZenzTest, WithoutMixedEnglishAWordTypedIntoKanaIsKana) {
+  floatype::EnableSessionFeatures(true);
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_use_live_conversion(false);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+  SendKeys({"b", "e", "f", "o", "r", "e"});
+  EXPECT_NE(Preedit(SendKeys({"Space"})), "before");
+  SendKeys({"Escape"});
+  SendKeys({"Escape"});
+  // And the / after it is the middle dot.
+  EXPECT_EQ(Preedit(SendKeys({"b", "e", "f", "o", "r", "e", "/"})),
+            "べふぉれ・");
+}
+
+TEST_F(FloatypeZenzTest, MixedEnglishUndoesAKanaWordWhenTypingGoesOn) {
+  floatype::EnableSessionFeatures(true);
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_mixed_english(true);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+
+  // A pause after べふぉれ shows before; a letter typed next goes on in kana.
+  ASSERT_EQ(Preedit(PollWhileAsked(
+                CallBack(SendKeys({"b", "e", "f", "o", "r", "e"})))),
+            "before");
+  EXPECT_EQ(Preedit(SendKeys({"n", "i"})), "べふぉれに");
+  SendKeys({"Escape"});
+  SendKeys({"Escape"});
+
+  // A / typed next keeps the word and is a /.
+  ASSERT_EQ(Preedit(PollWhileAsked(
+                CallBack(SendKeys({"b", "e", "f", "o", "r", "e"})))),
+            "before");
+  EXPECT_EQ(Preedit(SendKeys({"/"})), "before/");
+}
+
 // Sets the config for the tests of / after a letter or a digit.
 #define SET_SLASH_CONFIG(mixed_english, slash)                       \
   floatype::EnableSessionFeatures(true);                             \
@@ -1198,7 +1274,9 @@ TEST_F(FloatypeZenzTest, MixedEnglishLeavesATrailingNJapanese) {
   input.set_type(commands::Input::SET_CONFIG);
   *input.mutable_config() = config;
   Eval(std::move(input));
-  for (const absl::string_view word : {"ten", "pan", "sen", "ken", "pen"}) {
+  // Words of the test data's dictionary: てん, せん, けん, ぺん (it has no
+  // ぱん, so pan would be the English word there).
+  for (const absl::string_view word : {"ten", "sen", "ken", "pen"}) {
     SendKeys({word.substr(0, 1), word.substr(1, 1), word.substr(2, 1)});
     EXPECT_NE(Preedit(SendKeys({"Space"})), word);
     SendKeys({"Escape"});

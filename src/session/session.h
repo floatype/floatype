@@ -34,6 +34,7 @@
 
 #include <cstddef>
 #include <deque>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <utility>
@@ -337,6 +338,9 @@ class Session {
   // After a typed character: when it is one of the direct commit characters,
   // converts, asks zenz, and commits once it answers. Returns whether it did.
   bool MaybeCommitOnCharacter(commands::Command* command);
+  // floatype: whether a run of kana reads as Japanese by the dictionary's
+  // words (floatype::ReadsAsJapanese()), for words typed wholly into kana.
+  std::function<bool(absl::string_view)> KanaReadsAsJapanese() const;
   // floatype: whether `key` is a / to type as it is, because a letter or a
   // digit comes right before it: in the composition, in the text the app says
   // is before the caret, or else at the end of what was committed by the
