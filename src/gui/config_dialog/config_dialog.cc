@@ -85,6 +85,7 @@
 #include "gui/config_dialog/keymap_editor.h"
 #include "gui/config_dialog/look_preview.h"
 #include "gui/config_dialog/roman_table_editor.h"
+#include "gui/config_dialog/zenz_memory_dialog.h"
 #include "protocol/config.pb.h"
 #include "session/keymap.h"
 
@@ -760,10 +761,19 @@ void ConfigDialog::SetUpFloatypeSettings() {
                   "1 分で止まり、次の 1 文字目で起きる）");
   zenzLearningCheckBox_ =
       AddCheckBox(memory,
-                  "補正の表示中に control+delete "
-                  "で止めた補正を覚え、同じ読みでは繰り返さない");
+                  "zenz の補正の採用と却下を覚える（確定した補正、"
+                  "退けた語、control+delete で止めた補正）");
   zenzSuggestionLearningCheckBox_ =
       AddCheckBox(memory, "zenz が直した確定を予測候補に覚えさせる");
+  QPushButton* learned = new QPushButton(Text("学習データを見る…"));
+  learned->setObjectName(QStringLiteral("zenzMemoryButton"));
+  learned->setProperty("changes_nothing", true);
+  connect(learned, &QPushButton::clicked, this,
+          [this] { NewZenzMemoryDialog(this)->exec(); });
+  QHBoxLayout* learned_row = new QHBoxLayout();
+  learned_row->addWidget(learned);
+  learned_row->addStretch();
+  memory->addRow(learned_row);
 
   // 一般: the width of digits, the 全角・半角 table's digit row in one choice.
   numberFormComboBox_ = new QComboBox();
