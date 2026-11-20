@@ -625,6 +625,14 @@ TEST_F(CostSearchTest, LeavesWhatMayGoOnAsJapanese) {
   EXPECT_EQ(Spans(time, costs, true), Spans_{});
   // A word still being typed may start inside the word's kana: めをと.
   EXPECT_EQ(Spans(time, costs, false, {"めをと"}), Spans_{});
+  // A word of the general list whose kana are a word of the dictionary is
+  // that word: まけ is 負け.
+  EXPECT_EQ(Spans({{"ma", "ま"}, {"ke", "け"}, {"ga", "が"}, {"i", "い"}},
+                  {{"まけがい", 24000}, {"makeがい", 25000}}, false, {"まけ"}),
+            Spans_{});
+  EXPECT_EQ(Spans({{"ma", "ま"}, {"ke", "け"}, {"ga", "が"}, {"i", "い"}},
+                  {{"まけがい", 24000}, {"makeがい", 25000}}),
+            (Spans_{{0, 2, "make", "", true}}));
   // Words of three letters of the general list are left: あれ is no are.
   EXPECT_EQ(Spans({{"a", "あ"}, {"re", "れ"}, {"wo", "を"}},
                   {{"あれを", 24000}, {"areを", 25000}}),
@@ -693,7 +701,8 @@ TEST(WholeEnglishWordTest, AtSpaceKeysThatAreNoJapaneseAreTheWord) {
 std::optional<EnglishSpan> Together(
     const std::vector<std::vector<std::string>>& chars,
     const std::vector<EnglishSpan>& spans) {
-  const EnglishWords words("time\nmoney\npush\nsite\nfront\n", "page\n");
+  const EnglishWords words(
+      "time\nmoney\npush\nsite\nfront\npull\nquest\nrequest\n", "page\n");
   const ReadingLookup lookup = ReadingsOf({"して", "ぱげ"});
   const Typed typed = TypedAs(chars);
   return WordsRunTogether(
@@ -714,6 +723,28 @@ TEST(WordsRunTogetherTest, KeysThatAreAllWordsAreEnglish) {
             (EnglishSpan{0, 6, "frontpage", ""}));
 }
 
+TEST(WordsRunTogetherTest, JoinsTwoWordsOverKanaThatAreNoJapanese) {
+  // pullれquestが: れ between pull and quest is no Japanese, so the three
+  // are pull + request; が after them is left alone.
+  EXPECT_EQ(Together({{"pu", "ぷ"}, {"l", "ｌ"}, {"l", "ｌ"}, {"re", "れ"},
+                      {"qu", "く"}, {"e", "え"}, {"s", "ｓ"}, {"t", "ｔ"},
+                      {"ga", "が"}},
+                     {{0, 3, "pull", ""}, {4, 8, "quest", ""}}),
+            (EnglishSpan{0, 8, "pullrequest", ""}));
+  // pullれquestを: the last word ends in the kana after it (t + wo).
+  EXPECT_EQ(Together({{"pu", "ぷ"}, {"l", "ｌ"}, {"l", "ｌ"}, {"re", "れ"},
+                      {"qu", "く"}, {"e", "え"}, {"s", "ｓ"}, {"t", "と"},
+                      {"wo", "ぉ"}},
+                     {{0, 3, "pull", ""}, {4, 9, "quest", "wo"}}),
+            (EnglishSpan{0, 9, "pullrequest", "wo"}));
+  // pushしてfront: して between them is Japanese.
+  EXPECT_EQ(Together({{"pu", "ぷ"}, {"s", "ｓ"}, {"h", "ｈ"}, {"si", "し"},
+                      {"te", "て"}, {"fu", "ふ"}, {"ro", "ろ"}, {"n", "ん"},
+                      {"t", "ｔ"}, {"ga", "が"}},
+                     {{0, 3, "push", ""}, {5, 9, "front", ""}}),
+            std::nullopt);
+}
+
 TEST(WordsRunTogetherTest, JapaneseBesideAWordStaysJapanese) {
   // pushして: site is a word, but して reads as Japanese.
   EXPECT_EQ(Together({{"pu", "ぷ"}, {"s", "ｓ"}, {"h", "ｈ"}, {"si", "し"},
@@ -727,6 +758,11 @@ TEST(WordsRunTogetherTest, JapaneseBesideAWordStaysJapanese) {
             std::nullopt);
   // One word is no run.
   EXPECT_EQ(Together({{"mo", "も"}, {"ne", "ね"}, {"y", "ｙ"}, {"s", "ｓ"}},
+                     {}),
+            std::nullopt);
+  // Kana alone are Japanese, though their keys are words: ちめもね is no
+  // time + mone, and no letter is left over to say so.
+  EXPECT_EQ(Together({{"ti", "ち"}, {"me", "め"}, {"si", "し"}, {"te", "て"}},
                      {}),
             std::nullopt);
 }

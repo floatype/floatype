@@ -66,9 +66,11 @@ ABSL_FLAG(int, not_this, 0,
 ABSL_FLAG(bool, live, false,
           "type each reading key by key with live conversion on, pausing "
           "after 、 and 。 and at the end, and commit it with Enter; prints "
-          "<committed>\t<reading committed>\t<polls>\t<changes>, or SKIP for "
-          "a reading with characters that have no key here. <changes> counts "
-          "how often the text on screen changed while the user paused");
+          "<committed>\t<reading committed>\t<polls>\t<changes>\t<words>, "
+          "or SKIP for a reading with characters that have no key here. "
+          "<changes> counts how often the text on screen changed while the "
+          "user paused, <words> the pauses at which it showed three letters "
+          "or more in a row");
 ABSL_FLAG(int, pause_every, 0,
           "live mode: also pause after every this many kana (0: only at 、, 。 "
           "and the end)");
@@ -85,6 +87,9 @@ ABSL_FLAG(bool, keys, false,
           "live mode: each reading is the keys to type, so a space is the "
           "Space key and an upper-case letter is typed as it is; the text "
           "committed is everything the keys commit, not only the last Enter");
+ABSL_FLAG(bool, unknown_context, false,
+          "live mode: tell the session nothing of the text before the caret, "
+          "as an app that does not report it (a terminal, a long document)");
 ABSL_FLAG(bool, cost, false,
           "print each line's conversion cost (EngineConverter's "
           "ConversionCost()) and nothing else");
@@ -230,6 +235,8 @@ class Replayer {
     }
     int polls = 0;
     int changes = 0;
+    // The pauses at which the screen showed a word in letters.
+    int words = 0;
     // What the keys before Enter commit (with --keys, Space may commit).
     std::string before;
     for (const auto& [key_code, pause] : *keys) {
@@ -241,14 +248,23 @@ class Replayer {
         input.mutable_key()->set_key_code(key_code);
       }
       // What was committed on the way comes before the caret too.
-      input.mutable_context()->set_preceding_text(
-          absl::StrCat(left_context, before));
+      if (!absl::GetFlag(FLAGS_unknown_context)) {
+        input.mutable_context()->set_preceding_text(
+            absl::StrCat(left_context, before));
+      }
       commands::Output output = Eval(std::move(input));
       before += output.result().value();
       if (pause && output.has_callback()) {
         polls += RunCallbacks(output, changes);
         // A callback may commit too (a direct commit that waited for zenz).
         before += output.result().value();
+        // Three in a row: one or two may be a syllable still being typed.
+        int run = 0, longest = 0;
+        for (const char c : Preedit(output)) {
+          run = absl::ascii_isalpha(static_cast<unsigned char>(c)) ? run + 1 : 0;
+          longest = std::max(longest, run);
+        }
+        words += longest >= 3;
       }
     }
     commands::Input enter;
@@ -278,7 +294,7 @@ class Replayer {
     }
     return before + committed.result().value() + '\t' +
            committed.result().key() + '\t' + std::to_string(polls) + '\t' +
-           std::to_string(changes);
+           std::to_string(changes) + '\t' + std::to_string(words);
   }
 
   void SetConfig(int wait_for_zenz) {

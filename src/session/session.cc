@@ -638,6 +638,7 @@ bool Session::SendKey(commands::Command* command) {
     live_conversion_ = false;
   }
   space_after_commit_ = false;
+  english_kept_ = false;
   const bool run_committed = space_pending && command->output().has_result();
   // A click or a change of focus ends a run of English with no key: the text
   // the app then reports before the caret is not the word and its space.
@@ -2662,7 +2663,10 @@ bool Session::DeleteCandidateFromHistory(commands::Command* command) {
 }
 
 bool Session::Convert(commands::Command* command) {
-  KeepEnglishWords(false);
+  // The Space key has kept them already (TypeSpaceAfterEnglish()).
+  if (!std::exchange(english_kept_, false)) {
+    KeepEnglishWords(false);
+  }
   if (MaybeConvertAsEnglish(command)) {
     return true;
   }
@@ -2989,6 +2993,37 @@ bool Session::IsSlashAfterAscii(const commands::KeyEvent& key,
          ends_in_ascii(segments.history_segment(history - 1).candidate(0).value);
 }
 
+bool Session::MayFollowJapanese() const {
+  const auto ends_in_japanese = [](absl::string_view text) {
+    if (text.empty()) {
+      return false;
+    }
+    const Utf8AsChars chars(text);
+    const Util::ScriptType type = Util::GetScriptType(chars.back());
+    return type == Util::HIRAGANA || type == Util::KATAKANA ||
+           type == Util::KANJI;
+  };
+  // English is being written: the word and the space are before it.
+  if (english_run_) {
+    return false;
+  }
+  if (context_->client_context().has_preceding_text()) {
+    return ends_in_japanese(context_->client_context().preceding_text());
+  }
+  // The app does not tell (a terminal, a long document): what this session
+  // committed with the key before, known while that can still be undone.
+  // Else nothing is known, and Japanese may well be there.
+  if (!HasUndoContext()) {
+    return true;
+  }
+  const Segments& segments = context_->converter().GetSegments();
+  const size_t history = segments.history_segments_size();
+  return history == 0 ||
+         segments.history_segment(history - 1).candidates_size() == 0 ||
+         ends_in_japanese(
+             segments.history_segment(history - 1).candidate(0).value);
+}
+
 bool Session::HasEnglishWords() const {
   return !EnglishView(context_->composer(), KanaReadsAsJapanese())
               .spans.empty();
@@ -3030,18 +3065,7 @@ bool Session::KeepEnglishWordsIn(composer::Composer* composer,
           [this](absl::string_view text) {
             return context_->converter().ConversionCost(text);
           },
-      .after_japanese =
-          [this]() {
-            const std::string& before =
-                context_->client_context().preceding_text();
-            if (before.empty()) {
-              return false;
-            }
-            const Utf8AsChars chars(before);
-            const Util::ScriptType type = Util::GetScriptType(chars.back());
-            return type == Util::HIRAGANA || type == Util::KATAKANA ||
-                   type == Util::KANJI;
-          }(),
+      .after_japanese = MayFollowJapanese(),
   };
   const EnglishView view(*composer, KanaReadsAsJapanese(), &search);
   std::vector<floatype::EnglishSpan> spans = view.spans;
@@ -3316,6 +3340,16 @@ bool Session::TypeSpaceAfterEnglish(bool live, commands::Command* command) {
   // What Space would commit: the composition with its English as typed.
   composer::Composer kept = context_->composer();
   KeepEnglishWordsIn(&kept, true);
+  // Where Space converts after all, the conversion takes this: with kana
+  // left, or with no English, it is what the conversion would work out.
+  const auto convert_this = [&]() {
+    if (!shown_live) {
+      *context_->mutable_composer() = std::move(kept);
+      english_undo_.reset();
+      english_kept_ = true;
+    }
+    return false;
+  };
   // A letter kept as typed shows as one byte; a loose letter, full width.
   std::vector<std::string> shown;
   const std::string preedit = kept.GetStringForPreedit();
@@ -3338,7 +3372,7 @@ bool Session::TypeSpaceAfterEnglish(bool live, commands::Command* command) {
                             absl::ascii_isalpha(
                                 static_cast<unsigned char>(c[0]));
                    })) {
-    return false;
+    return convert_this();
   }
   const bool no_kana = std::all_of(shown.begin(), shown.begin() + end, ascii);
   // After Japanese, the marks at the end close a Japanese sentence, and
@@ -3346,7 +3380,7 @@ bool Session::TypeSpaceAfterEnglish(bool live, commands::Command* command) {
   if (!no_kana &&
       (end < shown.size() ||
        !absl::ascii_isalpha(static_cast<unsigned char>(shown[end - 1][0])))) {
-    return false;
+    return convert_this();
   }
   command->mutable_output()->set_consumed(true);
   if (shown_live) {

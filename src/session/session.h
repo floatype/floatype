@@ -378,6 +378,13 @@ class Session {
   void KeepEnglishWords(bool undoable, bool prose = false);
   // Whether the composition holds an English word still to turn into letters.
   bool HasEnglishWords() const;
+  // Whether the composition follows Japanese text, or may: the text the app
+  // reports before the caret, else what this session committed with the key
+  // before; where neither is known, it may.
+  bool MayFollowJapanese() const;
+  // The Space key kept the English words of the composition on its way to
+  // converting it, so Convert() does not work them out again.
+  bool english_kept_ = false;
   // The same in `composer`, which need not be the session's. Returns whether
   // the word it kept at the end may go on in kana.
   bool KeepEnglishWordsIn(composer::Composer* composer, bool prose) const;

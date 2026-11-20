@@ -93,8 +93,9 @@ struct KanaSearch {
   // (EngineConverter's ConversionCost()); negative where it cannot tell.
   // Without it, no word is told by its cost.
   std::function<int(absl::string_view text)> cost;
-  // The composition follows Japanese text, which its first kana may go on
-  // with: no word at its start is told by its cost.
+  // The composition follows Japanese text, or may (nothing is known of the
+  // text before it): its first kana may go on with that text, so no word at
+  // its start is told by its cost.
   bool after_japanese = false;
 };
 
@@ -148,7 +149,8 @@ struct EnglishSpan {
 // letters costs enough less than converting its kana: しぜがおおきすぎる
 // (し + ぜ + が...) is sizeが大きすぎる, and ちめをきろくする, with a word the
 // user added, is timeを記録する. まけをみとめる stays 負けを認める, and
-// ここでまつ holds no code. How much less is asked is said at the constants in
+// ここでまつ holds no code. A word of the general list is told so only where
+// its kana are no word of the dictionary (しぜ; not まけ, それ). How much less is asked is said at the constants in
 // the source, with the measurements behind them.
 std::vector<EnglishSpan> EnglishSpans(
     const std::vector<std::string>& raws, const std::vector<std::string>& query,
@@ -172,14 +174,18 @@ std::optional<EnglishSpan> WholeEnglishWord(
     const std::vector<std::string>& preedit, const EnglishWords& words,
     bool run, bool space);
 
-// A composition that is English words typed with no space between them
-// (timeismoney, goodmorning), as a span: its keys are letters only and make
-// up two words or more of `words`, or of two letters where a letter stays
-// that no kana takes (is, it, of). Only where the words in `spans` leave
+// English words typed with no space between them, as a span: a whole
+// composition (timeismoney, goodmorning), or, failing that, what lies from
+// the first word of `spans` to the last where every stretch of kana between
+// them is no Japanese (pullれquestをおくる is pullrequestを送る; fileをdelete
+// stays two words). The keys are letters only and make up two words or more
+// of `words`, or of two letters where a letter stays that no kana takes (is,
+// it, of). Only where the words in `spans` leave
 // something that is not Japanese: letters the romaji left over, or kana
 // that `reads_as_japanese` does not read or that are the keys of a word the
 // user added (frontぱげ). あとでtest and pushして stay as they are, though
-// at + ode + test and push + site are words.
+// at + ode + test and push + site are words, and so do kana with no letter
+// left over and no word in `spans` (をたべてた).
 std::optional<EnglishSpan> WordsRunTogether(
     const std::vector<std::string>& raws, const std::vector<std::string>& query,
     const std::vector<std::string>& preedit, const EnglishWords& words,

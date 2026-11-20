@@ -593,9 +593,25 @@ std::vector<EnglishSpan> SpanByCost(const std::vector<std::string>& raws,
       }
       const bool user = words.ContainsUser(raw);
       // Three letters are too often Japanese (あれ, おれ, いた).
-      if (user || raw.size() >= 4) {
-        found.push_back({begin, end, raw, user});
+      if (!user && raw.size() < 4) {
+        continue;
       }
+      // Kana that are a word of the dictionary are that word, but for the
+      // words the user added: まに is no mani, それ no sore.
+      if (!user) {
+        std::string reading;
+        for (size_t i = begin; i < end; ++i) {
+          reading += query[first + i];
+        }
+        bool is_word = false;
+        search.lookup(reading, [&](absl::string_view found_reading) {
+          is_word = is_word || found_reading == reading;
+        });
+        if (is_word) {
+          continue;
+        }
+      }
+      found.push_back({begin, end, raw, user});
     }
   }
   if (found.empty()) {
@@ -1021,87 +1037,129 @@ std::optional<EnglishSpan> WordsRunTogether(
   if (query.size() != size || preedit.size() != size || !reads_as_japanese) {
     return std::nullopt;
   }
-  std::string keys;
-  // A letter the romaji left over with kana after it: no syllable still
-  // being typed, so the keys are not plain Japanese.
-  bool letter_inside = false, letter_seen = false;
-  bool shown = true;
-  for (size_t i = 0; i < size; ++i) {
-    keys += raws[i];
-    const bool stays = IsLetter(query[i]) && preedit[i] != raws[i];
-    letter_inside = letter_inside || (letter_seen && !stays);
-    letter_seen = letter_seen || stays;
-    shown = shown && preedit[i] == raws[i];
-  }
-  constexpr size_t kMaxKeys = 40;
-  if (shown || keys.size() < 6 || keys.size() > kMaxKeys ||
-      !IsAsciiLetters(keys)) {
-    return std::nullopt;
-  }
-  // What the words found so far leave: letters the romaji left over, but for
-  // those at the end, which may yet make a kana, and stretches of kana.
   std::vector<bool> covered(size, false);
+  // The words found already, from the first to the last, and the keys the
+  // last one types again (quest + を of くえsとぉ); only the last may.
+  size_t first = size, last = 0;
+  std::string retyped;
   for (const EnglishSpan& span : spans) {
-    if (!span.retyped.empty() || span.end > size) {
+    if (span.end > size) {
       return std::nullopt;
     }
     std::fill(covered.begin() + span.begin, covered.begin() + span.end, true);
+    first = std::min(first, span.begin);
+    if (span.end > last) {
+      last = span.end;
+      retyped = span.retyped;
+    } else if (!span.retyped.empty()) {
+      return std::nullopt;
+    }
   }
   const auto loose = [&](size_t i) {
     return IsLetter(query[i]) && preedit[i] != raws[i];
   };
-  bool japanese = true;
-  for (size_t i = 0; i < size && japanese;) {
-    if (covered[i] || preedit[i] == raws[i]) {
-      ++i;
-      continue;
+  // The characters [begin, end) as words run together. `between` says they
+  // lie between two words found already, where every stretch of kana must be
+  // no Japanese; else one that is not will do. `again` are keys at the end
+  // that are typed again after the words.
+  const auto run = [&](size_t begin, size_t end, bool between,
+                       absl::string_view again) -> std::optional<EnglishSpan> {
+    std::string keys;
+    // A letter the romaji left over with kana after it: no syllable still
+    // being typed, so the keys are not plain Japanese.
+    bool letter_inside = false, letter_seen = false;
+    bool shown = true;
+    // Kana alone are Japanese, whatever words their keys make up (をたべてた
+    // is no wot + abet + eta): something must tell of English, a word found
+    // already or a letter the romaji left over.
+    bool told = false;
+    for (size_t i = begin; i < end; ++i) {
+      keys += raws[i];
+      const bool stays = loose(i);
+      letter_inside = letter_inside || (letter_seen && !stays);
+      letter_seen = letter_seen || stays;
+      shown = shown && preedit[i] == raws[i];
+      told = told || stays || covered[i];
     }
-    if (loose(i)) {
-      japanese = false;
-      break;
+    if (!keys.ends_with(again)) {
+      return std::nullopt;
     }
-    // A stretch of kana: Japanese where it reads so, but for the keys of a
-    // word the user added (frontぱげ is frontpage).
-    std::string kana, typed;
-    while (i < size && !covered[i] && IsKana(query[i])) {
-      typed += raws[i];
-      kana += query[i++];
+    keys.resize(keys.size() - again.size());
+    constexpr size_t kMaxKeys = 40;
+    if (shown || !told || keys.size() < 6 || keys.size() > kMaxKeys ||
+        !IsAsciiLetters(keys)) {
+      return std::nullopt;
     }
-    japanese = !kana.empty() && reads_as_japanese(kana) &&
-               !words.ContainsUser(typed);
-  }
-  if (japanese) {
-    return std::nullopt;
-  }
-  // The fewest words that make up the keys: of three letters or more, and
-  // where the keys are surely not plain Japanese, of two that leave a letter
-  // when typed alone (is, it, of; not no, to, go, which are の, と, ご after
-  // an English word). おきてねがおみてた is no ok + it + ...
-  constexpr absl::string_view kShort =
-      " am as at by if is it my of oh ok or up us ";
-  const std::string lower = absl::AsciiStrToLower(keys);
-  constexpr int kNone = 1 << 20;
-  std::vector<int> fewest(lower.size() + 1, kNone);
-  fewest[0] = 0;
-  for (size_t at = 0; at < lower.size(); ++at) {
-    if (fewest[at] == kNone) {
-      continue;
+    // What the words found so far leave: letters the romaji left over, and
+    // stretches of kana.
+    bool some_japanese = false, some_other = false;
+    for (size_t i = begin; i < end;) {
+      if (covered[i] || preedit[i] == raws[i]) {
+        ++i;
+        continue;
+      }
+      if (loose(i)) {
+        some_other = true;
+        ++i;
+        continue;
+      }
+      // A stretch of kana: Japanese where it reads so, but for the keys of
+      // a word the user added (frontぱげ is frontpage).
+      std::string kana, typed;
+      while (i < end && !covered[i] && IsKana(query[i])) {
+        typed += raws[i];
+        kana += query[i++];
+      }
+      if (kana.empty()) {
+        return std::nullopt;  // Neither a letter nor a kana.
+      }
+      const bool japanese =
+          reads_as_japanese(kana) && !words.ContainsUser(typed);
+      some_japanese = some_japanese || japanese;
+      some_other = some_other || !japanese;
     }
-    for (size_t length = 2; at + length <= lower.size() && length <= 24;
-         ++length) {
-      const absl::string_view word =
-          absl::string_view(lower).substr(at, length);
-      if (length == 2 ? letter_inside && absl::StrContains(
-                                             kShort, absl::StrCat(" ", word, " "))
-                      : words.Contains(word)) {
-        fewest[at + length] = std::min(fewest[at + length], fewest[at] + 1);
+    if (!some_other || (between && some_japanese)) {
+      return std::nullopt;
+    }
+    // The fewest words that make up the keys: of three letters or more, and
+    // where the keys are surely not plain Japanese, of two that leave a
+    // letter when typed alone (is, it, of; not no, to, go, which are の, と,
+    // ご after an English word). おきてねがおみてた is no ok + it + ...
+    constexpr absl::string_view kShort =
+        " am as at by if is it my of oh ok or up us ";
+    const std::string lower = absl::AsciiStrToLower(keys);
+    constexpr int kNone = 1 << 20;
+    std::vector<int> fewest(lower.size() + 1, kNone);
+    fewest[0] = 0;
+    for (size_t at = 0; at < lower.size(); ++at) {
+      if (fewest[at] == kNone) {
+        continue;
+      }
+      for (size_t length = 2; at + length <= lower.size() && length <= 24;
+           ++length) {
+        const absl::string_view word =
+            absl::string_view(lower).substr(at, length);
+        if (length == 2
+                ? letter_inside &&
+                      absl::StrContains(kShort, absl::StrCat(" ", word, " "))
+                : words.Contains(word)) {
+          fewest[at + length] = std::min(fewest[at + length], fewest[at] + 1);
+        }
       }
     }
+    if (fewest.back() == kNone || fewest.back() < 2) {
+      return std::nullopt;
+    }
+    return EnglishSpan{begin, end, keys, std::string(again)};
+  };
+  if (retyped.empty()) {
+    if (std::optional<EnglishSpan> whole = run(0, size, false, "")) {
+      return whole;
+    }
   }
-  if (fewest.back() == kNone || fewest.back() < 2) {
-    return std::nullopt;
-  }
-  return EnglishSpan{0, size, keys, ""};
+  // pullれquestをおくる: pull and quest are words, and れ between them is no
+  // Japanese, so the three are pull + request.
+  return spans.size() >= 2 ? run(first, last, true, retyped) : std::nullopt;
 }
 
 std::vector<EnglishSpan> JoinedNames(
