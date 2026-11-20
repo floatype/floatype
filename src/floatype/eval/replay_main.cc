@@ -96,14 +96,15 @@ ABSL_FLAG(std::string, commit, "",
           "(a third field of the line, alternatives separated by U+001F), as "
           "a user who mends the others by hand would teach nothing wrong");
 ABSL_FLAG(bool, zenz_teaches_mozc, false,
-          "for measuring: committing a correction of zenz's teaches Mozc's "
-          "conversion ranking its words");
-ABSL_FLAG(int, zenz_learning_rules, 7,
+          "the setting zenz_teaches_mozc: committing a correction of zenz's "
+          "teaches Mozc's conversion ranking its words, and zenz may change "
+          "what the user's history ranked first");
+ABSL_FLAG(int, zenz_learning_rules, -1,
           "for measuring: which rules about a segment the user's history "
           "ranked are on, as a sum: 1, zenz may not go back to the candidate "
           "the learning displaced; 2, the segment is not merged into a run "
-          "cut again; 4, no cutting as zenz cuts where there is one. 7 is the "
-          "app, 0 lets zenz treat such a segment like any other");
+          "cut again; 4, no cutting as zenz cuts where there is one. -1 is "
+          "the app: all of them (7), or none (0) where zenz teaches Mozc");
 ABSL_FLAG(bool, unknown_context, false,
           "live mode: tell the session nothing of the text before the caret, "
           "as an app that does not report it (a terminal, a long document)");
@@ -328,7 +329,7 @@ class Replayer {
            std::to_string(changes) + '\t' + std::to_string(words);
   }
 
-  void SetConfig(int wait_for_zenz) {
+  void SetConfig(int wait_for_zenz, bool zenz_teaches_mozc = false) {
     commands::Input input;
     input.set_type(commands::Input::SET_CONFIG);
     *input.mutable_config() = config::ConfigHandler::DefaultConfig();
@@ -340,6 +341,7 @@ class Replayer {
         absl::GetFlag(FLAGS_display_ambiguous));
     input.mutable_config()->set_suggest_added_words(
         absl::GetFlag(FLAGS_suggest_added_words));
+    input.mutable_config()->set_zenz_teaches_mozc(zenz_teaches_mozc);
     Eval(std::move(input));
   }
 
@@ -494,10 +496,13 @@ int main(int argc, char** argv) {
 
   // The first conversion starts the scorer and loads the model.
   replayer.Replay("", "きょうはいしゃにいく");
-  mozc::floatype::ZenzCorrector::SetTeachesMozcForMeasuring(
-      absl::GetFlag(FLAGS_zenz_teaches_mozc));
-  mozc::floatype::ZenzCorrector::SetLearningRulesForMeasuring(
-      absl::GetFlag(FLAGS_zenz_learning_rules));
+  // After the conversion above, which is not one of the lines measured.
+  if (absl::GetFlag(FLAGS_zenz_teaches_mozc)) {
+    replayer.SetConfig(absl::GetFlag(FLAGS_wait_for_zenz), true);
+  }
+  if (const int rules = absl::GetFlag(FLAGS_zenz_learning_rules); rules >= 0) {
+    mozc::floatype::ZenzCorrector::SetLearningRulesForMeasuring(rules);
+  }
 
   std::string line;
   while (std::getline(std::cin, line)) {

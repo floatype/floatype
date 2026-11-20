@@ -46,16 +46,17 @@ using ::floatype::scorer::Response;
 bool default_client_enabled = false;
 ScorerClient* default_client_for_testing = nullptr;
 bool ignore_secure_input_for_testing = false;
-bool teaches_mozc_for_measuring = false;
 // See ZenzCorrector::SetLearningRulesForMeasuring().
 constexpr int kKeepsDisplacedOut = 1;
 constexpr int kKeepsOutOfRuns = 2;
 constexpr int kKeepsCuts = 4;
-int learning_rules_for_measuring = 7;
+std::optional<int> learning_rules_for_measuring;
 
-// Whether the user's history put another candidate first than Mozc's best.
-bool LearnedFromUser(const Segment& segment, int rule) {
-  return (learning_rules_for_measuring & rule) != 0 &&
+// Whether the user's history put another candidate first than Mozc's best,
+// where `rule` about such a segment is on.
+bool LearnedFromUser(const Segment& segment, int rule, bool keeps_learned) {
+  return (learning_rules_for_measuring.value_or(keeps_learned ? 7 : 0) &
+          rule) != 0 &&
          segment.candidates_size() > 0 &&
          (segment.candidate(0).attributes &
           converter::Attribute::USER_SEGMENT_HISTORY_REWRITER);
@@ -180,8 +181,8 @@ bool FitsRequest(const std::vector<std::string>& rejected) {
 namespace {
 
 // The candidates MapToCandidates() may use, per conversion segment.
-std::vector<std::vector<std::string>> CandidateValues(
-    const Segments& segments) {
+std::vector<std::vector<std::string>> CandidateValues(const Segments& segments,
+                                                      bool keeps_learned) {
   // Full-width and half-width ASCII compare equal, so that among candidates
   // differing only in width, the one Mozc ranks higher wins: symbols, digits
   // and letters keep Mozc's width (spec section 4).
@@ -195,8 +196,9 @@ std::vector<std::vector<std::string>> CandidateValues(
     // The same writing may be several candidates (感じ of 感じる and the
     // noun), so it is the writing that is kept out.
     std::string displaced;
-    for (size_t i = 1; LearnedFromUser(segment, kKeepsDisplacedOut) &&
-                       displaced.empty() && i < segment.candidates_size();
+    for (size_t i = 1;
+         LearnedFromUser(segment, kKeepsDisplacedOut, keeps_learned) &&
+         displaced.empty() && i < segment.candidates_size();
          ++i) {
       if (segment.candidate(i).attributes &
           converter::Attribute::BEST_CANDIDATE) {
@@ -223,9 +225,10 @@ std::string ConversionReading(const Segments& segments) {
 }
 
 std::optional<std::vector<int>> MapToCandidates(const Segments& segments,
-                                                absl::string_view text) {
+                                                absl::string_view text,
+                                                bool keeps_learned) {
   const std::vector<std::vector<std::string>> values =
-      CandidateValues(segments);
+      CandidateValues(segments, keeps_learned);
   std::vector<int> chosen(values.size(), 0);
   absl::flat_hash_set<std::pair<size_t, size_t>> dead_ends;
   if (values.empty() ||
@@ -237,9 +240,10 @@ std::optional<std::vector<int>> MapToCandidates(const Segments& segments,
 }
 
 std::optional<Resegmentation> ResegmentationFor(const Segments& segments,
-                                                absl::string_view text) {
+                                                absl::string_view text,
+                                                bool keeps_learned) {
   const std::vector<std::vector<std::string>> values =
-      CandidateValues(segments);
+      CandidateValues(segments, keeps_learned);
   const size_t n = values.size();
   const std::string folded = japanese::FullWidthAsciiToHalfWidthAscii(text);
   // chars[b] is the number of characters before byte b, or -1 inside one.
@@ -309,7 +313,7 @@ std::optional<Resegmentation> ResegmentationFor(const Segments& segments,
               return Util::IsScriptType(value, Util::KANJI) &&
                      NumberUtil::NormalizeNumbers(value, true, &kanji, &digits);
             });
-        if (LearnedFromUser(segment, kKeepsOutOfRuns) ||
+        if (LearnedFromUser(segment, kKeepsOutOfRuns, keeps_learned) ||
             numeral == values[j].end()) {
           break;
         }
@@ -328,7 +332,7 @@ std::optional<Resegmentation> ResegmentationFor(const Segments& segments,
         if (j > i) {
           // A segment the user's history decided keeps its candidate.
           if (LearnedFromUser(segments.conversion_segment(j - 1),
-                              kKeepsOutOfRuns)) {
+                              kKeepsOutOfRuns, keeps_learned)) {
             break;
           }
           run_chars += segments.conversion_segment(j - 1).key_len();
@@ -409,7 +413,8 @@ std::optional<Resegmentation> ResegmentationFor(const Segments& segments,
   const auto alone = [&](size_t k) {
     return group[k] == k && (k + 1 == n || group[k + 1] != k) &&
            numbers[k].empty() &&
-           !LearnedFromUser(segments.conversion_segment(k), kKeepsOutOfRuns);
+           !LearnedFromUser(segments.conversion_segment(k), kKeepsOutOfRuns,
+                            keeps_learned);
   };
   for (size_t k = 0; k < n; ++k) {
     if (!in_run[k] || !alone(k)) {
@@ -874,8 +879,10 @@ std::optional<std::vector<uint8_t>> ZenzSegmentSizes(absl::string_view reading,
 std::optional<Mapping> MapWithResegmentation(const Segments& segments,
                                              absl::string_view text,
                                              const Resegmenter& resegment,
-                                             const WordLookup& words) {
-  if (std::optional<std::vector<int>> indices = MapToCandidates(segments, text);
+                                             const WordLookup& words,
+                                             bool keeps_learned) {
+  if (std::optional<std::vector<int>> indices =
+          MapToCandidates(segments, text, keeps_learned);
       indices.has_value()) {
     return Mapping{*std::move(indices), std::nullopt};
   }
@@ -907,7 +914,7 @@ std::optional<Mapping> MapWithResegmentation(const Segments& segments,
       }
     }
     std::optional<std::vector<int>> indices =
-        MapToCandidates(*resegmented, text);
+        MapToCandidates(*resegmented, text, keeps_learned);
     if (!indices.has_value()) {
       return std::nullopt;
     }
@@ -916,7 +923,7 @@ std::optional<Mapping> MapWithResegmentation(const Segments& segments,
   // The digits of a number Mozc wrote in kanji numerals, one per segment,
   // are a candidate of the segment that now holds all of it.
   if (const std::optional<Resegmentation> resegmentation =
-          ResegmentationFor(segments, text);
+          ResegmentationFor(segments, text, keeps_learned);
       resegmentation.has_value()) {
     if (std::optional<Mapping> mapping =
             map_resized(resegmentation->sizes, resegmentation->numbers);
@@ -929,8 +936,8 @@ std::optional<Mapping> MapWithResegmentation(const Segments& segments,
   // decided the segments it ranked, so those stay.
   if (std::any_of(segments.conversion_segments().begin(),
                   segments.conversion_segments().end(),
-                  [](const Segment& segment) {
-                    return LearnedFromUser(segment, kKeepsCuts);
+                  [keeps_learned](const Segment& segment) {
+                    return LearnedFromUser(segment, kKeepsCuts, keeps_learned);
                   })) {
     return std::nullopt;
   }
@@ -1257,8 +1264,8 @@ ZenzCorrector::PollResult ZenzCorrector::Judge(
   // Proper nouns (by Mozc's part of speech) were tried too: keeping Mozc's
   // took the regression set from 254 to 252 right, and refusing zenz's
   // traded a harm for a win; both made AJIMEE-Bench's MinCER worse.
-  std::optional<Mapping> mapping =
-      MapWithResegmentation(segments, response.conversion, resegment, words);
+  std::optional<Mapping> mapping = MapWithResegmentation(
+      segments, response.conversion, resegment, words, keeps_learned_);
   if (!mapping.has_value() ||
       (!mapping->segments.has_value() &&
        std::all_of(mapping->candidate_indices.begin(),
@@ -1322,15 +1329,7 @@ void ZenzCorrector::SetDefaultClientForTesting(ScorerClient* client) {
   default_client_for_testing = client;
 }
 
-void ZenzCorrector::SetTeachesMozcForMeasuring(bool teaches) {
-  teaches_mozc_for_measuring = teaches;
-}
-
-bool ZenzCorrector::TeachesMozcForMeasuring() {
-  return teaches_mozc_for_measuring;
-}
-
-void ZenzCorrector::SetLearningRulesForMeasuring(int rules) {
+void ZenzCorrector::SetLearningRulesForMeasuring(std::optional<int> rules) {
   learning_rules_for_measuring = rules;
 }
 

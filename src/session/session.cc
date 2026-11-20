@@ -3549,9 +3549,9 @@ bool Session::ApplyAcceptedCorrection() {
   if (text.empty() || floatype::ZenzMemory::Stopped().Contains(reading, text)) {
     return false;
   }
-  std::optional<floatype::Mapping> mapping =
-      floatype::MapWithResegmentation(segments, text, ZenzResegmenter(),
-                                      ZenzWords());
+  std::optional<floatype::Mapping> mapping = floatype::MapWithResegmentation(
+      segments, text, ZenzResegmenter(), ZenzWords(),
+      !context_->GetConfig().zenz_teaches_mozc());
   return mapping.has_value() && !floatype::UsesTurnedDown(segments, *mapping) &&
          ShowZenzText(reading, text, *std::move(mapping));
 }
@@ -3572,11 +3572,11 @@ bool Session::ShowZenzText(absl::string_view reading, absl::string_view text,
                            floatype::Mapping mapping) {
   EngineConverterInterface* converter = context_->mutable_converter();
   const bool recut = mapping.segments.has_value();
-  // zenz's choices never teach the conversion ranking; the suggestion
-  // history may learn the committed sentence. (Where teaching is being
-  // measured, a choice on Mozc's own segments is marked as the user's.)
+  // zenz's choices do not teach the conversion ranking, unless the setting
+  // zenz_teaches_mozc says so: then a choice on Mozc's own segments is marked
+  // as the user's. The suggestion history may learn the committed sentence.
   const uint32_t attributes =
-      !recut && floatype::ZenzCorrector::TeachesMozcForMeasuring()
+      !recut && context_->GetConfig().zenz_teaches_mozc()
           ? converter::Attribute::RERANKED
       : context_->GetConfig().zenz_suggestion_learning()
           ? converter::Attribute::NO_HISTORY_LEARNING
@@ -3873,6 +3873,7 @@ void Session::RequestZenz(commands::Command* command, bool not_this) {
   }
   zenz_.set_timeout(absl::Milliseconds(config.zenz_timeout_millisec()));
   zenz_.set_learning(config.zenz_learning());
+  zenz_.set_keeps_learned(!config.zenz_teaches_mozc());
   zenz_.Configure(config.zenz_stop_when_idle());
   // A correction the user committed before shows at once; zenz still looks,
   // as the context may call for another. Not after "not this", which may have
@@ -3927,11 +3928,11 @@ bool Session::PollZenz(commands::Command* command) {
     if (!zenz_indices_.empty()) {
       zenz_indices_.clear();
       RestoreMozcOrder();
-      mapping =
-          floatype::MapWithResegmentation(context_->converter().GetSegments(),
-                                          result.text, ZenzResegmenter(),
-                                          ZenzWords())
-              .value_or(floatype::Mapping());
+      mapping = floatype::MapWithResegmentation(
+                    context_->converter().GetSegments(), result.text,
+                    ZenzResegmenter(), ZenzWords(),
+                    !context_->GetConfig().zenz_teaches_mozc())
+                    .value_or(floatype::Mapping());
     }
     ShowZenzText(result.reading, result.text, std::move(mapping));
   }

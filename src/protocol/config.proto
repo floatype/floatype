@@ -508,6 +508,11 @@ message Config {
   // floatype: a correction stopped with Ctrl+Delete while it is shown is not
   // made again for the same reading. Clearing the user history forgets them.
   optional bool zenz_learning = 1013 [default = true];
+  // floatype: committing a correction of zenz's as it is shown teaches Mozc's
+  // conversion ranking its words, as choosing the candidates by hand does
+  // (Mozkey's default). zenz may then change any candidate the history
+  // ranked first, since what it taught is among them.
+  optional bool zenz_teaches_mozc = 1027 [default = false];
 
   //////////////////////////////////////////////////////////////
   //

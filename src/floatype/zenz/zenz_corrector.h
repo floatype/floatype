@@ -20,12 +20,16 @@ namespace mozc::floatype {
 
 // Returns, for each conversion segment, the index of the candidate to show so
 // that the segments read `text`, preferring higher-ranked candidates. Width is
-// ignored in the comparison, so Mozc's choice of full or half width stays. A
-// segment whose top candidate the user's history promoted keeps it. Returns
+// ignored in the comparison, so Mozc's choice of full or half width stays.
+// With `keeps_learned`, where the user's history ranked a candidate first,
+// the one it displaced is not used (and such a segment is not cut again by
+// the functions below): off where zenz teaches Mozc (the setting
+// zenz_teaches_mozc), as the history then holds zenz's words too. Returns
 // nullopt when `text` cannot be written with Mozc's candidates, which also
 // rejects any text whose reading differs from the conversion's.
 std::optional<std::vector<int>> MapToCandidates(const Segments& segments,
-                                                absl::string_view text);
+                                                absl::string_view text,
+                                                bool keeps_learned = true);
 // For `text` that MapToCandidates() cannot write: new conversion segments
 // under which Mozc's candidates may write it (Zenzai has the converter search
 // again under zenz's answer; Mozc segments again). Segments that spell their
@@ -43,7 +47,8 @@ struct Resegmentation {
   std::vector<std::string> numbers;
 };
 std::optional<Resegmentation> ResegmentationFor(const Segments& segments,
-                                                absl::string_view text);
+                                                absl::string_view text,
+                                                bool keeps_learned = true);
 // The key lengths, in characters, of segments that end where `text` goes
 // from hiragana to another script (が|完成度高い, 机に|物を|置く), found by
 // matching the kana in `text` to `reading` (hiragana). Returns nullopt when
@@ -80,7 +85,8 @@ using WordLookup = std::function<void(
 std::optional<Mapping> MapWithResegmentation(const Segments& segments,
                                              absl::string_view text,
                                              const Resegmenter& resegment,
-                                             const WordLookup& words = nullptr);
+                                             const WordLookup& words = nullptr,
+                                             bool keeps_learned = true);
 // The conversion's reading: its segment keys in hiragana.
 std::string ConversionReading(const Segments& segments);
 // The part of the text before the composition that zenz may see: what follows
@@ -158,6 +164,9 @@ class ZenzCorrector {
   // Whether answers the user stopped (ZenzMemory::Stopped()) are kept off
   // screen: the zenz_learning setting.
   void set_learning(bool learning) { learning_ = learning; }
+  // Whether answers leave alone what the user's history ranked first
+  // (MapToCandidates()): the setting zenz_teaches_mozc turns it off.
+  void set_keeps_learned(bool keeps_learned) { keeps_learned_ = keeps_learned; }
   // The setting zenz_stop_when_idle, applied from the scorer's next start.
   // Call it before Warm() and Request().
   void Configure(bool stop_when_idle);
@@ -175,17 +184,13 @@ class ZenzCorrector {
   // Tests and the evaluation tools ask zenz whether or not macOS has secure
   // input on (the lock screen turns it on).
   static void IgnoreSecureInputForTesting(bool ignore);
-  // For measuring only (replay_main --zenz_teaches_mozc): whether committing
-  // a correction as shown teaches Mozc's conversion ranking its words, as
-  // choosing the candidates by hand does. Off in the app.
-  static void SetTeachesMozcForMeasuring(bool teaches);
-  static bool TeachesMozcForMeasuring();
   // For measuring only (replay_main --zenz_learning_rules): which of the
-  // rules about a segment the user's history ranked are on, as a sum: 1, the
-  // candidate the learning displaced is kept out; 2, such a segment is not
-  // merged into a run cut again; 4, no cutting as zenz cuts and no writing of
-  // zenz's own where there is such a segment. 7, all of them, in the app.
-  static void SetLearningRulesForMeasuring(int rules);
+  // rules about a segment the user's history ranked are on, whatever
+  // `keeps_learned` says, as a sum: 1, the candidate the learning displaced
+  // is kept out; 2, such a segment is not merged into a run cut again; 4, no
+  // cutting as zenz cuts and no writing of zenz's own where there is such a
+  // segment. The app has all of them (7) or, where zenz teaches Mozc, none.
+  static void SetLearningRulesForMeasuring(std::optional<int> rules);
 
  private:
   struct Pending {
@@ -209,6 +214,7 @@ class ZenzCorrector {
   ScorerClient* const client_;
   absl::Duration timeout_ = kTimeout;
   bool learning_ = false;
+  bool keeps_learned_ = true;
   std::optional<Pending> pending_;
   // What zenz may not answer for "<reading>\t<left context>" in
   // rejected_for_, kept for Request() with `not_this`.

@@ -765,6 +765,10 @@ void ConfigDialog::SetUpFloatypeSettings() {
                   "退けた語、control+delete で止めた補正）");
   zenzSuggestionLearningCheckBox_ =
       AddCheckBox(memory, "zenz が直した確定を予測候補に覚えさせる");
+  zenzTeachesMozcCheckBox_ = AddCheckBox(
+      memory,
+      "zenz が直した語を、確定したら変換の順位にも覚えさせる（次から zenz "
+      "を待たずに出る。zenz は、覚えた語を別の文で直せる）");
   QPushButton* learned = new QPushButton(Text("学習データを見る…"));
   learned->setObjectName(QStringLiteral("zenzMemoryButton"));
   learned->setProperty("changes_nothing", true);
@@ -816,8 +820,8 @@ void ConfigDialog::SetUpFloatypeSettings() {
   // Settings that only matter while their switch is on follow it.
   for (QWidget* widget : std::initializer_list<QWidget*>{
            zenzTimeoutSpinBox_, zenzSuggestionLearningCheckBox_,
-           zenzLearningCheckBox_, zenzStopWhenIdleCheckBox_,
-           zenzDelaySpinBox_}) {
+           zenzTeachesMozcCheckBox_, zenzLearningCheckBox_,
+           zenzStopWhenIdleCheckBox_, zenzDelaySpinBox_}) {
     connect(useZenzCheckBox_, &QCheckBox::toggled, widget,
             &QWidget::setEnabled);
   }
@@ -1301,6 +1305,7 @@ void ConfigDialog::ConvertFromProto(const config::Config& config) {
   zenzTimeoutSpinBox_->setValue(config.zenz_timeout_millisec());
   SET_CHECKBOX(zenzSuggestionLearningCheckBox_, zenz_suggestion_learning);
   SET_CHECKBOX(zenzLearningCheckBox_, zenz_learning);
+  SET_CHECKBOX(zenzTeachesMozcCheckBox_, zenz_teaches_mozc);
   SET_CHECKBOX(zenzStopWhenIdleCheckBox_, zenz_stop_when_idle);
   SET_CHECKBOX(liveConversionCheckBox_, use_live_conversion);
   liveConversionDelaySpinBox_->setValue(
@@ -1422,6 +1427,7 @@ void ConfigDialog::ConvertToProto(config::Config* config) const {
   config->set_zenz_timeout_millisec(zenzTimeoutSpinBox_->value());
   GET_CHECKBOX(zenzSuggestionLearningCheckBox_, zenz_suggestion_learning);
   GET_CHECKBOX(zenzLearningCheckBox_, zenz_learning);
+  GET_CHECKBOX(zenzTeachesMozcCheckBox_, zenz_teaches_mozc);
   GET_CHECKBOX(zenzStopWhenIdleCheckBox_, zenz_stop_when_idle);
   GET_CHECKBOX(liveConversionCheckBox_, use_live_conversion);
   config->set_live_conversion_delay_millisec(
