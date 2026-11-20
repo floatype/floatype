@@ -8,6 +8,9 @@
 #                 after " | "
 # Categories:
 #   english-alone       an English word alone whose romaji is all kana (before)
+#   english-dictionary  an English word alone whose kana is itself a dictionary word
+#                       (time is ちめ, 血眼): Japanese by the rule in use unless the
+#                       user adds the word; kept apart to keep the weakness in view
 #   english-loose       an English word alone that leaves letters (test)
 #   japanese-alone      Japanese alone, also where the keys spell an English word
 #   mid-sentence        English inside Japanese typed without a break
@@ -32,15 +35,15 @@ english-alone		wifi	wifi
 english-alone		delete	delete
 english-alone		message	message
 english-alone		issue	issue
-english-alone	次の	page	page
-english-alone	この	video	video
-english-alone		menu	menu
-english-alone		data	data
-english-alone		token	token
-english-alone		come	come
-english-alone		code	code
-english-alone		time	time
-english-alone		note	note
+english-dictionary	次の	page	page
+english-dictionary	この	video	video
+english-dictionary		menu	menu
+english-dictionary		data	data
+english-dictionary		token	token
+english-dictionary		come	come
+english-dictionary		code	code
+english-dictionary		time	time
+english-dictionary		note	note
 english-loose		test	test
 english-loose		keyboard	keyboard
 english-loose		update	update

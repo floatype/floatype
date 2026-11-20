@@ -24,7 +24,8 @@ import unicodedata
 from pathlib import Path
 
 SETS = {"dev": ["dev"], "heldout": ["heldout"], "all": ["dev", "heldout"]}
-CATEGORIES = ["english-alone", "english-loose", "japanese-alone", "mid-sentence",
+CATEGORIES = ["english-alone", "english-dictionary", "english-loose",
+              "japanese-alone", "mid-sentence",
               "ambiguous-japanese", "ambiguous-english", "slash",
               "japanese-sentence"]
 # Their answers hold no English.
