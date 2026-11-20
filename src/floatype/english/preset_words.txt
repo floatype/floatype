@@ -6,7 +6,10 @@
 # ちめ), so that typed alone they would stay kana. Only words nobody types
 # alone for Japanese: the keys are not how that kana is typed (code is こで,
 # typed kode), or the kana is no word (だた). Not site (して), made (まで),
-# node (ので), home (ほめ), name (なめ), date (だて), demo (でも), memo (めも).
+# node (ので), home (ほめ), name (なめ), date (だて), demo (でも), memo (めも),
+# nor words whose kana a common Japanese word goes on from, since a pause
+# there would show the letters: mode (もでる), todo (とどく), undo (うんどう),
+# mute (むてんか), gate (がてら).
 page
 menu
 data
@@ -15,14 +18,10 @@ code
 token
 video
 note
-mode
 main
 idea
 area
-todo
-undo
 redo
-mute
 safe
 zone
 wide
@@ -53,7 +52,6 @@ engine
 origin
 resize
 hidden
-gate
 domain
 define
 session
