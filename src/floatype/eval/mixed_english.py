@@ -12,6 +12,12 @@ must be one of the expected answers, as it is or after NFKC. Where the answer
 is all Japanese, an output with ASCII letters also counts as a false positive:
 English seen where there was none.
 
+The typing sets (--set typing-dev, typing-heldout; mixed_typing_*.tsv) hold
+English run together, English sentences, English beside Japanese, and tokens
+of code and commands. In their keys a space is the Space key and an upper-case
+letter is typed with Shift (replay_main --keys), and the committed text is
+everything the keys commit.
+
 Run from src/ after building the scorer and replay_main (see ajimee.py):
   python3 floatype/eval/mixed_english.py [--set dev|heldout|all] [--out /tmp/mixed.tsv]
 """
@@ -23,17 +29,30 @@ import sys
 import unicodedata
 from pathlib import Path
 
-SETS = {"dev": ["dev"], "heldout": ["heldout"], "all": ["dev", "heldout"]}
+SETS = {"dev": ["dev"], "heldout": ["heldout"], "all": ["dev", "heldout"],
+        "typing-dev": ["typing_dev"], "typing-heldout": ["typing_heldout"],
+        "typing-all": ["typing_dev", "typing_heldout"]}
+# The files: mixed_english_<name>.tsv, and for the typing sets (a space in the
+# keys is the Space key, upper case is typed with Shift) mixed_<name>.tsv.
 CATEGORIES = ["english-alone", "english-dictionary", "english-loose",
               "japanese-alone", "mid-sentence",
               "ambiguous-japanese", "ambiguous-english", "slash",
-              "japanese-sentence"]
+              "japanese-sentence",
+              "run-together", "english-sentence", "english-japanese", "token",
+              "japanese-space"]
 # Their answers hold no English.
-JAPANESE = ["japanese-alone", "ambiguous-japanese", "japanese-sentence"]
+JAPANESE = ["japanese-alone", "ambiguous-japanese", "japanese-sentence",
+            "japanese-space"]
 # What replay_main types as it is: no space, no upper case.
 KEYS = re.compile(r"[!-@\[-~]+")
+# The typing sets' keys: any printable ASCII.
+TYPING_KEYS = re.compile(r"[ -~]+")
 # zenz answers within 2 or 3 polls of 10 ms; its 300 ms timeout takes about 30.
 TIMEOUT_POLLS = 20
+
+
+def is_typing(name):
+  return name.startswith("typing_")
 
 
 def load_items(text, name):
@@ -43,8 +62,9 @@ def load_items(text, name):
     if not line or line.startswith("#"):
       continue
     fields = line.split("\t")
+    keys = TYPING_KEYS if is_typing(name) else KEYS
     if (len(fields) != 4 or fields[0] not in CATEGORIES
-        or not KEYS.fullmatch(fields[2]) or not fields[3]):
+        or not keys.fullmatch(fields[2]) or not fields[3]):
       raise SystemExit(f"{name} line {number}: not an item: {line!r}")
     items.append({"set": name, "category": fields[0], "context": fields[1],
                   "keys": fields[2], "expected": fields[3].split(" | ")})
@@ -52,7 +72,8 @@ def load_items(text, name):
 
 
 def read_set(name):
-  path = Path(__file__).resolve().parent / f"mixed_english_{name}.tsv"
+  prefix = "mixed" if is_typing(name) else "mixed_english"
+  path = Path(__file__).resolve().parent / f"{prefix}_{name}.tsv"
   return load_items(path.read_text(encoding="utf-8"), name)
 
 
@@ -78,6 +99,7 @@ def score(item, line):
 def replay(items, args):
   done = subprocess.run(
       [args.replay, "--live", "--mixed_english", f"--scorer={args.scorer}"]
+      + (["--keys"] if items and is_typing(items[0]["set"]) else [])
       + ([f"--model={args.model}"] if args.model else []),
       input="".join(f"{i['context']}\t{i['keys']}\n" for i in items),
       capture_output=True, encoding="utf-8", errors="replace", check=True)
@@ -94,13 +116,15 @@ def report(name, rows):
   print(f"{name} {len(rows)} 件: 一致 {count('exact')}、NFKC で一致 {count('nfkc')}")
   for category in CATEGORIES:
     subset = [r for r in rows if r["category"] == category]
+    if not subset:
+      continue
     print(f"  {category:<19}{len(subset):>4} 件: 一致 {count('exact', subset)}、"
           f"NFKC で一致 {count('nfkc', subset)}")
   japanese = [r for r in rows if r["category"] in JAPANESE]
   print(f"  日本語のはずの出力に英字: {count('false_positive')}/{len(japanese)} 件")
   print(f"  打てなかった（SKIP）: {count('skipped')} 件、"
         f"zenz の時間切れらしい: {count('timeout')} 件")
-  if name == "heldout":
+  if name.endswith("heldout"):
     return
   for r in rows:
     if not r["nfkc"]:

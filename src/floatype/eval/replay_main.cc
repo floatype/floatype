@@ -76,6 +76,10 @@ ABSL_FLAG(bool, suggest, false,
           "after the last key, separated by |; with --live, after the pause "
           "that follows it");
 ABSL_FLAG(bool, mixed_english, false, "live mode: turn mixed English input on");
+ABSL_FLAG(bool, keys, false,
+          "live mode: each reading is the keys to type, so a space is the "
+          "Space key and an upper-case letter is typed as it is; the text "
+          "committed is everything the keys commit, not only the last Enter");
 ABSL_FLAG(bool, suggest_added_words, false,
           "suggest the words of the added dictionaries too");
 ABSL_FLAG(bool, display_ambiguous, false,
@@ -218,14 +222,25 @@ class Replayer {
     }
     int polls = 0;
     int changes = 0;
+    // What the keys before Enter commit (with --keys, Space may commit).
+    std::string before;
     for (const auto& [key_code, pause] : *keys) {
       commands::Input input;
       input.set_type(commands::Input::SEND_KEY);
-      input.mutable_key()->set_key_code(key_code);
-      input.mutable_context()->set_preceding_text(left_context);
+      if (key_code == ' ') {
+        input.mutable_key()->set_special_key(commands::KeyEvent::SPACE);
+      } else {
+        input.mutable_key()->set_key_code(key_code);
+      }
+      // What was committed on the way comes before the caret too.
+      input.mutable_context()->set_preceding_text(
+          absl::StrCat(left_context, before));
       commands::Output output = Eval(std::move(input));
-      if (pause) {
+      before += output.result().value();
+      if (pause && output.has_callback()) {
         polls += RunCallbacks(output, changes);
+        // A callback may commit too (a direct commit that waited for zenz).
+        before += output.result().value();
       }
     }
     commands::Input enter;
@@ -242,8 +257,9 @@ class Replayer {
     reset.set_type(commands::Input::SEND_COMMAND);
     reset.mutable_command()->set_type(commands::SessionCommand::RESET_CONTEXT);
     Eval(std::move(reset));
-    return committed.result().value() + '\t' + committed.result().key() + '\t' +
-           std::to_string(polls) + '\t' + std::to_string(changes);
+    return before + committed.result().value() + '\t' +
+           committed.result().key() + '\t' + std::to_string(polls) + '\t' +
+           std::to_string(changes);
   }
 
   void SetConfig(int wait_for_zenz) {
@@ -293,7 +309,9 @@ class Replayer {
     for (const char32_t c : Utf8AsChars32(reading)) {
       // Lower-case letters, digits and ASCII symbols are typed as they are:
       // an English word, 2026, before/after.
-      if (c > U' ' && c < 0x7F && !(c >= U'A' && c <= U'Z')) {
+      if (c < 0x7F &&
+          (absl::GetFlag(FLAGS_keys) ? c >= U' '
+                                     : c > U' ' && !(c >= U'A' && c <= U'Z'))) {
         if (!flush()) return std::nullopt;
         keys.emplace_back(static_cast<char>(c), false);
         continue;

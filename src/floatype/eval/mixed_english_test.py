@@ -56,6 +56,20 @@ class MixedEnglishTest(unittest.TestCase):
     self.assertFalse(row["timeout"])
     self.assertTrue(mixed_english.score(item, "test\ttest\t29\t0")["timeout"])
 
+  def test_the_typing_sets_are_well_formed(self):
+    items = (mixed_english.read_set("typing_dev")
+             + mixed_english.read_set("typing_heldout"))
+    typed = [(i["context"], i["keys"]) for i in items]
+    self.assertEqual(len(typed), len(set(typed)))
+    for item in items:
+      if item["category"] == "japanese-space":
+        # Japanese, then one Space to convert it.
+        self.assertRegex(item["keys"], r"^[a-z]+ $", item)
+        for answer in item["expected"]:
+          self.assertIsNone(re.search("[A-Za-z ]", answer), item)
+      elif item["category"] in ("run-together", "english-sentence", "token"):
+        self.assertEqual(item["expected"], [item["keys"]], item)
+
   def test_the_sets_are_well_formed(self):
     items = mixed_english.read_set("dev") + mixed_english.read_set("heldout")
     typed = [(i["context"], i["keys"]) for i in items]

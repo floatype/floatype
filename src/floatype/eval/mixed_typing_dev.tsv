@@ -1,0 +1,123 @@
+# Typing with no mode switch: English run together, English sentences, English
+# beside Japanese, and tokens of code and commands. Written for floatype; not
+# taken from another input method's tests or documents.
+#
+# <category>\t<left context>\t<keys>\t<expected>, several answers separated
+# by " | ". A space in <keys> is the Space key; an upper-case letter is typed
+# with Shift. The keys are typed in a kana mode from an empty input and
+# committed with Enter at the end; the answer is everything committed.
+#
+# run-together       English words typed with no space stay as typed.
+# english-sentence   English words with spaces: Space after an English word
+#                    types a space.
+# english-japanese   English with spaces beside Japanese, which converts.
+# token              commands, paths, addresses and names of code stay as typed.
+# japanese-space     Japanese still converts on Space: nothing above may turn
+#                    it into kana and a space.
+run-together		timeismoney	timeismoney
+run-together		thankyou	thankyou
+run-together		helloworld	helloworld
+run-together		goodmorning	goodmorning
+run-together		seeyoulater	seeyoulater
+run-together		nicetomeetyou	nicetomeetyou
+run-together		letsgo	letsgo
+run-together		comeon	comeon
+run-together		checkitout	checkitout
+run-together		goodjob	goodjob
+run-together		noproblem	noproblem
+run-together		welcomeback	welcomeback
+run-together		happybirthday	happybirthday
+run-together		takecare	takecare
+run-together		gameover	gameover
+run-together		pleasewait	pleasewait
+run-together		darkmode	darkmode
+run-together		usecase	usecase
+run-together		pullrequest	pullrequest
+run-together		codereview	codereview
+run-together		unittest	unittest
+run-together		opensource	opensource
+run-together		frontpage	frontpage
+run-together		bestpractice	bestpractice
+run-together		dontworry	dontworry
+english-sentence		time is money	time is money
+english-sentence		thank you	thank you
+english-sentence		hello world	hello world
+english-sentence		good morning	good morning
+english-sentence		see you later	see you later
+english-sentence		nice to meet you	nice to meet you
+english-sentence		this is a pen	this is a pen
+english-sentence		how are you	how are you
+english-sentence		what is this	what is this
+english-sentence		let me know	let me know
+english-sentence		no problem	no problem
+english-sentence		of course	of course
+english-sentence		by the way	by the way
+english-sentence		for example	for example
+english-sentence		open the file	open the file
+english-sentence		it works	it works
+english-sentence		not found	not found
+english-sentence		access denied	access denied
+english-sentence		coming soon	coming soon
+english-sentence		git push origin main	git push origin main
+english-sentence		npm install	npm install
+english-sentence		make sure you have it	make sure you have it
+english-sentence		as soon as possible	as soon as possible
+english-sentence		read the manual	read the manual
+english-sentence		work in progress	work in progress
+english-japanese		hello, kyouhaiitenkidesune	hello, 今日はいい天気ですね
+english-japanese		thank you. mataashita	thank you. また明日
+english-japanese		korehapull requestdesu	これはpull requestです
+english-japanese		good morning. kyoumoyorosiku	good morning. 今日もよろしく
+english-japanese		kyouhaday offdesu	今日はday offです
+english-japanese		see you ashita	see you 明日
+english-japanese		no problem desu	no problem です | no problemです
+english-japanese		git push sitekudasai	git push してください | git pushしてください
+english-japanese		open source noshousetu	open source の小説 | open sourceの小説
+english-japanese		work in progress nanode	work in progress なので | work in progressなので
+english-japanese		nice to meet you. hajimemasite	nice to meet you. はじめまして | nice to meet you. 初めまして
+english-japanese		npm install woshimasu	npm install をします | npm installをします
+token		/review	/review
+token		$skill	$skill
+token		@src/app.ts	@src/app.ts
+token		taro@example.com	taro@example.com
+token		https://example.com/docs	https://example.com/docs
+token		v1.2.3	v1.2.3
+token		main.cc	main.cc
+token		config.toml	config.toml
+token		src/main.rs	src/main.rs
+token		foo_bar	foo_bar
+token		snake_case	snake_case
+token		node_modules	node_modules
+token		localhost:3000	localhost:3000
+token		192.168.0.1	192.168.0.1
+token		utf-8	utf-8
+token		x86_64	x86_64
+token		--help	--help
+token		git commit -m	git commit -m
+token		npm run dev	npm run dev
+token		ls -la	ls -la
+token		README.md	README.md
+token		camelCase	camelCase
+token		index.html	index.html
+token		a.b.c	a.b.c
+token		key=value	key=value
+japanese-space		kyouhaiitenkidesune 	今日はいい天気ですね
+japanese-space		arigatougozaimasu 	ありがとうございます | 有難うございます
+japanese-space		yorosikuonegaisimasu 	よろしくお願いします | 宜しくお願いします
+japanese-space		ashitahaamedesu 	明日は雨です
+japanese-space		kaigihasanjikaradesu 	会議は三時からです | 会議は3時からです
+japanese-space		sorehaiikangaedesu 	それはいい考えです | それは良い考えです
+japanese-space		mousugutukimasu 	もうすぐ着きます
+japanese-space		nihongowobenkyousiteimasu 	日本語を勉強しています
+japanese-space		sumimasen 	すみません
+japanese-space		konnnichiha 	こんにちは | 今日は
+japanese-space		wakarimasita 	わかりました | 分かりました | 解りました
+japanese-space		otukaresamadesu 	お疲れ様です | お疲れさまです
+japanese-space		are 	あれ
+japanese-space		sore 	それ
+japanese-space		made 	まで
+japanese-space		site 	して
+japanese-space		nomi 	のみ | 飲み
+japanese-space		more 	漏れ | もれ | 盛れ
+japanese-space		tomato 	トマト
+japanese-space		banana 	バナナ

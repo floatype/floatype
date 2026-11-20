@@ -1,0 +1,68 @@
+# Typing with no mode switch: English run together, English sentences, English
+# beside Japanese, and tokens of code and commands. Written for floatype; not
+# taken from another input method's tests or documents.
+#
+# <category>\t<left context>\t<keys>\t<expected>, several answers separated
+# by " | ". A space in <keys> is the Space key; an upper-case letter is typed
+# with Shift. The keys are typed in a kana mode from an empty input and
+# committed with Enter at the end; the answer is everything committed.
+#
+# run-together       English words typed with no space stay as typed.
+# english-sentence   English words with spaces: Space after an English word
+#                    types a space.
+# english-japanese   English with spaces beside Japanese, which converts.
+# token              commands, paths, addresses and names of code stay as typed.
+# japanese-space     Japanese still converts on Space: nothing above may turn
+#                    it into kana and a space.
+run-together		seeyoutomorrow	seeyoutomorrow
+run-together		longtimenosee	longtimenosee
+run-together		onemoretime	onemoretime
+run-together		haveaniceday	haveaniceday
+run-together		whatsup	whatsup
+run-together		stepbystep	stepbystep
+run-together		readmefirst	readmefirst
+run-together		signupnow	signupnow
+run-together		hotfix	hotfix
+run-together		backlog	backlog
+run-together		workflow	workflow
+run-together		lightmode	lightmode
+english-sentence		knowledge is power	knowledge is power
+english-sentence		see you tomorrow	see you tomorrow
+english-sentence		good night	good night
+english-sentence		have a nice day	have a nice day
+english-sentence		one more time	one more time
+english-sentence		where are you	where are you
+english-sentence		i do not know	i do not know
+english-sentence		step by step	step by step
+english-sentence		git pull origin main	git pull origin main
+english-sentence		cargo build	cargo build
+english-sentence		out of memory	out of memory
+english-sentence		permission denied	permission denied
+english-japanese		good night. oyasuminasai	good night. おやすみなさい | good night. お休みなさい
+english-japanese		kyouhawork from homedesu	今日はwork from homeです
+english-japanese		cargo build sitekudasai	cargo build してください | cargo buildしてください
+english-japanese		see you tomorrow. mataasita	see you tomorrow. また明日
+english-japanese		out of memory deotimasita	out of memory で落ちました | out of memoryで落ちました
+english-japanese		step by step desusumemasu	step by step で進めます | step by stepで進めます
+token		/help	/help
+token		$home	$home
+token		@docs/readme.md	@docs/readme.md
+token		hanako@example.org	hanako@example.org
+token		http://localhost:8080	http://localhost:8080
+token		v2.0.1	v2.0.1
+token		lib.rs	lib.rs
+token		package.json	package.json
+token		src/lib/util.ts	src/lib/util.ts
+token		bar_baz	bar_baz
+token		--version	--version
+token		cd ..	cd ..
+japanese-space		ohayougozaimasu 	おはようございます | お早うございます
+japanese-space		raishuunokinyoubidesu 	来週の金曜日です
+japanese-space		sukosimattekudasai 	少し待ってください | 少し待って下さい
+japanese-space		eigawomiteimasu 	映画を見ています | 映画を観ています
+japanese-space		yoroshiku 	よろしく | 宜しく
+japanese-space		kore 	これ
+japanese-space		nomimono 	飲み物
+japanese-space		hare 	晴れ | はれ | 腫れ
+japanese-space		same 	サメ | 鮫 | 冷め | 覚め
+japanese-space		pasokon 	パソコン
