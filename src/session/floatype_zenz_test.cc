@@ -205,6 +205,51 @@ class FloatypeZenzTest : public testing::SessionHandlerTestBase {
     return SendKeys({"k", "i", "k", "a", "i", "g", "a"});
   }
 
+  // Has zenz's 機械が機械 committed, so that it is suggested while Mozc's
+  // ranking still puts 機会 first, and starts a session without zenz.
+  void SuggestTheCorrectedSentence() {
+    CommitCorrectedSentence();
+    ASSERT_EQ(MozcsKikai(), "機会");
+    StartSession(/*zenz=*/false);
+  }
+
+  // Moves through the predictions to `value`.
+  commands::Output SelectPrediction(absl::string_view value) {
+    commands::Output output = SendKeys({"Down"});
+    for (int i = 0; i < 10 && Preedit(output) != value; ++i) {
+      output = SendKeys({"Down"});
+    }
+    EXPECT_EQ(Preedit(output), value);
+    return output;
+  }
+
+  // What Mozc alone makes of きかい, in a new session.
+  std::string MozcsKikai() {
+    StartSession(/*zenz=*/false);
+    return Preedit(ConvertKikai());
+  }
+
+  // The id of the suggestion `value` among those `output` shows.
+  int SuggestionId(const commands::Output& output, absl::string_view value) {
+    for (const commands::CandidateWord& word :
+         output.all_candidate_words().candidates()) {
+      if (word.value() == value) {
+        return word.id();
+      }
+    }
+    ADD_FAILURE() << value << " is not suggested";
+    return 0;
+  }
+
+  commands::Output SendCommand(commands::SessionCommand::CommandType type,
+                               int id = 0) {
+    commands::Input input;
+    input.set_type(commands::Input::SEND_COMMAND);
+    input.mutable_command()->set_type(type);
+    input.mutable_command()->set_id(id);
+    return Eval(std::move(input));
+  }
+
   commands::Output ConvertKikai() {
     return SendKeys({"k", "i", "k", "a", "i", "Space"});
   }
@@ -600,6 +645,139 @@ TEST_F(FloatypeZenzTest, TeachingMozcStillKeepsCorrectionsOutOfSuggestions) {
   Eval(std::move(input));
   CommitCorrectedSentence();
   EXPECT_FALSE(Suggests(TypeKikaiga(), "機械が機械"));
+}
+
+// Picking a suggestion is a choice like picking candidates: Mozc's ranking
+// learns the words that its own conversion of the reading can write. Only
+// きかいが is typed, so it is the suggestion's whole reading that converts.
+TEST_F(FloatypeZenzTest, PickingASuggestionTeachesMozcItsWords) {
+  SuggestTheCorrectedSentence();
+  ASSERT_TRUE(Suggests(TypeKikaiga(), "機械が機械"));
+  SelectPrediction("機械が機械");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機械が機械");
+  EXPECT_EQ(MozcsKikai(), "機械");
+}
+
+TEST_F(FloatypeZenzTest, BackspaceRightAfterPickingASuggestionTakesItBack) {
+  SuggestTheCorrectedSentence();
+  TypeKikaiga();
+  SelectPrediction("機械が機械");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機械が機械");
+  SendKeys({"Backspace"});
+  EXPECT_EQ(MozcsKikai(), "機会");
+}
+
+TEST_F(FloatypeZenzTest, UndoAfterPickingASuggestionTakesItBack) {
+  SuggestTheCorrectedSentence();
+  TypeKikaiga();
+  SelectPrediction("機械が機械");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機械が機械");
+  // The key asks the client to call back with the Undo command.
+  CallBack(SendKeys({"Ctrl Backspace"}));
+  EXPECT_EQ(MozcsKikai(), "機会");
+}
+
+TEST_F(FloatypeZenzTest, RevertAfterPickingASuggestionTakesItBack) {
+  SuggestTheCorrectedSentence();
+  TypeKikaiga();
+  SelectPrediction("機械が機械");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機械が機械");
+  SendCommand(commands::SessionCommand::REVERT);
+  EXPECT_EQ(MozcsKikai(), "機会");
+}
+
+// What the macOS candidate window sends on a click, with no candidate
+// focused.
+TEST_F(FloatypeZenzTest, ClickingASuggestionTeachesMozcItsWords) {
+  SuggestTheCorrectedSentence();
+  const int id = SuggestionId(TypeKikaiga(), "機械が機械");
+  ASSERT_EQ(SendCommand(commands::SessionCommand::SUBMIT_CANDIDATE, id)
+                .result()
+                .value(),
+            "機械が機械");
+  EXPECT_EQ(MozcsKikai(), "機械");
+}
+
+TEST_F(FloatypeZenzTest, SelectingASuggestionAndEnterTeachesMozcItsWords) {
+  SuggestTheCorrectedSentence();
+  const int id = SuggestionId(TypeKikaiga(), "機械が機械");
+  ASSERT_EQ(
+      Preedit(SendCommand(commands::SessionCommand::SELECT_CANDIDATE, id)),
+      "機械が機械");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機械が機械");
+  EXPECT_EQ(MozcsKikai(), "機械");
+}
+
+TEST_F(FloatypeZenzTest, PickingASuggestionByItsNumberTeachesMozcItsWords) {
+  SuggestTheCorrectedSentence();
+  TypeKikaiga();
+  const commands::Output tab = SendKeys({"Tab"});
+  int number = 0;
+  for (int i = 0; i < tab.candidate_window().candidate_size(); ++i) {
+    if (tab.candidate_window().candidate(i).value() == "機械が機械") {
+      number = i + 1;
+    }
+  }
+  ASSERT_GE(number, 1);
+  ASSERT_LE(number, 9);
+  const std::string key = std::to_string(number);
+  ASSERT_EQ(Preedit(SendKeys({key})), "機械が機械");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機械が機械");
+  EXPECT_EQ(MozcsKikai(), "機械");
+}
+
+TEST_F(FloatypeZenzTest, PickingASuggestionAfterALiveConversionTeachesMozc) {
+  SuggestTheCorrectedSentence();
+  floatype::EnableSessionFeatures(true);
+  const commands::Output typed = TypeKikaiga();
+  ASSERT_TRUE(Suggests(typed, "機械が機械"));
+  CallBack(typed);  // The live conversion.
+  SelectPrediction("機械が機械");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機械が機械");
+  floatype::EnableSessionFeatures(false);
+  EXPECT_EQ(MozcsKikai(), "機械");
+}
+
+// Where the history is read and not written, the suggestion still shows and
+// picking it teaches nothing. (In incognito mode nothing from the history is
+// suggested; the ranking refuses to learn there by the check next to this
+// one.)
+TEST_F(FloatypeZenzTest, PickingASuggestionTeachesNothingWithLearningReadOnly) {
+  SuggestTheCorrectedSentence();
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_history_learning_level(config::Config::READ_ONLY);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+  ASSERT_TRUE(Suggests(TypeKikaiga(), "機械が機械"));
+  SelectPrediction("機械が機械");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機械が機械");
+  SetZenzTeachesMozc(false);  // The default settings: learning on again.
+  EXPECT_EQ(MozcsKikai(), "機会");
+}
+
+// zenz's own 百千年 is suggested once committed, and Mozc's conversion of
+// ひゃくせんねん has no candidate that writes it: nothing is guessed at.
+TEST_F(FloatypeZenzTest, PickingASuggestionMozcCannotWriteTeachesNothing) {
+  ASSERT_OK(FileUtil::SetContents(answers_, "ヒャクセンネン\t百千年\n"));
+  const std::initializer_list<absl::string_view> reading = {
+      "h", "y", "a", "k", "u", "s", "e", "n", "n", "n", "e", "n", "n"};
+  SendKeys(reading);
+  ASSERT_EQ(Preedit(PollWhileAsked(SendKeys({"Space"}))), "百千年");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "百千年");
+  StartSession(/*zenz=*/false);
+  SendKeys(reading);
+  const std::string mozc = Preedit(SendKeys({"Space"}));
+  ASSERT_NE(mozc, "百千年");
+
+  StartSession(/*zenz=*/false);
+  ASSERT_TRUE(Suggests(SendKeys({"h", "y", "a", "k", "u"}), "百千年"));
+  SelectPrediction("百千年");
+  ASSERT_EQ(SendKeys({"Enter"}).result().value(), "百千年");
+  StartSession(/*zenz=*/false);
+  SendKeys(reading);
+  EXPECT_EQ(Preedit(SendKeys({"Space"})), mozc);
 }
 
 TEST_F(FloatypeZenzTest, CtrlBackspaceDeletesTheSelectedSuggestion) {

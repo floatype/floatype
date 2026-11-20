@@ -104,6 +104,8 @@ class Converter final : public ConverterInterface {
 
   void FinishConversion(const ConversionRequest& request,
                         Segments* segments) const override;
+  void FinishConversionForRanking(const ConversionRequest& request,
+                                  Segments* segments) const override;
   void CancelConversion(Segments* segments) const override;
   void ResetConversion(Segments* segments) const override;
   void RevertConversion(Segments* segments) const override;

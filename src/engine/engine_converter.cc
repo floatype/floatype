@@ -38,6 +38,7 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -726,6 +727,9 @@ void EngineConverter::Commit(const composer::Composer& composer,
     ResetState();
     return;
   }
+  // floatype: a prediction is committed as picked from its list.
+  const std::optional<std::pair<std::string, std::string>> picked =
+      CheckState(PREDICTION) ? PickedSuggestion() : std::nullopt;
 
   for (size_t i = 0; i < segments_.conversion_segments_size();
        i += GetSegmentSpan(i)) {
@@ -744,6 +748,9 @@ void EngineConverter::Commit(const composer::Composer& composer,
                                                    .SetConfigView(*config_)
                                                    .Build();
   converter_->FinishConversion(conversion_request, &segments_);
+  if (picked.has_value()) {
+    LearnPickedSuggestion(picked->first, picked->second);
+  }
   ResetState();
 }
 
@@ -796,6 +803,9 @@ bool EngineConverter::CommitSuggestionInternal(
     DCHECK_GT(segments_.conversion_segments_size(), 0);
   } else {
     // Not partial suggestion so let's reset the state.
+    // floatype: a suggestion is committed as picked from its list.
+    const std::optional<std::pair<std::string, std::string>> picked =
+        PickedSuggestion();
     if (!converter_->CommitSegmentValue(&segments_, 0,
                                         GetCandidateIndexForConverter(0))) {
       LOG(WARNING) << "CommitSegmentValue failed";
@@ -811,6 +821,9 @@ bool EngineConverter::CommitSuggestionInternal(
                                                      .Build();
     converter_->FinishConversion(conversion_request, &segments_);
     DCHECK_EQ(0, segments_.conversion_segments_size());
+    if (picked.has_value()) {
+      LearnPickedSuggestion(picked->first, picked->second);
+    }
     ResetState();
   }
   return true;
@@ -974,7 +987,100 @@ void EngineConverter::CommitHead(size_t count,
   output::FillCursorOffsetResult(CalculateCursorOffset(composition), &result_);
 }
 
-void EngineConverter::Revert() { converter_->RevertConversion(&segments_); }
+void EngineConverter::Revert() {
+  // floatype: what a picked suggestion taught goes with its commit.
+  if (taught_.has_value() && taught_->first == segments_.revert_id()) {
+    converter_->RevertConversion(&taught_->second);
+  }
+  taught_.reset();
+  converter_->RevertConversion(&segments_);
+}
+
+namespace {
+
+// Chooses a candidate of each conversion segment from `segment` on so that
+// they write `value` from `pos` on to the letter, the candidates ranked
+// higher first. `dead_ends` holds the (segment, position) pairs that fail.
+bool Writes(const Segments& segments, absl::string_view value, size_t segment,
+            size_t pos, std::vector<int>& chosen,
+            std::set<std::pair<size_t, size_t>>& dead_ends) {
+  if (segment == segments.conversion_segments_size()) {
+    return pos == value.size();
+  }
+  if (dead_ends.contains({segment, pos})) {
+    return false;
+  }
+  const Segment& candidates = segments.conversion_segment(segment);
+  for (size_t i = 0; i < candidates.candidates_size(); ++i) {
+    const std::string& written = candidates.candidate(i).value;
+    if (!written.empty() && value.substr(pos).starts_with(written) &&
+        Writes(segments, value, segment + 1, pos + written.size(), chosen,
+               dead_ends)) {
+      chosen[segment] = static_cast<int>(i);
+      return true;
+    }
+  }
+  dead_ends.insert({segment, pos});
+  return false;
+}
+
+}  // namespace
+
+std::optional<std::pair<std::string, std::string>>
+EngineConverter::PickedSuggestion() const {
+  if (segments_.conversion_segments_size() != 1) {
+    return std::nullopt;
+  }
+  const Segment& segment = segments_.conversion_segment(0);
+  const int index = GetCandidateIndexForConverter(0);
+  if (index < 0 || !segment.is_valid_index(index)) {
+    return std::nullopt;
+  }
+  const converter::Candidate& candidate = segment.candidate(index);
+  if (candidate.key.empty() || candidate.value.empty() ||
+      (candidate.attributes & (converter::Attribute::NO_HISTORY_LEARNING |
+                               converter::Attribute::PARTIALLY_KEY_CONSUMED))) {
+    return std::nullopt;
+  }
+  return std::make_pair(candidate.key, candidate.value);
+}
+
+void EngineConverter::LearnPickedSuggestion(absl::string_view key,
+                                            absl::string_view value) {
+  taught_.reset();
+  if (!request_ || !config_) {
+    return;
+  }
+  const ConversionRequest request =
+      ConversionRequestBuilder()
+          .SetRequestView(*request_)
+          .SetConfigView(*config_)
+          .SetRequestType(ConversionRequest::CONVERSION)
+          .SetKey(key)
+          .Build();
+  // Segments of its own: the session's hold the commit.
+  Segments segments;
+  if (!converter_->StartConversion(request, &segments)) {
+    return;
+  }
+  const size_t size = segments.conversion_segments_size();
+  std::vector<int> chosen(size, 0);
+  std::set<std::pair<size_t, size_t>> dead_ends;
+  // What the conversion writes by itself needs no teaching, and what it
+  // cannot write is not guessed at.
+  if (!Writes(segments, value, 0, 0, chosen, dead_ends) ||
+      std::all_of(chosen.begin(), chosen.end(),
+                  [](int index) { return index == 0; })) {
+    return;
+  }
+  for (size_t i = 0; i < size; ++i) {
+    if (!converter_->CommitSegmentValue(&segments, i, chosen[i])) {
+      return;
+    }
+  }
+  converter_->FinishConversionForRanking(request, &segments);
+  taught_.emplace(segments_.revert_id(), std::move(segments));
+}
 
 bool EngineConverter::DeleteCandidateFromHistory(std::optional<int> id) {
   if (id == std::nullopt) {

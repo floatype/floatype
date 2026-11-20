@@ -446,6 +446,19 @@ class EngineConverter : public EngineConverterInterface {
   // while no choice is fixed.
   std::vector<std::pair<std::string, std::string>> shown_first_;
 
+  // floatype: the key and the value of the candidate about to be committed
+  // from the list of suggestions or predictions, or nullopt when the
+  // conversion ranking has nothing to learn from it.
+  std::optional<std::pair<std::string, std::string>> PickedSuggestion() const;
+  // floatype: converts `key` and, where candidates of that conversion write
+  // `value` to the letter and one of them is not the first, has the
+  // conversion ranking learn them as chosen by the user. Call it right after
+  // the commit of the suggestion: Revert() takes back both.
+  void LearnPickedSuggestion(absl::string_view key, absl::string_view value);
+  // floatype: the commit (its revert id) LearnPickedSuggestion() went with,
+  // and the conversion it taught.
+  std::optional<std::pair<uint64_t, converter::Segments>> taught_;
+
   // Indicates whether config_ will be updated by the command candidate.
   converter::Candidate::Command updated_command_;
 

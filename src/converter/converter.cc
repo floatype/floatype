@@ -368,6 +368,24 @@ void Converter::FinishConversion(const ConversionRequest& request,
   }
 }
 
+void Converter::FinishConversionForRanking(const ConversionRequest& request,
+                                           Segments* segments) const {
+  for (Segment& segment : *segments) {
+    if (segment.candidates_size() > 0) {
+      CompletePosIds(segment.mutable_candidate(0));
+    }
+  }
+  absl::BitGen bitgen;
+  segments->set_revert_id(absl::Uniform<uint64_t>(
+      absl::IntervalClosed, bitgen, 1, std::numeric_limits<uint64_t>::max()));
+  const prediction::Result history_result = HistorySegmentsToResult(*segments);
+  const ConversionRequest finish_req = ConversionRequestBuilder()
+                                           .SetConversionRequestView(request)
+                                           .SetHistoryResultView(history_result)
+                                           .Build();
+  rewriter_->Finish(finish_req, *segments);
+}
+
 void Converter::CancelConversion(Segments* segments) const {
   segments->clear_conversion_segments();
 }

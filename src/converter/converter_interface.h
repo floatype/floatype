@@ -82,6 +82,13 @@ class ConverterInterface {
   virtual void FinishConversion(const ConversionRequest& request,
                                 Segments* segments) const = 0;
 
+  // floatype: lets the conversion ranking, and nothing else, learn `segments`
+  // as a committed conversion: the suggestion history, which FinishConversion()
+  // teaches too, learns nothing. RevertConversion() on `segments` takes it
+  // back.
+  virtual void FinishConversionForRanking(const ConversionRequest& request,
+                                          Segments* segments) const {}
+
   // Clear segments and keep the context
   virtual void CancelConversion(Segments* segments) const = 0;
 
