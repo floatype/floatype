@@ -1,6 +1,7 @@
 #include "floatype/english/english_words.h"
 
 #include <algorithm>
+#include <map>
 #include <memory>
 #include <optional>
 #include <set>
@@ -545,6 +546,88 @@ TEST(SymbolsAsTypedTest, NeedsEnglishAndNoKana) {
   EXPECT_EQ(Symbols({{"e", "え"}, {"ve", "ゔ"}, {"n", "ん"}, {"t", "と"},
                      {"wo", "ぉ"}, {"_", "_", "＿"}, {"a", "a"}},
                     {{0, 5, "event", "wo"}}),
+            Spans_{});
+}
+
+// Words told by the cost of converting (KanaSearch's cost).
+class CostSearchTest : public ::testing::Test {
+ protected:
+  // The spans of `chars`, where every kana reads as Japanese on its own and
+  // converting `text` costs `costs[text]`.
+  static std::vector<EnglishSpan> Spans(
+      const std::vector<std::vector<std::string>>& chars,
+      std::map<std::string, int> costs, bool after_japanese = false,
+      std::vector<std::string> readings = {}) {
+    const EnglishWords words("size\nmake\nare\n", "time\n");
+    const ReadingLookup lookup = ReadingsOf(readings);
+    const KanaSearch search = {
+        .lookup = lookup,
+        .starts_word =
+            [readings](absl::string_view kana) {
+              return std::any_of(
+                  readings.begin(), readings.end(),
+                  [&](const std::string& r) { return r.starts_with(kana); });
+            },
+        .kana_of_keys = [](absl::string_view) { return std::string(); },
+        .cost =
+            [costs](absl::string_view text) {
+              const auto it = costs.find(std::string(text));
+              return it == costs.end() ? -1 : it->second;
+            },
+        .after_japanese = after_japanese,
+    };
+    std::vector<std::string> raws, query, preedit;
+    for (const std::vector<std::string>& c : chars) {
+      raws.push_back(c[0]);
+      query.push_back(c[1]);
+      preedit.push_back(c[1]);
+    }
+    return EnglishSpans(
+        raws, query, preedit, words,
+        [&](absl::string_view kana) { return ReadsAsJapanese(kana, lookup); },
+        &search);
+  }
+};
+
+TEST_F(CostSearchTest, AWordThatConvertsDearlyAsKanaIsEnglish) {
+  // sizegaii: し, ぜ, が and い are all pieces of Japanese, so the stretch
+  // reads; converting it costs far more than with size in letters.
+  const std::vector<std::vector<std::string>> size = {
+      {"si", "し"}, {"ze", "ぜ"}, {"ga", "が"}, {"i", "い"}, {"i", "い"}};
+  EXPECT_EQ(Spans(size, {{"しぜがいい", 24000}, {"sizeがいい", 29000}}),
+            (Spans_{{0, 2, "size", "", true}}));
+  // Not where the kana are nearly as cheap: the margin is 7,000.
+  EXPECT_EQ(Spans(size, {{"しぜがいい", 21000}, {"sizeがいい", 29000}}),
+            Spans_{});
+  // No telling without a cost.
+  EXPECT_EQ(Spans(size, {}), Spans_{});
+}
+
+TEST_F(CostSearchTest, AWordTheUserAddedNeedsLess) {
+  // timewo: ちめ is a word of the dictionary, time one the user added.
+  const std::vector<std::vector<std::string>> time = {
+      {"ti", "ち"}, {"me", "め"}, {"wo", "を"}};
+  EXPECT_EQ(Spans(time, {{"ちめを", 15000}, {"timeを", 25000}}),
+            (Spans_{{0, 2, "time", "", true}}));
+  EXPECT_EQ(Spans(time, {{"ちめを", 12000}, {"timeを", 25000}}), Spans_{});
+  // makewo: the same costs do not do for a word of the general list.
+  const std::vector<std::vector<std::string>> make = {
+      {"ma", "ま"}, {"ke", "け"}, {"wo", "を"}};
+  EXPECT_EQ(Spans(make, {{"まけを", 15000}, {"makeを", 25000}}), Spans_{});
+}
+
+TEST_F(CostSearchTest, LeavesWhatMayGoOnAsJapanese) {
+  const std::vector<std::vector<std::string>> time = {
+      {"ti", "ち"}, {"me", "め"}, {"wo", "を"}};
+  const std::map<std::string, int> costs = {{"ちめを", 15000},
+                                            {"timeを", 25000}};
+  // After Japanese, the first kana may go on with it (猫 + の手を).
+  EXPECT_EQ(Spans(time, costs, true), Spans_{});
+  // A word still being typed may start inside the word's kana: めをと.
+  EXPECT_EQ(Spans(time, costs, false, {"めをと"}), Spans_{});
+  // Words of three letters of the general list are left: あれ is no are.
+  EXPECT_EQ(Spans({{"a", "あ"}, {"re", "れ"}, {"wo", "を"}},
+                  {{"あれを", 24000}, {"areを", 25000}}),
             Spans_{});
 }
 

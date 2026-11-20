@@ -1240,6 +1240,39 @@ bool EngineConverter::StartsWord(absl::string_view reading) const {
   return word_start_lookup_ && word_start_lookup_(reading);
 }
 
+int EngineConverter::ConversionCost(absl::string_view reading) const {
+  if (reading.empty()) {
+    return 0;
+  }
+  ConversionRequest::Options options;
+  options.enable_user_history_for_conversion = false;
+  ConversionRequestBuilder builder;
+  if (request_) {
+    builder.SetRequestView(*request_);
+  }
+  if (config_) {
+    builder.SetConfigView(*config_);
+  }
+  const ConversionRequest request =
+      builder.SetOptions(std::move(options))
+          .SetRequestType(ConversionRequest::CONVERSION)
+          .SetKey(reading)
+          .Build();
+  // Segments of its own: the session's stay as they are.
+  Segments segments;
+  if (!converter_->StartConversion(request, &segments)) {
+    return -1;
+  }
+  int cost = 0;
+  for (const Segment& segment : segments.conversion_segments()) {
+    if (segment.candidates_size() == 0) {
+      return -1;
+    }
+    cost += segment.candidate(0).cost;
+  }
+  return cost;
+}
+
 bool EngineConverter::SetSegments(Segments segments) {
   if (!CheckState(CONVERSION) ||
       std::any_of(selected_candidate_indices_.begin(),

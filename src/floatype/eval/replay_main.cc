@@ -40,6 +40,7 @@
 #include "base/util.h"
 #include "config/config_handler.h"
 #include "engine/engine.h"
+#include "engine/engine_converter_interface.h"
 #include "engine/eval_engine_factory.h"
 #include "floatype/zenz/scorer_client.h"
 #include "floatype/zenz/zenz_corrector.h"
@@ -84,6 +85,9 @@ ABSL_FLAG(bool, keys, false,
           "live mode: each reading is the keys to type, so a space is the "
           "Space key and an upper-case letter is typed as it is; the text "
           "committed is everything the keys commit, not only the last Enter");
+ABSL_FLAG(bool, cost, false,
+          "print each line's conversion cost (EngineConverter's "
+          "ConversionCost()) and nothing else");
 ABSL_FLAG(bool, suggest_added_words, false,
           "suggest the words of the added dictionaries too");
 ABSL_FLAG(bool, display_ambiguous, false,
@@ -417,6 +421,15 @@ int main(int argc, char** argv) {
   absl::StatusOr<std::unique_ptr<mozc::Engine>> engine = mozc::CreateEvalEngine(
       absl::GetFlag(FLAGS_data_file), absl::GetFlag(FLAGS_data_type));
   CHECK_OK(engine);
+  if (absl::GetFlag(FLAGS_cost)) {
+    const std::unique_ptr<mozc::engine::EngineConverterInterface> converter =
+        (*engine)->CreateEngineConverter();
+    std::string line;
+    while (std::getline(std::cin, line)) {
+      std::cout << converter->ConversionCost(line) << std::endl;
+    }
+    return 0;
+  }
   // Live conversion and the indicator run only where turned on, as in the
   // converter process.
   const bool live = absl::GetFlag(FLAGS_live);

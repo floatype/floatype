@@ -89,6 +89,13 @@ struct KanaSearch {
   // The kana that `keys` type on their own (を for wo), or "" where a letter
   // stays.
   std::function<std::string(absl::string_view keys)> kana_of_keys;
+  // How costly `text`, kana with or without words in letters, is to convert
+  // (EngineConverter's ConversionCost()); negative where it cannot tell.
+  // Without it, no word is told by its cost.
+  std::function<int(absl::string_view text)> cost;
+  // The composition follows Japanese text, which its first kana may go on
+  // with: no word at its start is told by its cost.
+  bool after_japanese = false;
 };
 
 // An English word inside a composition: characters [begin, end), typed as
@@ -100,6 +107,9 @@ struct EnglishSpan {
   size_t end;
   std::string word;
   std::string retyped;
+  // Told by the cost of converting (KanaSearch's cost): what is typed after
+  // it may tell otherwise, so the word is looked at again then.
+  bool by_cost = false;
   bool operator==(const EnglishSpan&) const = default;
 };
 
@@ -132,6 +142,14 @@ struct EnglishSpan {
 // it (えゔぇんとぉ is event + wo), whose other keys are typed again. No word
 // touches a letter or another word, and a stretch beside a loose letter is
 // left alone.
+//
+// With `search`'s cost, a word inside a stretch that does read as Japanese
+// piece by piece is a span too where converting the stretch with the word in
+// letters costs enough less than converting its kana: しぜがおおきすぎる
+// (し + ぜ + が...) is sizeが大きすぎる, and ちめをきろくする, with a word the
+// user added, is timeを記録する. まけをみとめる stays 負けを認める, and
+// ここでまつ holds no code. How much less is asked is said at the constants in
+// the source, with the measurements behind them.
 std::vector<EnglishSpan> EnglishSpans(
     const std::vector<std::string>& raws, const std::vector<std::string>& query,
     const std::vector<std::string>& preedit, const EnglishWords& words,

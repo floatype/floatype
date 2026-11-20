@@ -3026,6 +3026,22 @@ bool Session::KeepEnglishWordsIn(composer::Composer* composer,
             return Util::IsScriptType(kana, Util::HIRAGANA) ? kana
                                                             : std::string();
           },
+      .cost =
+          [this](absl::string_view text) {
+            return context_->converter().ConversionCost(text);
+          },
+      .after_japanese =
+          [this]() {
+            const std::string& before =
+                context_->client_context().preceding_text();
+            if (before.empty()) {
+              return false;
+            }
+            const Utf8AsChars chars(before);
+            const Util::ScriptType type = Util::GetScriptType(chars.back());
+            return type == Util::HIRAGANA || type == Util::KATAKANA ||
+                   type == Util::KANJI;
+          }(),
   };
   const EnglishView view(*composer, KanaReadsAsJapanese(), &search);
   std::vector<floatype::EnglishSpan> spans = view.spans;
@@ -3044,6 +3060,12 @@ bool Session::KeepEnglishWordsIn(composer::Composer* composer,
                              absl::ascii_isalpha(
                                  static_cast<unsigned char>(c[0]));
                     }));
+  // A word told by its cost is looked at again once more is typed.
+  may_go_on = may_go_on ||
+              std::any_of(spans.begin(), spans.end(),
+                          [](const floatype::EnglishSpan& span) {
+                            return span.by_cost;
+                          });
   // Where English is written word by word, the keys of a word are the word.
   if (std::optional<floatype::EnglishSpan> word = floatype::WholeEnglishWord(
           view.raws, view.query, view.preedit,

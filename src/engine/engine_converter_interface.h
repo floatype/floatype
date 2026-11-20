@@ -283,6 +283,10 @@ class EngineConverterInterface {
   // floatype: whether the reading of some word of the dictionary starts with
   // `reading` (きょ starts きょう). False where there is no dictionary.
   virtual bool StartsWord(absl::string_view reading) const { return false; }
+  // floatype: how costly `reading` is to convert on its own: the costs of the
+  // best candidates of its segments, summed. The user's history is left out.
+  // Less means likelier Japanese. Negative where it cannot be converted.
+  virtual int ConversionCost(absl::string_view reading) const { return -1; }
 
   // Operation for the candidate list.
   virtual void SetCandidateListVisible(bool visible) = 0;

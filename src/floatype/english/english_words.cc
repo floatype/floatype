@@ -534,6 +534,124 @@ std::vector<EnglishSpan> SpansInKana(const std::vector<std::string>& raws,
   return spans;
 }
 
+// How much less converting a stretch with a word in letters must cost than
+// converting its kana, for the word to be English. Mozc charges a run of
+// letters about 17,900 whatever the word, so the difference is negative even
+// for English: on the mixed English dev set it is -4,200 to -6,600 for the
+// words of the general list that should be English (before, size, image) and
+// -6,800 to -10,200 for those the user added (note, time).
+//   - A word the user added: in the 7,290 plain-Japanese gate inputs the keys
+//     of such words were typed at 244 places, prefixes counted. With the
+//     sentence whole the difference never reached -14,000 (その手の is
+//     -14,300, この手の -13,900); it did at 8 places inside a word still
+//     being typed (の手つづ, of の手続き), which are left out below.
+//   - A word of the general list: at 8,490 places in 1,200 of those inputs
+//     the difference reached -7,000 three times, all inside a word still
+//     being typed, and -8,000 with one sentence whole.
+constexpr int kUserWordCostMargin = -12000;
+constexpr int kGeneralWordCostMargin = -7000;
+
+// The word inside the stretch of kana [first, last), which reads as Japanese
+// piece by piece, that its conversion cost tells to be English (see
+// EnglishSpans()); `ends`, `letter_before` and `letter_after` as for
+// SpansInKana(). One word a stretch.
+std::vector<EnglishSpan> SpanByCost(const std::vector<std::string>& raws,
+                                    const std::vector<std::string>& query,
+                                    size_t first, size_t last, bool ends,
+                                    bool letter_before, bool letter_after,
+                                    const EnglishWords& words,
+                                    const KanaSearch& search) {
+  if (!search.cost) {
+    return {};
+  }
+  const size_t n = last - first;
+  const auto joined = [&](size_t i) {
+    return i < n && Joined(query[first + i], raws[first + i]);
+  };
+  struct Word {
+    size_t begin, end;
+    std::string word;
+    bool user;
+  };
+  constexpr size_t kMaxWords = 8;  // Bounds the conversions a pause costs.
+  std::vector<Word> found;
+  for (size_t begin = 0; begin < n && found.size() < kMaxWords; ++begin) {
+    if (joined(begin)) {
+      continue;
+    }
+    std::string raw;
+    for (size_t end = begin + 1; end <= n && found.size() < kMaxWords; ++end) {
+      raw += raws[first + end - 1];
+      if (raw.size() > kMaxLetters) {
+        break;
+      }
+      // A word alone in the stretch is for the rules of a word typed alone.
+      if (joined(end) || (begin == 0 && end == n) ||
+          (begin == 0 && letter_before) || (end == n && letter_after) ||
+          raw.size() < 3 || !IsAsciiLetters(raw) || !words.Contains(raw)) {
+        continue;
+      }
+      const bool user = words.ContainsUser(raw);
+      // Three letters are too often Japanese (あれ, おれ, いた).
+      if (user || raw.size() >= 4) {
+        found.push_back({begin, end, raw, user});
+      }
+    }
+  }
+  if (found.empty()) {
+    return {};
+  }
+  std::string kana;
+  std::vector<size_t> offsets;  // Where each character starts, and the end.
+  for (size_t i = 0; i < n; ++i) {
+    offsets.push_back(kana.size());
+    kana += query[first + i];
+  }
+  offsets.push_back(kana.size());
+  const int japanese = search.cost(kana);
+  if (japanese < 0) {
+    return {};
+  }
+  const Word* best = nullptr;
+  int best_margin = 0;
+  for (const Word& word : found) {
+    // At the start of a composition that follows Japanese, the kana may go
+    // on with it: 猫 + のてをみる is 猫の手を見る.
+    if (first == 0 && word.begin == 0 && search.after_japanese) {
+      continue;
+    }
+    // A Japanese word still being typed may start inside the word's kana:
+    // じょうとのてつづ goes on to 譲渡の手続き, no note.
+    bool going_on = false;
+    for (size_t q = word.begin;
+         ends && search.starts_word && q < word.end && !going_on; ++q) {
+      going_on = !joined(q) &&
+                 search.starts_word(absl::string_view(kana).substr(offsets[q]));
+    }
+    if (going_on) {
+      continue;
+    }
+    const int english = search.cost(
+        absl::StrCat(absl::string_view(kana).substr(0, offsets[word.begin]),
+                     word.word,
+                     absl::string_view(kana).substr(offsets[word.end])));
+    if (english < 0) {
+      continue;
+    }
+    const int margin =
+        japanese - english -
+        (word.user ? kUserWordCostMargin : kGeneralWordCostMargin);
+    if (margin >= 0 && (best == nullptr || margin > best_margin)) {
+      best = &word;
+      best_margin = margin;
+    }
+  }
+  if (best == nullptr) {
+    return {};
+  }
+  return {{first + best->begin, first + best->end, best->word, "", true}};
+}
+
 // EnglishSpans() without the words inside stretches of kana.
 std::vector<EnglishSpan> SpansWithLetters(
     const std::vector<std::string>& raws, const std::vector<std::string>& query,
@@ -668,6 +786,12 @@ std::vector<EnglishSpan> SpansWithLetters(
       size_t last = candidate.end;
       while (last < size && IsKana(query[last])) {
         ++last;
+      }
+      // Kana beside a letter the romaji left over are not read: the letter
+      // may be theirs (まいにち + key + ぼあ + r is 毎日keyboard).
+      if ((first > 0 && loose[first - 1]) || (last < size && loose[last])) {
+        fits[c] = false;
+        continue;
       }
       if (first < candidate.begin) {
         KanaReader before(kana.subspan(first, candidate.begin - first),
@@ -813,9 +937,14 @@ std::vector<EnglishSpan> EnglishSpans(
     const bool letter_after = last < size && !other(last);
     if (!beside && !(reads_as_japanese && !letter_before && !letter_after &&
                      IsAsciiLetters(raw) && words.Contains(raw))) {
-      for (EnglishSpan& span :
-           SpansInKana(raws, query, first, last, last == size, letter_before,
-                       letter_after, words, *search)) {
+      std::vector<EnglishSpan> inside =
+          SpansInKana(raws, query, first, last, last == size, letter_before,
+                      letter_after, words, *search);
+      if (inside.empty()) {
+        inside = SpanByCost(raws, query, first, last, last == size,
+                            letter_before, letter_after, words, *search);
+      }
+      for (EnglishSpan& span : inside) {
         spans.push_back(std::move(span));
       }
     }

@@ -243,6 +243,7 @@ class EngineConverter : public EngineConverterInterface {
       std::function<void(absl::string_view key, WordCallback word)>;
   void set_word_lookup(WordLookup lookup) { word_lookup_ = std::move(lookup); }
   bool StartsWord(absl::string_view reading) const override;
+  int ConversionCost(absl::string_view reading) const override;
   // floatype: what StartsWord() calls; the engine gives its dictionary's.
   using WordStartLookup = std::function<bool(absl::string_view reading)>;
   void set_word_start_lookup(WordStartLookup lookup) {
