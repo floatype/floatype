@@ -180,9 +180,12 @@ class ZenzCorrector {
   // choosing the candidates by hand does. Off in the app.
   static void SetTeachesMozcForMeasuring(bool teaches);
   static bool TeachesMozcForMeasuring();
-  // For measuring only (replay_main --zenz_ignores_learning): zenz treats a
-  // segment the user's history ranked like any other. Off in the app.
-  static void SetIgnoresLearningForMeasuring(bool ignores);
+  // For measuring only (replay_main --zenz_learning_rules): which of the
+  // rules about a segment the user's history ranked are on, as a sum: 1, the
+  // candidate the learning displaced is kept out; 2, such a segment is not
+  // merged into a run cut again; 4, no cutting as zenz cuts and no writing of
+  // zenz's own where there is such a segment. 7, all of them, in the app.
+  static void SetLearningRulesForMeasuring(int rules);
 
  private:
   struct Pending {

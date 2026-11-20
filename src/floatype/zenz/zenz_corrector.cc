@@ -47,11 +47,16 @@ bool default_client_enabled = false;
 ScorerClient* default_client_for_testing = nullptr;
 bool ignore_secure_input_for_testing = false;
 bool teaches_mozc_for_measuring = false;
-bool ignores_learning_for_measuring = false;
+// See ZenzCorrector::SetLearningRulesForMeasuring().
+constexpr int kKeepsDisplacedOut = 1;
+constexpr int kKeepsOutOfRuns = 2;
+constexpr int kKeepsCuts = 4;
+int learning_rules_for_measuring = 7;
 
 // Whether the user's history put another candidate first than Mozc's best.
-bool LearnedFromUser(const Segment& segment) {
-  return !ignores_learning_for_measuring && segment.candidates_size() > 0 &&
+bool LearnedFromUser(const Segment& segment, int rule) {
+  return (learning_rules_for_measuring & rule) != 0 &&
+         segment.candidates_size() > 0 &&
          (segment.candidate(0).attributes &
           converter::Attribute::USER_SEGMENT_HISTORY_REWRITER);
 }
@@ -190,8 +195,8 @@ std::vector<std::vector<std::string>> CandidateValues(
     // The same writing may be several candidates (感じ of 感じる and the
     // noun), so it is the writing that is kept out.
     std::string displaced;
-    for (size_t i = 1; LearnedFromUser(segment) && displaced.empty() &&
-                       i < segment.candidates_size();
+    for (size_t i = 1; LearnedFromUser(segment, kKeepsDisplacedOut) &&
+                       displaced.empty() && i < segment.candidates_size();
          ++i) {
       if (segment.candidate(i).attributes &
           converter::Attribute::BEST_CANDIDATE) {
@@ -304,7 +309,8 @@ std::optional<Resegmentation> ResegmentationFor(const Segments& segments,
               return Util::IsScriptType(value, Util::KANJI) &&
                      NumberUtil::NormalizeNumbers(value, true, &kanji, &digits);
             });
-        if (LearnedFromUser(segment) || numeral == values[j].end()) {
+        if (LearnedFromUser(segment, kKeepsOutOfRuns) ||
+            numeral == values[j].end()) {
           break;
         }
         numerals += *numeral;
@@ -321,7 +327,8 @@ std::optional<Resegmentation> ResegmentationFor(const Segments& segments,
       for (size_t j = i; j <= n; ++j) {
         if (j > i) {
           // A segment the user's history decided keeps its candidate.
-          if (LearnedFromUser(segments.conversion_segment(j - 1))) {
+          if (LearnedFromUser(segments.conversion_segment(j - 1),
+                              kKeepsOutOfRuns)) {
             break;
           }
           run_chars += segments.conversion_segment(j - 1).key_len();
@@ -402,7 +409,7 @@ std::optional<Resegmentation> ResegmentationFor(const Segments& segments,
   const auto alone = [&](size_t k) {
     return group[k] == k && (k + 1 == n || group[k + 1] != k) &&
            numbers[k].empty() &&
-           !LearnedFromUser(segments.conversion_segment(k));
+           !LearnedFromUser(segments.conversion_segment(k), kKeepsOutOfRuns);
   };
   for (size_t k = 0; k < n; ++k) {
     if (!in_run[k] || !alone(k)) {
@@ -920,10 +927,11 @@ std::optional<Mapping> MapWithResegmentation(const Segments& segments,
   // Cutting as zenz cuts lets Mozc's dictionary write what Mozc's own
   // boundaries hid (がかんせいど|たかい: が|完成度高い). The user's history
   // decided the segments it ranked, so those stay.
-  if (std::any_of(
-          segments.conversion_segments().begin(),
-          segments.conversion_segments().end(),
-          [](const Segment& segment) { return LearnedFromUser(segment); })) {
+  if (std::any_of(segments.conversion_segments().begin(),
+                  segments.conversion_segments().end(),
+                  [](const Segment& segment) {
+                    return LearnedFromUser(segment, kKeepsCuts);
+                  })) {
     return std::nullopt;
   }
   const std::string reading = Reading(segments);
@@ -1322,8 +1330,8 @@ bool ZenzCorrector::TeachesMozcForMeasuring() {
   return teaches_mozc_for_measuring;
 }
 
-void ZenzCorrector::SetIgnoresLearningForMeasuring(bool ignores) {
-  ignores_learning_for_measuring = ignores;
+void ZenzCorrector::SetLearningRulesForMeasuring(int rules) {
+  learning_rules_for_measuring = rules;
 }
 
 void ZenzCorrector::IgnoreSecureInputForTesting(bool ignore) {

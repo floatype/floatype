@@ -98,9 +98,12 @@ ABSL_FLAG(std::string, commit, "",
 ABSL_FLAG(bool, zenz_teaches_mozc, false,
           "for measuring: committing a correction of zenz's teaches Mozc's "
           "conversion ranking its words");
-ABSL_FLAG(bool, zenz_ignores_learning, false,
-          "for measuring: zenz may change a candidate the user's history "
-          "ranked first to any other, Mozc's own best included");
+ABSL_FLAG(int, zenz_learning_rules, 7,
+          "for measuring: which rules about a segment the user's history "
+          "ranked are on, as a sum: 1, zenz may not go back to the candidate "
+          "the learning displaced; 2, the segment is not merged into a run "
+          "cut again; 4, no cutting as zenz cuts where there is one. 7 is the "
+          "app, 0 lets zenz treat such a segment like any other");
 ABSL_FLAG(bool, unknown_context, false,
           "live mode: tell the session nothing of the text before the caret, "
           "as an app that does not report it (a terminal, a long document)");
@@ -493,8 +496,8 @@ int main(int argc, char** argv) {
   replayer.Replay("", "きょうはいしゃにいく");
   mozc::floatype::ZenzCorrector::SetTeachesMozcForMeasuring(
       absl::GetFlag(FLAGS_zenz_teaches_mozc));
-  mozc::floatype::ZenzCorrector::SetIgnoresLearningForMeasuring(
-      absl::GetFlag(FLAGS_zenz_ignores_learning));
+  mozc::floatype::ZenzCorrector::SetLearningRulesForMeasuring(
+      absl::GetFlag(FLAGS_zenz_learning_rules));
 
   std::string line;
   while (std::getline(std::cin, line)) {
