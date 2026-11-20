@@ -1,0 +1,251 @@
+# Mixed Japanese/English typing: the items the feature is tuned on. The
+# held-out items are in mixed_english_heldout.tsv. mixed_english.py scores both.
+# Tab separated: <category>	<left context>	<keys>	<expected>
+#   left context  the text before the caret, may be empty
+#   keys          typed on a US layout in a kana (romaji) mode: lower-case
+#                 letters, digits and ASCII symbols, no spaces
+#   expected      the text the user wants committed, other accepted answers
+#                 after " | "
+# Categories:
+#   english-alone       an English word alone whose romaji is all kana (before)
+#   english-loose       an English word alone that leaves letters (test)
+#   japanese-alone      Japanese alone, also where the keys spell an English word
+#   mid-sentence        English inside Japanese typed without a break
+#   ambiguous-japanese  keys that hold an English spelling, Japanese in context
+#   ambiguous-english   the same spellings where English is right in context
+#   slash               / stays / after letters and digits, and is ・ after kana
+#   japanese-sentence   no English at all: a letter in the output is a false positive
+# The Japanese is spelled both ways (shi/si, tsu/tu, fu/hu, ji/zi, n/nn). A few
+# English words are not in the built-in word list on purpose (json, config).
+english-alone		before	before
+english-alone		hello	hello
+english-alone		open	open
+english-alone		online	online
+english-alone		base	base
+english-alone		like	like
+english-alone		file	file
+english-alone		line	line
+english-alone		save	save
+english-alone		size	size
+english-alone		rule	rule
+english-alone		wifi	wifi
+english-alone		delete	delete
+english-alone		message	message
+english-alone		issue	issue
+english-alone	次の	page	page
+english-alone	この	video	video
+english-alone		menu	menu
+english-alone		data	data
+english-alone		token	token
+english-alone		come	come
+english-alone		code	code
+english-alone		time	time
+english-alone		note	note
+english-loose		test	test
+english-loose		keyboard	keyboard
+english-loose		update	update
+english-loose		email	email
+english-loose		slack	slack
+english-loose		github	github
+english-loose		google	google
+english-loose		merge	merge
+english-loose		branch	branch
+english-loose		commit	commit
+english-loose		deploy	deploy
+english-loose		debug	debug
+english-loose		script	script
+english-loose		server	server
+english-loose		docker	docker
+english-loose		python	python
+english-loose		string	string
+english-loose		error	error
+english-loose		json	json
+english-loose		config	config
+japanese-alone		site	して
+japanese-alone		made	まで
+japanese-alone		sore	それ
+japanese-alone		are	あれ
+japanese-alone		demo	でも
+japanese-alone		node	ので
+japanese-alone		wane	わね
+japanese-alone		tomato	トマト
+japanese-alone		banana	バナナ
+japanese-alone		piano	ピアノ
+japanese-alone		memo	メモ
+japanese-alone		pan	パン
+japanese-alone		dare	誰 | だれ
+japanese-alone		kite	来て | きて
+japanese-alone		ninja	忍者
+japanese-alone		futon	布団 | ふとん
+japanese-alone		arigatou	ありがとう
+japanese-alone		konnnichiha	こんにちは
+japanese-alone		sumimasen	すみません
+japanese-alone		daijoubu	大丈夫
+japanese-alone		chotto	ちょっと
+japanese-alone		wakarimashita	わかりました | 分かりました
+japanese-alone		otukaresama	お疲れ様 | お疲れさま | おつかれさま
+japanese-alone		kantan	簡単
+japanese-alone		hazimemasite	はじめまして | 初めまして
+japanese-alone		matane	またね
+japanese-alone		ikimasenn	行きません
+mid-sentence		googledesiraberu	googleで調べる
+mid-sentence		slackderenrakushimasu	slackで連絡します
+mid-sentence		githubnipushsita	githubにpushした
+mid-sentence		emailwookurimashita	emailを送りました
+mid-sentence		updategahitsuyoudesu	updateが必要です
+mid-sentence		testhaashitayarimasu	testは明日やります
+mid-sentence		meetinghananjikaradesuka	meetingは何時からですか
+mid-sentence		filewohozonsita	fileを保存した
+mid-sentence		onlinedesankasimasu	onlineで参加します
+mid-sentence		sizegaookisugiru	sizeが大きすぎる | sizeが大き過ぎる
+mid-sentence		imagewotenpushimasu	imageを添付します
+mid-sentence		messagegatodokimasita	messageが届きました
+mid-sentence		raishuunoeventwoyoyakushita	来週のeventを予約した
+mid-sentence		kyouhatestwokakimasu	今日はtestを書きます
+mid-sentence		konofilewohirakimasu	このfileを開きます
+mid-sentence		atodeemaildeokurimasu	あとでemailで送ります | 後でemailで送ります
+mid-sentence		atarasiibranchwotukuru	新しいbranchを作る
+mid-sentence		saigonicommitshimasu	最後にcommitします
+mid-sentence		sakkinoissuewokakuninsuru	さっきのissueを確認する
+mid-sentence		kokodesavesitekudasai	ここでsaveしてください | ここでsaveして下さい
+mid-sentence		kinounoupdatedekowareta	昨日のupdateで壊れた
+mid-sentence		mainichikeyboardwotsukau	毎日keyboardを使う
+mid-sentence		sorehabeforetoonajidesu	それはbeforeと同じです
+mid-sentence		furuifilewodeletesuru	古いfileをdeleteする
+mid-sentence		kaigihaonlinedeokonau	会議はonlineで行う
+mid-sentence		tuginoreleaseharaigetudesu	次のreleaseは来月です
+mid-sentence		setteihaconfignikaku	設定はconfigに書く
+mid-sentence		kekkahajsondekaesu	結果はjsonで返す
+mid-sentence		kyounolunchhananinisuru	今日のlunchは何にする
+mid-sentence		korehaserverdeugoku	これはserverで動く
+mid-sentence		tugihatest	次はtest
+mid-sentence		korekaradeploy	これからdeploy
+mid-sentence		sukinakotobahalove	好きな言葉はlove
+mid-sentence		ashitamadenireview	明日までにreview
+mid-sentence		nokorihadebug	残りはdebug
+mid-sentence		kyounoshukudaihaenglish	今日の宿題はenglish
+mid-sentence		mazu,testwokaku.	まず、testを書く。
+mid-sentence		3jikarameetingdesu	3時からmeetingです
+mid-sentence		hai,opensimasita.	はい、openしました。
+mid-sentence		pullrequestwookuru	pullrequestを送る
+mid-sentence	今日は	pythonwobenkyousuru	pythonを勉強する
+mid-sentence	次の	sprintnokeikakuwotateru	sprintの計画を立てる
+ambiguous-japanese		soujiwositekara	掃除をしてから
+ambiguous-japanese		nanisiteruno	何してるの
+ambiguous-japanese	準備を	siteokimasu	しておきます
+ambiguous-japanese		ekimadearuku	駅まで歩く
+ambiguous-japanese		ashitamadenidasu	明日までに出す
+ambiguous-japanese	ここ	madedesu	までです
+ambiguous-japanese		mitakedowakaranai	見たけどわからない | 見たけど分からない
+ambiguous-japanese		amegafuttakedo	雨が降ったけど
+ambiguous-japanese		sorehaiidesune	それはいいですね | それは良いですね
+ambiguous-japanese		soredeonegaisimasu	それでお願いします
+ambiguous-japanese		arehanandesuka	あれは何ですか | あれはなんですか
+ambiguous-japanese		jikangaarebaiku	時間があれば行く
+ambiguous-japanese		timeiwosiraberu	地名を調べる
+ambiguous-japanese		sinbunnnoitimen	新聞の一面
+ambiguous-japanese		asitanotenki	明日の天気
+ambiguous-japanese		tomodachinotegami	友達の手紙
+ambiguous-japanese	私	notewomiru	の手を見る
+ambiguous-japanese		samuinodekaeru	寒いので帰る
+ambiguous-japanese		daredemodekiru	誰でもできる | 誰でも出来る | だれでもできる
+ambiguous-japanese		nanamenikiru	斜めに切る
+ambiguous-japanese		koremorenshuudesu	これも練習です
+ambiguous-japanese		shiainimaketa	試合に負けた
+ambiguous-japanese		senseinihomerareta	先生に褒められた | 先生にほめられた
+ambiguous-japanese		dousemuridesu	どうせ無理です
+ambiguous-japanese		yoroshikuonegaishimasu	よろしくお願いします | 宜しくお願いします
+ambiguous-japanese		dousurebaiidesuka	どうすればいいですか | どうすれば良いですか
+ambiguous-japanese		asahayakumegasameta	朝早く目が覚めた
+ambiguous-japanese		kodomowosodateru	子供を育てる | 子どもを育てる
+ambiguous-japanese		kaishadehatarakimasu	会社で働きます
+ambiguous-japanese		osharenamisedesu	おしゃれな店です | お洒落な店です | オシャレな店です
+ambiguous-english		atarasiisitewotukuru	新しいsiteを作る
+ambiguous-english	この	sitehabenridesu	siteは便利です
+ambiguous-english		websitewokousinsuru	websiteを更新する
+ambiguous-english		timewokirokusuru	timeを記録する
+ambiguous-english		kyounotimehayokatta	今日のtimeは良かった | 今日のtimeはよかった
+ambiguous-english		timelinewomiru	timelineを見る
+ambiguous-english		notenimatomeru	noteにまとめる | noteに纏める
+ambiguous-english	新しい	notewotukuru	noteを作る
+ambiguous-english		notebookwohiraku	notebookを開く
+ambiguous-english		nodewotuikasuru	nodeを追加する
+ambiguous-english		modewokirikaeru	modeを切り替える | modeを切替える
+ambiguous-english		darkmodenisuru	darkmodeにする
+ambiguous-english		namewonyuuryokusuru	nameを入力する
+ambiguous-english		filenamewokaeru	filenameを変える
+ambiguous-english		morebotanwoosu	moreボタンを押す
+ambiguous-english		makewojikkousuru	makeを実行する
+ambiguous-english		homenimodoru	homeに戻る
+ambiguous-english		homegamenwohiraku	home画面を開く
+ambiguous-english		usecasewokangaeru	usecaseを考える
+ambiguous-english		kareganumberonedesu	彼がnumberoneです
+ambiguous-english		sure,ryoukaidesu.	sure、了解です。
+ambiguous-english		saigonotakegayokatta	最後のtakeが良かった | 最後のtakeがよかった
+ambiguous-english		datewosentakusuru	dateを選択する
+ambiguous-english		handmadenokaban	handmadeのかばん | handmadeの鞄 | handmadeのカバン
+ambiguous-english		konofilewosharesuru	このfileをshareする
+slash		before/after	before/after
+slash		test/spec	test/spec
+slash		2026/11/20	2026/11/20
+slash		src/main	src/main
+slash		kyouha/asita	今日は・明日
+slash		a/b	a/b
+slash		input/output	input/output
+slash		read/write	read/write
+slash		open/close	open/close
+slash		save/load	save/load
+slash		like/love	like/love
+slash		online/offline	online/offline
+slash		true/false	true/false
+slash		10/31	10/31
+slash		1/2	1/2
+slash		toukyou/oosaka	東京・大阪
+slash		asa/yoru	朝・夜
+slash		usr/local/bin	usr/local/bin
+slash		km/h	km/h
+slash		test/tesuto	test/テスト
+slash		nihongo/english	日本語・english
+slash		before/afterwokuraberu	before/afterを比べる
+japanese-sentence		kyouhaiitenkidesune	今日はいい天気ですね | 今日は良い天気ですね
+japanese-sentence		ashitanoasahayakushuppatsushimasu	明日の朝早く出発します
+japanese-sentence		shiryouwojunbishiteokimasu	資料を準備しておきます
+japanese-sentence		chottomattekudasai	ちょっと待ってください | ちょっと待って下さい
+japanese-sentence		jikangaarebatetsudaimasu	時間があれば手伝います
+japanese-sentence		shinkansendeoosakaniikimasu	新幹線で大阪に行きます
+japanese-sentence		chuumonshitashouhingatodokimashita	注文した商品が届きました
+japanese-sentence		kaigihagogokarahajimarimasu	会議は午後から始まります
+japanese-sentence		fuyuyasuminihokkaidouheikitai	冬休みに北海道へ行きたい
+japanese-sentence		tsuginodenshaninorimashou	次の電車に乗りましょう
+japanese-sentence		tsumetaimizuganomitai	冷たい水が飲みたい
+japanese-sentence		jitenshadegakkounikayotteimasu	自転車で学校に通っています
+japanese-sentence		chiisaikoedehanashimasu	小さい声で話します
+japanese-sentence		shashinwotottemoiidesuka	写真を撮ってもいいですか | 写真を撮っても良いですか
+japanese-sentence		funnikigaiimisedesu	雰囲気がいい店です | 雰囲気が良い店です
+japanese-sentence		juushowokaitekudasai	住所を書いてください | 住所を書いて下さい
+japanese-sentence		kinouhatomodatitoeigawomimasita	昨日は友達と映画を見ました | 昨日は友達と映画を観ました
+japanese-sentence		syuumatuhakazokutosugosimasu	週末は家族と過ごします
+japanese-sentence		atarasiikutuwokaimasita	新しい靴を買いました
+japanese-sentence		tugihanihongowobennkyousimasu	次は日本語を勉強します
+japanese-sentence		hazimemasite,yorosikuonegaisimasu.	はじめまして、よろしくお願いします。 | 初めまして、よろしくお願いします。 | はじめまして、宜しくお願いします。 | 初めまして、宜しくお願いします。
+japanese-sentence		tikakunokonbinidegohanwokau	近くのコンビニでご飯を買う | 近くのコンビニでごはんを買う
+japanese-sentence		densyagaokureteimasu	電車が遅れています
+japanese-sentence		situmongaarimasu	質問があります
+japanese-sentence		mousukosiyukkurihanasitekudasai	もう少しゆっくり話してください | もう少しゆっくり話して下さい
+japanese-sentence		sitemoiidesuka	してもいいですか | しても良いですか
+japanese-sentence		kokomadedekimasita	ここまでできました | ここまで出来ました
+japanese-sentence		sorehatasikanimondaidesu	それは確かに問題です
+japanese-sentence		onakagasuitanodetabemasu	お腹が空いたので食べます | お腹がすいたので食べます | おなかがすいたので食べます | おなかが空いたので食べます
+japanese-sentence		minnnadeissyonitabemasyou	みんなで一緒に食べましょう | 皆で一緒に食べましょう
+japanese-sentence		konnnichiha,ogenkidesuka.	こんにちは、お元気ですか。
+japanese-sentence		me-ruwookurimasita	メールを送りました
+japanese-sentence		sa-ba-gaotiteimasu	サーバーが落ちています
+japanese-sentence		ko-hi-wonominagarahonwoyomu	コーヒーを飲みながら本を読む
+japanese-sentence		tesutonokekkawokakuninsimasu	テストの結果を確認します
+japanese-sentence		fairuwohozonsitekudasai	ファイルを保存してください | ファイルを保存して下さい
+japanese-sentence		de-tawobakkuappusuru	データをバックアップする
+japanese-sentence		pasokongakowaretanodesyuurisimasu	パソコンが壊れたので修理します
+japanese-sentence		arigatougozaimasita	ありがとうございました
+japanese-sentence		kinnyoubinobanhaaiteimasu	金曜日の晩は空いています | 金曜日の晩はあいています
+japanese-sentence		kokohakinnendesu	ここは禁煙です
+japanese-sentence		sorehasirimasenn	それは知りません

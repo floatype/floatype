@@ -1,0 +1,122 @@
+# Mixed Japanese/English typing: the held-out items, which the feature is
+# judged on. Do not tune on them or list them in reports: mixed_english.py
+# prints only their counts. The columns and the categories are those of
+# mixed_english_dev.tsv, with other sentences and, where possible, other words.
+english-alone		live	live
+english-alone		role	role
+english-alone		remove	remove
+english-alone		resume	resume
+english-alone		cache	cache
+english-alone		value	value
+english-alone		remote	remote
+english-alone		device	device
+english-alone		mobile	mobile
+english-alone		change	change
+english-alone	別の	route	route
+english-alone		core	core
+english-alone		idea	idea
+english-loose		build	build
+english-loose		client	client
+english-loose		window	window
+english-loose		browser	browser
+english-loose		print	print
+english-loose		function	function
+english-loose		password	password
+english-loose		download	download
+english-loose		search	search
+english-loose		readme	readme
+japanese-alone		tame	ため | 為
+japanese-alone		hare	晴れ | はれ
+japanese-alone		mite	見て | みて
+japanese-alone		zero	ゼロ
+japanese-alone		pen	ペン
+japanese-alone		karaoke	カラオケ
+japanese-alone		sushi	寿司 | すし | 鮨
+japanese-alone		tsunami	津波
+japanese-alone		ryoukaidesu	了解です
+japanese-alone		gomennnasai	ごめんなさい
+japanese-alone		sayounara	さようなら
+japanese-alone		zenzen	全然 | ぜんぜん
+japanese-alone		jaamatane	じゃあまたね
+mid-sentence		builddesippaisita	buildで失敗した
+mid-sentence		passwordwowasureta	passwordを忘れた
+mid-sentence		kinounoradiowokiita	昨日のradioを聞いた | 昨日のradioを聴いた
+mid-sentence		atarasiiaccountwotourokusuru	新しいaccountを登録する
+mid-sentence		konochapterwoinsatsusuru	このchapterを印刷する
+mid-sentence		downloadgaowaranai	downloadが終わらない
+mid-sentence		teamnominnnanikyouyuusuru	teamのみんなに共有する | teamの皆に共有する
+mid-sentence		kyouhaschedulegaippaidesu	今日はscheduleがいっぱいです | 今日はscheduleが一杯です
+mid-sentence		browserwosaikidousitekudasai	browserを再起動してください | browserを再起動して下さい
+mid-sentence		cachewosakujosuru	cacheを削除する
+mid-sentence		valuewokakuninsuru	valueを確認する
+mid-sentence		mobiledemomireru	mobileでも見れる
+mid-sentence		atodelinkwoharimasu	あとでlinkを貼ります | 後でlinkを貼ります | あとでlinkを張ります | 後でlinkを張ります
+mid-sentence		taskgamadanokotteiru	taskがまだ残っている
+mid-sentence		tuginostepnisusumu	次のstepに進む
+mid-sentence		sorosoroinstall	そろそろinstall
+mid-sentence		kotaehachange	答えはchange
+mid-sentence		2kaimenochatdesu	2回目のchatです
+mid-sentence		sorede,planhadounarimasuka.	それで、planはどうなりますか。
+mid-sentence		windowwotojiru	windowを閉じる
+mid-sentence	明日の	calendarwomiru	calendarを見る
+mid-sentence		remotedehatarakimasu	remoteで働きます
+ambiguous-japanese		eigoganigatedesu	英語が苦手です
+ambiguous-japanese		takaikedone	高いけどね
+ambiguous-japanese		sounanone	そうなのね
+ambiguous-japanese		souiukotone	そういうことね | そういう事ね
+ambiguous-japanese		omiyagewokau	お土産を買う | おみやげを買う
+ambiguous-japanese		iiaideagaaru	いいアイデアがある | 良いアイデアがある
+ambiguous-japanese		kyouhayasuminohidesu	今日は休みの日です
+ambiguous-japanese		purezentowoerabu	プレゼントを選ぶ
+ambiguous-japanese		kaferatewonomu	カフェラテを飲む
+ambiguous-japanese		hitoridekaeru	一人で帰る | ひとりで帰る | 1人で帰る
+ambiguous-japanese		otamesidetukau	お試しで使う
+ambiguous-japanese		tunenikakuninsuru	常に確認する
+ambiguous-japanese		hayameninemasu	早めに寝ます
+ambiguous-japanese		kazewofusegu	風を防ぐ | 風邪を防ぐ
+ambiguous-japanese		fumeinatengaaru	不明な点がある
+ambiguous-english		gatewotooru	gateを通る
+ambiguous-english		taskwodonenisuru	taskをdoneにする
+ambiguous-english		nonewokaesu	noneを返す
+ambiguous-english		tonewotyouseisuru	toneを調整する
+ambiguous-english		agedenarabekaeru	ageで並べ替える | ageで並べかえる
+ambiguous-english		ideawomatomeru	ideaをまとめる | ideaを纏める
+ambiguous-english		hidewoyuukounisuru	hideを有効にする
+ambiguous-english		purenakansuuwokaku	pureな関数を書く
+ambiguous-english		ratewokeisansuru	rateを計算する
+ambiguous-english		ridewoyoyakusuru	rideを予約する
+ambiguous-english		sidemenyu-wohiraku	sideメニューを開く
+ambiguous-english		modelwotunesuru	modelをtuneする
+ambiguous-english		fusewokoukansuru	fuseを交換する
+slash		and/or	and/or
+slash		front/back	front/back
+slash		male/female	male/female
+slash		rate/limit	rate/limit
+slash		3/14	3/14
+slash		2027/1/5	2027/1/5
+slash		haru/aki	春・秋
+slash		migi/hidari	右・左
+slash		win/mac	win/mac
+slash		width/height	width/height
+slash		x/y	x/y
+japanese-sentence		raishuunokinnyoubihayasumidesu	来週の金曜日は休みです
+japanese-sentence		ekimaenohonnyadematiawase	駅前の本屋で待ち合わせ
+japanese-sentence		kazegatsuyoinodekiwotsukete	風が強いので気をつけて | 風が強いので気を付けて
+japanese-sentence		saikinnundoubusokudesu	最近運動不足です
+japanese-sentence		yuugatamadeniowarasemasu	夕方までに終わらせます
+japanese-sentence		kinoukaraatamagaitai	昨日から頭が痛い
+japanese-sentence		sumimasen,mouichidoonegaishimasu.	すみません、もう一度お願いします。
+japanese-sentence		kaerinisu-pa-niyorimasu	帰りにスーパーに寄ります
+japanese-sentence		bangohanhakare-nisimasu	晩ご飯はカレーにします | 晩御飯はカレーにします | 晩ごはんはカレーにします
+japanese-sentence		natuyasuminiuminiikimasita	夏休みに海に行きました
+japanese-sentence		ryokounojunbigaowarimashita	旅行の準備が終わりました
+japanese-sentence		densyanonakaniwasuremonowosita	電車の中に忘れ物をした
+japanese-sentence		madowosimetekudasai	窓を閉めてください | 窓を閉めて下さい
+japanese-sentence		kyouhasukosisamuidesune	今日は少し寒いですね
+japanese-sentence		eigonosyukudaiwowasuremasita	英語の宿題を忘れました
+japanese-sentence		hontounitasukarimasita	本当に助かりました
+japanese-sentence		konomitiwomassuguittekudasai	この道をまっすぐ行ってください | この道を真っ直ぐ行ってください | この道をまっすぐ行って下さい | この道を真っ直ぐ行って下さい
+japanese-sentence		purinta-notyousigawarui	プリンターの調子が悪い
+japanese-sentence		konpyu-ta-wosaikidousuru	コンピューターを再起動する
+japanese-sentence		minasan,otsukaresamadeshita.	皆さん、お疲れ様でした。 | みなさん、お疲れ様でした。 | 皆さん、お疲れさまでした。 | みなさん、お疲れさまでした。
+japanese-sentence		basugamadakimasenn	バスがまだ来ません
