@@ -50,6 +50,7 @@
 #include "base/file_util.h"
 #include "base/port.h"
 #include "base/system_util.h"
+#include "config/character_form_manager.h"
 #include "config/config_handler.h"
 #include "data_manager/data_manager.h"
 #include "data_manager/testing/mock_data_manager.h"
@@ -58,6 +59,7 @@
 #include "engine/engine_mock.h"
 #include "engine/mock_data_engine_factory.h"
 #include "floatype/config/settings_file.h"
+#include "floatype/zenz/zenz_corrector.h"
 #include "protocol/commands.pb.h"
 #include "protocol/config.pb.h"
 #include "protocol/engine_builder.pb.h"
@@ -318,6 +320,25 @@ TEST_F(SessionHandlerTest, CreateSession_ConfigTest) {
     EXPECT_EQ(command.output().launch_tool_mode(),
               commands::Output::WORD_REGISTER_DIALOG);
   }
+}
+
+// floatype: at the start no SET_CONFIG comes, and the letters romaji leaves
+// over must be full width inside all the same: mixed English input tells them
+// by their width.
+TEST_F(SessionHandlerTest, LettersAreFullWidthInsideFromTheStart) {
+  floatype::EnableSessionFeatures(true);
+  const config::Config config = config::ConfigHandler::DefaultConfig();
+  config::ConfigHandler::SetConfig(config);
+  config::CharacterFormManager* forms =
+      config::CharacterFormManager::GetCharacterFormManager();
+  forms->ReloadConfig(config);  // As the manager's first use loads it.
+  ASSERT_EQ(forms->GetPreeditCharacterForm("a"), config::Config::HALF_WIDTH);
+
+  SessionHandler handler(CreateMockDataEngine());
+
+  EXPECT_EQ(forms->GetPreeditCharacterForm("a"), config::Config::FULL_WIDTH);
+  floatype::EnableSessionFeatures(false);
+  forms->ReloadConfig(config);
 }
 
 TEST_F(SessionHandlerTest, CreateSessionMinIntervalTest) {

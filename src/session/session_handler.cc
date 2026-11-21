@@ -129,6 +129,22 @@ bool IsApplicationAlive(const session::Session* session) {
 #endif  // MOZC_DISABLE_SESSION_WATCHDOG
   return true;
 }
+// floatype: inside the converter process, letters that romaji left over stay
+// full width whatever the setting says, since mixed English input tells them
+// by their width from letters kept as typed. The session writes them half
+// width on the way out (Session::TypeLettersHalfWidth()).
+void LoadCharacterForms(const config::Config& config) {
+  config::Config rules = config;
+  if (floatype::SessionFeaturesEnabled()) {
+    for (config::Config::CharacterFormRule& rule :
+         *rules.mutable_character_form_rules()) {
+      if (rule.group() == "A") {
+        rule.set_preedit_character_form(config::Config::FULL_WIDTH);
+      }
+    }
+  }
+  config::CharacterFormManager::GetCharacterFormManager()->ReloadConfig(rules);
+}
 }  // namespace
 
 SessionHandler::SessionHandler(std::unique_ptr<EngineInterface> engine)
@@ -141,6 +157,9 @@ SessionHandler::SessionHandler(std::unique_ptr<EngineInterface> engine)
   table_manager_ = std::make_unique<composer::TableManager>();
   request_ = std::make_shared<commands::Request>();
   config_ = config::ConfigHandler::GetSharedConfig();
+  // The manager loads the settings as they are when it is first used, and no
+  // update follows at the start.
+  LoadCharacterForms(*config_);
   key_map_manager_ = std::make_shared<keymap::KeyMapManager>(*config_);
   // Mobile builds currently allow all reload paths by default, whereas
   // ChromeOS configures its allowed dictionary path at the caller site.
@@ -231,21 +250,7 @@ void SessionHandler::UpdateSessions(
   }
 
   if (is_config_updated) {
-    // floatype: inside the converter process, letters that romaji left over
-    // stay full width whatever the setting says, since mixed English input
-    // tells them by their width from letters kept as typed. The session
-    // writes them half width on the way out (Session::TypeLettersHalfWidth()).
-    config::Config rules = *config_;
-    if (floatype::SessionFeaturesEnabled()) {
-      for (config::Config::CharacterFormRule& rule :
-           *rules.mutable_character_form_rules()) {
-        if (rule.group() == "A") {
-          rule.set_preedit_character_form(config::Config::FULL_WIDTH);
-        }
-      }
-    }
-    config::CharacterFormManager::GetCharacterFormManager()->ReloadConfig(
-        rules);
+    LoadCharacterForms(*config_);
   }
 }
 

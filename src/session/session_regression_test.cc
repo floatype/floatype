@@ -536,7 +536,8 @@ TEST_F(SessionRegressionTest, CommitT13nSuggestion) {
 
   commands::Command command;
   InsertCharacterChars("ssh", &command);
-  EXPECT_EQ(GetComposition(command), "っｓｈ");
+  // floatype: letters are half width by default.
+  EXPECT_EQ(GetComposition(command), "っsh");
 
   constexpr int kHiraganaId = -1;
   SendCommandWithId(commands::SessionCommand::SUBMIT_CANDIDATE, kHiraganaId,
@@ -545,7 +546,7 @@ TEST_F(SessionRegressionTest, CommitT13nSuggestion) {
   EXPECT_TRUE(command.output().has_result());
   EXPECT_FALSE(command.output().has_preedit());
 
-  EXPECT_EQ(command.output().result().value(), "っｓｈ");
+  EXPECT_EQ(command.output().result().value(), "っsh");
 }
 
 TEST_F(SessionRegressionTest, DeleteCandidateFromHistory) {
