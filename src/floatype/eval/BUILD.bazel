@@ -18,6 +18,7 @@ mozc_cc_binary(
         "//config:config_handler",
         "//engine",
         "//engine:eval_engine_factory",
+        "//floatype/config:settings_file",
         "//floatype/zenz:scorer_client",
         "//floatype/zenz:zenz_corrector",
         "//protocol:commands_cc_proto",

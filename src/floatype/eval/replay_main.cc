@@ -42,6 +42,7 @@
 #include "engine/engine.h"
 #include "engine/engine_converter_interface.h"
 #include "engine/eval_engine_factory.h"
+#include "floatype/config/settings_file.h"
 #include "floatype/zenz/scorer_client.h"
 #include "floatype/zenz/zenz_corrector.h"
 #include "protocol/commands.pb.h"
@@ -96,7 +97,7 @@ ABSL_FLAG(bool, keys, false,
           "live mode: each reading is the keys to type, so a space is the "
           "Space key, a carriage return the Enter key, a shift-out character "
           "(0x0E) the Down key, a backspace character (0x08) the Backspace "
-          "key, a vertical tab a pause "
+          "key, 0x10 and 0x11 the Right and Left keys, a vertical tab a pause "
           "after the key before it, and an upper-case letter is typed as it "
           "is; the text committed is everything the keys commit, not only "
           "the last Enter");
@@ -117,6 +118,13 @@ ABSL_FLAG(int, zenz_remembered_min_chars, 1,
 ABSL_FLAG(bool, show_pauses, false,
           "live mode: print to stderr what the screen shows at each pause "
           "that has three letters or more in a row");
+ABSL_FLAG(std::string, user_files_dir, "",
+          "a directory with the user's files (user_dictionary.tsv, "
+          "english_words.txt) to use, as next to config.toml; empty uses none");
+ABSL_FLAG(bool, trace_keys, false,
+          "live mode with --keys: print to stderr, after each key and after a "
+          "pause's callbacks, what the screen shows, what was committed, and "
+          "the candidates listed (the focused one in brackets)");
 ABSL_FLAG(bool, enter_after_commit, false,
           "replay (not live), with --commit: Enter once more after the "
           "commit, as a user who ends the line after each sentence");
@@ -305,6 +313,32 @@ class Replayer {
     return absl::StrJoin(values, "|");
   }
 
+  // With --trace_keys, prints what `output` shows after the key `key_code`.
+  static void Trace(char key_code, absl::string_view when,
+                    const commands::Output& output) {
+    if (!absl::GetFlag(FLAGS_trace_keys)) {
+      return;
+    }
+    const std::string key = key_code == ' '      ? "Space"
+                            : key_code == '\r'   ? "Enter"
+                            : key_code == '\x0e' ? "Down"
+                            : key_code == '\b'   ? "Backspace"
+                            : key_code == '\x10' ? "Right"
+                            : key_code == '\x11' ? "Left"
+                                                 : std::string(1, key_code);
+    std::string candidates;
+    const commands::CandidateWindow& window = output.candidate_window();
+    for (const commands::CandidateWindow::Candidate& c : window.candidate()) {
+      const bool focused =
+          window.has_focused_index() && c.index() == window.focused_index();
+      absl::StrAppend(&candidates, focused ? "[" : "", c.value(),
+                      focused ? "]" : "", " ");
+    }
+    std::cerr << "TRACE\t" << key << when << "\t" << Preedit(output) << "\t"
+              << (output.has_result() ? output.result().value() : "") << "\t"
+              << candidates << std::endl;
+  }
+
   // Adds what `output` commits to `text`.
   static void AppendCommitted(const commands::Output& output,
                               std::string* text) {
@@ -337,6 +371,10 @@ class Replayer {
         input.mutable_key()->set_special_key(commands::KeyEvent::DOWN);
       } else if (key_code == '\b') {
         input.mutable_key()->set_special_key(commands::KeyEvent::BACKSPACE);
+      } else if (key_code == '\x10') {
+        input.mutable_key()->set_special_key(commands::KeyEvent::RIGHT);
+      } else if (key_code == '\x11') {
+        input.mutable_key()->set_special_key(commands::KeyEvent::LEFT);
       } else {
         input.mutable_key()->set_key_code(key_code);
       }
@@ -347,10 +385,12 @@ class Replayer {
       }
       commands::Output output = Eval(std::move(input));
       AppendCommitted(output, &before);
+      Trace(key_code, "", output);
       if (pause && output.has_callback()) {
         polls += RunCallbacks(output, changes);
         // A callback may commit too (a direct commit that waited for zenz).
         AppendCommitted(output, &before);
+        Trace(key_code, " (pause)", output);
         // Three in a row: one or two may be a syllable still being typed.
         int run = 0, longest = 0;
         for (const char c : Preedit(output)) {
@@ -463,10 +503,10 @@ class Replayer {
       }
       // Lower-case letters, digits and ASCII symbols are typed as they are:
       // an English word, 2026, before/after.
-      if (c < 0x7F &&
-          (absl::GetFlag(FLAGS_keys)
-               ? c >= U' ' || c == U'\r' || c == U'\x0e' || c == U'\b'
-               : c > U' ' && !(c >= U'A' && c <= U'Z'))) {
+      if (c < 0x7F && (absl::GetFlag(FLAGS_keys)
+                           ? c >= U' ' || c == U'\r' || c == U'\x0e' ||
+                                 c == U'\b' || c == U'\x10' || c == U'\x11'
+                           : c > U' ' && !(c >= U'A' && c <= U'Z'))) {
         if (!flush()) return std::nullopt;
         keys.emplace_back(static_cast<char>(c), false);
         continue;
@@ -538,6 +578,10 @@ int main(int argc, char** argv) {
       mozc::TempDirectory::Default().CreateTempDirectory();
   CHECK_OK(profile);
   mozc::SystemUtil::SetUserProfileDirectory(profile->path());
+  if (!absl::GetFlag(FLAGS_user_files_dir).empty()) {
+    mozc::floatype::SetUserFilesDir(absl::GetFlag(FLAGS_user_files_dir),
+                                    /*report_errors=*/false);
+  }
 
   std::unique_ptr<mozc::floatype::ScorerClient> client;
   if (absl::GetFlag(FLAGS_zenz)) {
