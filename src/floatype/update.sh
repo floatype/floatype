@@ -45,17 +45,23 @@ if [ "$built" -ne 0 ]; then
   exit 1
 fi
 
-before="$(shasum "$plist" 2>/dev/null || true)"
+# What macOS reads once when it registers the input method: the Info.plist,
+# its localized names and the menu bar icons.
+registered() {
+  cat "$plist" "$app"/Contents/Resources/*.lproj/InfoPlist.strings \
+    "$app"/Contents/Resources/*.tiff 2>/dev/null | shasum || true
+}
+before="$(registered)"
 # The package always asks for a logout; whether one is needed is decided below.
 echo "floatype: インストールしています"
 if ! out="$(sudo installer -pkg bazel-bin/mac/Mozc.pkg -target / 2>&1)"; then
   echo "$out"
   exit 1
 fi
-after="$(shasum "$plist" 2>/dev/null || true)"
+after="$(registered)"
 
 if [ -z "$before" ] || [ "${before%% *}" != "${after%% *}" ]; then
-  echo "floatype: 入力メソッドの登録内容が変わったので、ログアウトしてログインし直してください。"
+  echo "floatype: 入力メソッドの登録内容（名前やアイコンを含む）が変わったので、ログアウトしてログインし直してください。"
 else
   # launchd keeps the old binaries' code hashes for its agents and refuses to
   # start the new ones (EX_CONFIG) until they are registered again. macOS
