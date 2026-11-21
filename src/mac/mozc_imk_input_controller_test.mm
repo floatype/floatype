@@ -51,6 +51,22 @@
 #include "testing/gmock.h"
 #include "testing/gunit.h"
 
+// An input method's client names the selection differently from the text view
+// behind it.
+@interface NSTextView (ImkClientForTesting)
+- (void)setMarkedText:(id)string
+       selectionRange:(NSRange)selection
+     replacementRange:(NSRange)replacement;
+@end
+
+@implementation NSTextView (ImkClientForTesting)
+- (void)setMarkedText:(id)string
+       selectionRange:(NSRange)selection
+     replacementRange:(NSRange)replacement {
+  [self setMarkedText:string selectedRange:selection replacementRange:replacement];
+}
+@end
+
 @interface MockIMKServer : NSObject <ServerCallback> {
   // The controller which accepts user's clicks
   __weak id<ControllerCallback> expectedController_;
@@ -684,19 +700,21 @@ TEST_F(MozcImkInputControllerTest, commitText) {
 
 // floatype, a trial: a commit that comes with words to write again before it
 // (nice to meet you came out 偽とmeet you).
-TEST_F(MozcImkInputControllerTest, ACommitWritesAgainWhatTheClientShowsBeforeIt) {
+TEST_F(MozcImkInputControllerTest, ACommitStaysWhereTheClientDoesNotShowItAfterwards) {
   commands::Output output;
   output.set_consumed(true);
   output.mutable_result()->set_value("meet ");
   output.mutable_rewrite()->set_before("偽と");
   output.mutable_rewrite()->set_after("nice to ");
-  // The app shows 偽と right before the composition (めえｔ at 3..6).
+  // The app shows 偽と right before the composition (めえｔ at 3..6), and after the commit
+  // still the same text: the commit alone, with no range, as with no rewrite.
   [mock_client_ setAttributedString:[[NSAttributedString alloc] initWithString:@"a偽とめえｔ"]];
   mock_client_.expectedRange = NSMakeRange(3, 3);
   [controller_ processOutput:&output client:mock_client_];
   EXPECT_EQ([mock_client_ getCounter:"insertText:replacementRange:"], 1);
-  EXPECT_TRUE([@"nice to meet " isEqualToString:mock_client_.insertedText]);
-  EXPECT_TRUE(NSEqualRanges(mock_client_.insertedRange, NSMakeRange(1, 5)));
+  EXPECT_TRUE([@"meet " isEqualToString:mock_client_.insertedText]);
+  EXPECT_EQ(mock_client_.insertedRange.location, NSNotFound);
+  EXPECT_EQ([mock_client_ getCounter:"setMarkedText:selectionRange:replacementRange:"], 0);
   EXPECT_EQ([controller_ replacementRange].location, NSNotFound);
 }
 
@@ -735,9 +753,10 @@ TEST_F(MozcImkInputControllerTest, ACommitTypesBackspaceOnlyWhereAskedAndNoTextS
   EXPECT_EQ(mock_client_.insertedRange.location, NSNotFound);
 }
 
-// The same against AppKit's own text view, the class most apps edit with: it
-// takes a replacement range that starts before the composition. The proxy an
-// input method reaches an app through is not part of this.
+// Against AppKit's own text view, the class most apps edit with. The proxy an
+// input method reaches an app through is not part of this: through it, Notes
+// and TextEdit took no range that starts before the composition, which this
+// view takes.
 TEST_F(MozcImkInputControllerTest, ACommitWritesAgainInAnAppKitTextView) {
   const auto composing = [](NSString *before) {
     NSTextView *view = [[NSTextView alloc] initWithFrame:NSMakeRect(0, 0, 300, 100)];

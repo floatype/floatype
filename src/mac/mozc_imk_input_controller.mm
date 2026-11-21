@@ -502,9 +502,24 @@ bool CanSurroundingText(absl::string_view bundle_id) {
     const NSRange range = NSMakeRange(composition.location - [before length], [before length]);
     shown = [[sender attributedSubstringFromRange:range] string];
     if ([shown isEqualToString:before]) {
-      [sender insertText:written
-          replacementRange:NSMakeRange(range.location, range.length + composition.length)];
+      // Apps take no range that starts before a composition (Notes and TextEdit wrote the words
+      // twice), so the composition is committed first. Then the words go as Undo's do, which
+      // those apps take: a composition over the range, and its commit. Where the app does not
+      // show the commit right before the cursor, it stays as committed.
+      [sender insertText:committed replacementRange:replacementRange_];
       replacementRange_ = NSMakeRange(NSNotFound, 0);
+      NSString *stale = [before stringByAppendingString:committed];
+      const NSRange cursor = [sender selectedRange];
+      if (cursor.location == NSNotFound || cursor.location < [stale length]) {
+        return YES;
+      }
+      const NSRange all = NSMakeRange(cursor.location - [stale length], [stale length]);
+      if ([[[sender attributedSubstringFromRange:all] string] isEqualToString:stale]) {
+        [sender setMarkedText:written
+               selectionRange:NSMakeRange([written length], 0)
+             replacementRange:all];
+        [sender insertText:written replacementRange:NSMakeRange(NSNotFound, 0)];
+      }
       return YES;
     }
   }
