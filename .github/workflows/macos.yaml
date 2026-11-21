@@ -78,6 +78,20 @@ jobs:
         run: |
           python3 build_tools/update_deps.py
 
+      # The sources are pinned by SHA-256 in the script, so its hash keys them.
+      - name: Try to restore the dictionary sources
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/Library/Caches/floatype/dictionary
+          key: floatype-dictionary-${{ hashFiles('src/floatype/tools/make_extra_dictionary.py') }}
+
+      # evaluation.tsv is what the dictionary with these gives, so
+      # evaluation_diff_test fails without them.
+      - name: Make the added dictionaries
+        working-directory: ./src
+        run: |
+          python3 floatype/tools/make_extra_dictionary.py
+
       - name: bazel test
         working-directory: ./src
         run: |

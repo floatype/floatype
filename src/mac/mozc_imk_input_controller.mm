@@ -597,9 +597,11 @@ bool CanSurroundingText(absl::string_view bundle_id) {
 
   // floatype: timer callbacks come every 10ms while zenz works and mostly change
   // nothing; those leave the application and the renderer alone.
-  std::string screen = output->preedit().SerializeAsString();
-  screen += '\0' + output->candidate_window().SerializeAsString();
-  screen += '\0' + output->indicator().SerializeAsString();
+  // Partial: this only tells two outputs apart, and a debug build stops on a message that lacks
+  // a required field.
+  std::string screen = output->preedit().SerializePartialAsString();
+  screen += '\0' + output->candidate_window().SerializePartialAsString();
+  screen += '\0' + output->indicator().SerializePartialAsString();
   const bool unchanged = processingCallback_ && !output->has_result() &&
                          !output->has_deletion_range() && screen == lastScreen_;
   lastScreen_ = std::move(screen);
