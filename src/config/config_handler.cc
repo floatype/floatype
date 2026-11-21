@@ -89,11 +89,15 @@ Config CreateDefaultConfig() {
   constexpr Config::CharacterForm kLastForm = Config::LAST_FORM;
   // "ア"
   AddCharacterFormRule("ア", kFullWidth, kFullWidth, &config);
-  AddCharacterFormRule("A", kFullWidth, kLastForm, &config);
+  // floatype: letters are half width too, typed and converted (the user: there
+  // is no time one types them full width; converting to them is enough).
+  AddCharacterFormRule("A", Config::HALF_WIDTH, Config::HALF_WIDTH, &config);
   // floatype: digits are half width, typed and converted (the user's choice).
   AddCharacterFormRule("0", Config::HALF_WIDTH, Config::HALF_WIDTH, &config);
   AddCharacterFormRule("(){}[]", kFullWidth, kLastForm, &config);
-  AddCharacterFormRule(".,", kFullWidth, kLastForm, &config);
+  // floatype: so are the period and the comma beside digits and letters
+  // (v1.2.3, 1,000); the Japanese 。 and 、 have their own rule below.
+  AddCharacterFormRule(".,", Config::HALF_WIDTH, Config::HALF_WIDTH, &config);
   // "。、",
   AddCharacterFormRule("。、", kFullWidth, kFullWidth, &config);
   // "・「」"

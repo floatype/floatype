@@ -1119,24 +1119,48 @@ TEST_F(FloatypeZenzTest, KeepsSuggestionsWhileARomanSequenceIsUnfinished) {
       Suggestions(SendKeys({"k", "i", "k", "a", "i"}));
   ASSERT_GE(shown.size(), 2);
   const commands::Output k = SendKeys({"k"});
-  EXPECT_EQ(Preedit(k), "きかいｋ");
+  EXPECT_EQ(Preedit(k), "きかいk");
   EXPECT_EQ(Suggestions(k), shown);
   const commands::Output ky = SendKeys({"y"});
-  EXPECT_EQ(Preedit(ky), "きかいｋｙ");
+  EXPECT_EQ(Preedit(ky), "きかいky");
   EXPECT_EQ(Suggestions(ky), shown) << "Mozc alone suggests one candidate";
   // A finished sequence suggests afresh.
   EXPECT_EQ(Preedit(SendKeys({"o"})), "きかいきょ");
 }
 
+// Letters that romaji left over, and a period beside digits, are typed half
+// width by default; the width table can still make the letters full width.
+TEST_F(FloatypeZenzTest, TypesLettersAndPeriodsBesideDigitsHalfWidth) {
+  floatype::EnableSessionFeatures(true);
+  EXPECT_EQ(Preedit(SendKeys({"u", "p", "d"})), "うpd");
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(), "うpd");
+  EXPECT_EQ(Preedit(SendKeys({"v", "1", ".", "2"})), "v1.2");
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(), "v1.2");
+
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  for (config::Config::CharacterFormRule& rule :
+       *config.mutable_character_form_rules()) {
+    if (rule.group() == "A") {
+      rule.set_preedit_character_form(config::Config::FULL_WIDTH);
+    }
+  }
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+  EXPECT_EQ(Preedit(SendKeys({"u", "p", "d"})), "うｐｄ");
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(), "うｐｄ");
+}
+
 TEST_F(FloatypeZenzTest, PickingAHeldSuggestionCommitsItAsMozcWould) {
   floatype::EnableSessionFeatures(true);
   SendKeys({"k", "i", "k", "a", "i", "k", "y"});
-  // Mozc alone suggests 機会 for きかいｋｙ too, dropping the unfinished ｋｙ.
+  // Mozc alone suggests 機会 for きかいky too, dropping the unfinished ky.
   ASSERT_EQ(Preedit(SendKeys({"Down"})), "機会");
   EXPECT_EQ(SendKeys({"Enter"}).result().value(), "機会");
   // Enter without picking commits the composition as typed.
   SendKeys({"k", "i", "k", "a", "i", "k", "y"});
-  EXPECT_EQ(SendKeys({"Enter"}).result().value(), "きかいｋｙ");
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(), "きかいky");
 }
 
 TEST_F(FloatypeZenzTest, SuggestsForTheFirstLettersOfAComposition) {
@@ -2863,7 +2887,7 @@ TEST_F(FloatypeZenzTest, AKeyCanRunSeveralCommands) {
 }
 
 TEST_F(FloatypeZenzTest, AmbiguousRomajiCanShowItsKana) {
-  EXPECT_EQ(Preedit(SendKeys({"k", "a", "n"})), "かｎ") << "off by default";
+  EXPECT_EQ(Preedit(SendKeys({"k", "a", "n"})), "かn") << "off by default";
   SendKeys({"Escape"});
   config::Config config = config::ConfigHandler::DefaultConfig();
   config.set_display_ambiguous_romaji(true);

@@ -57,6 +57,7 @@
 #include "config/config_handler.h"
 #include "engine/engine_interface.h"
 #include "floatype/config/settings_file.h"
+#include "floatype/zenz/zenz_corrector.h"
 #include "floatype/zenz/zenz_memory.h"
 #include "protocol/commands.pb.h"
 #include "protocol/config.pb.h"
@@ -230,8 +231,21 @@ void SessionHandler::UpdateSessions(
   }
 
   if (is_config_updated) {
+    // floatype: inside the converter process, letters that romaji left over
+    // stay full width whatever the setting says, since mixed English input
+    // tells them by their width from letters kept as typed. The session
+    // writes them half width on the way out (Session::TypeLettersHalfWidth()).
+    config::Config rules = *config_;
+    if (floatype::SessionFeaturesEnabled()) {
+      for (config::Config::CharacterFormRule& rule :
+           *rules.mutable_character_form_rules()) {
+        if (rule.group() == "A") {
+          rule.set_preedit_character_form(config::Config::FULL_WIDTH);
+        }
+      }
+    }
     config::CharacterFormManager::GetCharacterFormManager()->ReloadConfig(
-        *config_);
+        rules);
   }
 }
 

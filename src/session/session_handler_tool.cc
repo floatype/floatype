@@ -297,6 +297,20 @@ bool SessionHandlerTool::EvalCommand(commands::Input* input,
   return EvalCommandInternal(input, output, true);
 }
 
+namespace {
+// floatype: the scenarios are Mozc's and check Mozc's widths of letters,
+// periods and commas, which floatype's defaults make half width.
+void UseMozcsWidths(Config* config) {
+  for (Config::CharacterFormRule& rule :
+       *config->mutable_character_form_rules()) {
+    if (rule.group() == "A" || rule.group() == ".,") {
+      rule.set_preedit_character_form(Config::FULL_WIDTH);
+      rule.set_conversion_character_form(Config::LAST_FORM);
+    }
+  }
+}
+}  // namespace
+
 SessionHandlerInterpreter::SessionHandlerInterpreter()
     : SessionHandlerInterpreter(EngineFactory::Create().value()) {}
 
@@ -306,6 +320,9 @@ SessionHandlerInterpreter::SessionHandlerInterpreter(
   last_output_ = std::make_unique<Output>();
   request_ = std::make_unique<Request>();
   config_ = ConfigHandler::GetCopiedConfig();
+  UseMozcsWidths(&config_);
+  ConfigHandler::SetConfig(config_);
+  CharacterFormManager::GetCharacterFormManager()->ReloadConfig(config_);
 
   // Set up session.
   CHECK(client_->CreateSession()) << "Client initialization is failed.";
@@ -319,7 +336,8 @@ SessionHandlerInterpreter::~SessionHandlerInterpreter() {
 }
 
 void SessionHandlerInterpreter::ClearState() {
-  const Config& config = ConfigHandler::DefaultConfig();
+  Config config = ConfigHandler::DefaultConfig();
+  UseMozcsWidths(&config);
   ConfigHandler::SetConfig(config);
 
   // CharacterFormManager is not automatically updated when the config is

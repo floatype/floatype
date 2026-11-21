@@ -276,11 +276,12 @@ TEST_F(ConfigHandlerTest, GetDefaultConfig) {
   constexpr std::array<TestCase, 13> kTestCases = {{
       // "ア"
       {"ア", Config::FULL_WIDTH, Config::FULL_WIDTH},
-      {"A", Config::FULL_WIDTH, Config::LAST_FORM},
+      // floatype: so are letters, and the period and comma beside them.
+      {"A", Config::HALF_WIDTH, Config::HALF_WIDTH},
       // floatype: digits are half width.
       {"0", Config::HALF_WIDTH, Config::HALF_WIDTH},
       {"(){}[]", Config::FULL_WIDTH, Config::LAST_FORM},
-      {".,", Config::FULL_WIDTH, Config::LAST_FORM},
+      {".,", Config::HALF_WIDTH, Config::HALF_WIDTH},
       // "。、",
       {"。、", Config::FULL_WIDTH, Config::FULL_WIDTH},
       // "・「」"

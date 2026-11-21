@@ -409,6 +409,7 @@ void Session::EnsureIMEIsOn() {
 }
 
 bool Session::SendCommand(commands::Command* command) {
+  const ImeContext::State state_before = context_->state();
   UpdateTime();
   UpdatePreferences(command);
   if (!command->input().has_command()) {
@@ -579,6 +580,7 @@ bool Session::SendCommand(commands::Command* command) {
       result = DoNothing(command);
       break;
   }
+  TypeLettersHalfWidth(state_before, command);
   // A commit that a timer callback made is not a word of typed_words_.
   if (command->output().has_result()) {
     typed_words_.clear();
@@ -688,10 +690,52 @@ bool Session::TestSendKey(commands::Command* command) {
 }
 
 bool Session::SendKey(commands::Command* command) {
+  const ImeContext::State state = context_->state();
   const BeforeKey before = LookBeforeKey();
   const bool result = SendKeyInternal(command);
+  TypeLettersHalfWidth(state, command);
   FollowTypedWords(before, command);
   return result;
+}
+
+void Session::TypeLettersHalfWidth(ImeContext::State before,
+                                   commands::Command* command) const {
+  if (!floatype::SessionFeaturesEnabled() ||
+      context_->composer().GetInputMode() == transliteration::FULL_ASCII) {
+    return;
+  }
+  const auto& rules = context_->GetConfig().character_form_rules();
+  if (std::none_of(rules.begin(), rules.end(),
+                   [](const config::Config::CharacterFormRule& rule) {
+                     return rule.group() == "A" &&
+                            rule.preedit_character_form() ==
+                                config::Config::HALF_WIDTH;
+                   })) {
+    return;
+  }
+  const auto half = [](std::string* text) {
+    std::string out;
+    for (const char32_t c : Utf8AsChars32(*text)) {
+      const bool letter =
+          (c >= U'ａ' && c <= U'ｚ') || (c >= U'Ａ' && c <= U'Ｚ');
+      Util::CodepointToUtf8Append(letter ? c - 0xFEE0 : c, &out);
+    }
+    *text = std::move(out);
+  };
+  commands::Output* output = command->mutable_output();
+  if (context_->state() == ImeContext::COMPOSITION && output->has_preedit()) {
+    for (commands::Preedit::Segment& segment :
+         *output->mutable_preedit()->mutable_segment()) {
+      half(segment.mutable_value());
+      half(segment.mutable_key());
+    }
+  }
+  if (output->has_live_reading()) {
+    half(output->mutable_live_reading());
+  }
+  if (before == ImeContext::COMPOSITION && output->has_result()) {
+    half(output->mutable_result()->mutable_value());
+  }
 }
 
 Session::BeforeKey Session::LookBeforeKey() const {

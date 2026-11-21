@@ -469,6 +469,13 @@ class Session {
   void FollowTypedWords(const BeforeKey& before, commands::Command* command);
   // SendKey() but for FollowTypedWords().
   bool SendKeyInternal(commands::Command* command);
+  // Where the setting has letters typed half width (the rule for "A", the
+  // default): writes the letters that romaji left over half width in what
+  // `command` shows of the composition and in what it commits of it. `before`
+  // is the state before the command. A conversion's letters are the
+  // converter's, and a mode of full-width letters keeps them.
+  void TypeLettersHalfWidth(ImeContext::State before,
+                            commands::Command* command) const;
   // The composition as typed, before a live conversion kept a word that ends
   // it in loose letters: the user may have paused inside a syllable
   // (きょうは + s reads "has", but may go on to きょうはしる). The next letter
