@@ -1,0 +1,22 @@
+load("//:build_defs.bzl", "mozc_cc_library", "mozc_cc_test")
+
+package(default_visibility = ["//visibility:private"])
+
+mozc_cc_library(
+    name = "update_check",
+    srcs = ["update_check.cc"],
+    hdrs = ["update_check.h"],
+    visibility = ["//gui/config_dialog:__pkg__"],
+    deps = [
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+mozc_cc_test(
+    name = "update_check_test",
+    srcs = ["update_check_test.cc"],
+    deps = [
+        ":update_check",
+        "//testing:gunit_main",
+    ],
+)

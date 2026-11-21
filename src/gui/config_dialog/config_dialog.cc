@@ -36,8 +36,10 @@
 #include <QColor>
 #include <QColorDialog>
 #include <QComboBox>
+#include <QCryptographicHash>
 #include <QDesktopServices>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QFontDatabase>
 #include <QFormLayout>
@@ -45,6 +47,9 @@
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QIcon>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QLabel>
 #include <QMessageBox>
 #include <QPixmap>
@@ -54,6 +59,7 @@
 #include <QScrollBar>
 #include <QSpinBox>
 #include <QStyleHints>
+#include <QTemporaryDir>
 #include <QUrl>
 #include <QVBoxLayout>
 #include <QVariant>
@@ -62,11 +68,11 @@
 #include <cstdint>
 #include <initializer_list>
 #include <istream>
+#include <iterator>
 #include <map>
 #include <memory>
 #include <sstream>
 #include <string>
-#include <iterator>
 #include <utility>
 #include <vector>
 
@@ -77,6 +83,7 @@
 #include "base/config_file_stream.h"
 #include "base/port.h"
 #include "base/run_level.h"
+#include "base/version.h"
 #include "client/client.h"
 #include "config/config_handler.h"
 #include "floatype/look/window_look.h"
@@ -164,6 +171,7 @@ ConfigDialog::ConfigDialog()
   suggestionsSizeSpinBox->setRange(1, 9);
   SetUpFloatypeSettings();
   SetUpFooter();
+  SetUpUpdate();
   WrapTabsInScrollAreas();
 
   punctuationsSettingComboBox->addItem(QString::fromUtf8("、。"));
@@ -890,6 +898,181 @@ void ConfigDialog::SetUpFooter() {
   });
   legend->addWidget(reveal);
   centralLayout->insertLayout(centralLayout->indexOf(footerLayout), legend);
+}
+
+namespace {
+QString& UpdateCurl() {
+  static QString* curl = new QString(QStringLiteral("/usr/bin/curl"));
+  return *curl;
+}
+QString& UpdateOpen() {
+  static QString* open = new QString(QStringLiteral("/usr/bin/open"));
+  return *open;
+}
+}  // namespace
+
+void ConfigDialog::SetUpdateToolsForTesting(const QString& curl,
+                                            const QString& open) {
+  UpdateCurl() = curl;
+  UpdateOpen() = open;
+}
+
+void ConfigDialog::SetUpUpdate() {
+  QFormLayout* group = InsertGroup(miscTabLayout, 0, "更新");
+  updateButton_ = new QPushButton(Text("更新を確認"));
+  updateButton_->setObjectName(QStringLiteral("updateButton"));
+  updateButton_->setProperty("changes_nothing", true);
+  updateLabel_ = new QLabel(
+      Text("今の版は %1。押したときだけ GitHub に問い合わせます")
+          .arg(QString::fromStdString(Version::GetFloatypeVersion())));
+  updateLabel_->setObjectName(QStringLiteral("updateLabel"));
+  QHBoxLayout* row = new QHBoxLayout();
+  row->addWidget(updateButton_);
+  row->addWidget(updateLabel_);
+  row->addStretch();
+  group->addRow(row);
+  connect(updateButton_, &QPushButton::clicked, this,
+          &ConfigDialog::UpdateClicked);
+}
+
+void ConfigDialog::ShowUpdate(const char* text, bool busy) {
+  updateLabel_->setText(Text(text));
+  updateButton_->setEnabled(!busy);
+}
+
+void ConfigDialog::RunCurl(
+    const QStringList& arguments, int seconds,
+    std::function<void(bool ok, const QByteArray& output)> done) {
+  QProcess* curl = new QProcess(this);
+  connect(curl, &QProcess::finished, this,
+          [curl, done](int code, QProcess::ExitStatus status) {
+            done(status == QProcess::NormalExit && code == 0,
+                 curl->readAllStandardOutput());
+            curl->deleteLater();
+          });
+  connect(curl, &QProcess::errorOccurred, this,
+          [curl, done](QProcess::ProcessError error) {
+            if (error == QProcess::FailedToStart) {
+              done(false, QByteArray());
+              curl->deleteLater();
+            }
+          });
+  // https alone, on redirects too.
+  curl->start(
+      UpdateCurl(),
+      QStringList{QStringLiteral("-sS"), QStringLiteral("-L"),
+                  QStringLiteral("--proto"), QStringLiteral("=https"),
+                  QStringLiteral("--proto-redir"), QStringLiteral("=https"),
+                  QStringLiteral("--max-time"), QString::number(seconds)} +
+          arguments);
+}
+
+void ConfigDialog::UpdateClicked() {
+  if (update_.kind == floatype::UpdateCheck::kNewer) {
+    DownloadUpdate();
+  } else {
+    CheckForUpdate();
+  }
+}
+
+void ConfigDialog::CheckForUpdate() {
+  ShowUpdate("確認しています…", /*busy=*/true);
+  RunCurl(
+      {QStringLiteral("-H"),
+       QStringLiteral("Accept: application/vnd.github+json"),
+       QStringLiteral("-w"), QStringLiteral("\n%{http_code}"),
+       QString::fromUtf8(floatype::kLatestReleaseUrl.data(),
+                         floatype::kLatestReleaseUrl.size())},
+      20, [this](bool ok, const QByteArray& output) {
+        // The status is the last line; the answer comes before it.
+        const int end = output.lastIndexOf('\n');
+        const QJsonObject release =
+            QJsonDocument::fromJson(output.left(end)).object();
+        std::vector<floatype::ReleaseAsset> assets;
+        for (const QJsonValue& value :
+             release.value(QStringLiteral("assets")).toArray()) {
+          const QJsonObject asset = value.toObject();
+          assets.push_back(
+              {asset.value(QStringLiteral("name")).toString().toStdString(),
+               asset.value(QStringLiteral("browser_download_url"))
+                   .toString()
+                   .toStdString()});
+        }
+        update_ = floatype::CheckLatestRelease(
+            ok && end >= 0 ? output.mid(end + 1).trimmed().toInt() : 0,
+            release.value(QStringLiteral("tag_name")).toString().toStdString(),
+            assets, Version::GetFloatypeVersion());
+        switch (update_.kind) {
+          case floatype::UpdateCheck::kNewer:
+            updateLabel_->setText(
+                Text("新しい版 %1 があります（今は %2）")
+                    .arg(
+                        QString::fromStdString(update_.version),
+                        QString::fromStdString(Version::GetFloatypeVersion())));
+            updateButton_->setText(Text("ダウンロードして入れる"));
+            updateButton_->setEnabled(true);
+            break;
+          case floatype::UpdateCheck::kUpToDate:
+            ShowUpdate("最新です", /*busy=*/false);
+            break;
+          case floatype::UpdateCheck::kNoRelease:
+            ShowUpdate("まだリリースがありません", /*busy=*/false);
+            break;
+          case floatype::UpdateCheck::kFailed:
+            ShowUpdate("確認できませんでした", /*busy=*/false);
+            break;
+        }
+      });
+}
+
+void ConfigDialog::DownloadUpdate() {
+  ShowUpdate("ダウンロードしています…", /*busy=*/true);
+  // Kept after the dialog closes: the Installer reads the package from it.
+  auto folder = std::make_shared<QTemporaryDir>(QDir::tempPath() +
+                                                "/floatype-update-XXXXXX");
+  folder->setAutoRemove(false);
+  const QString package = folder->filePath(QStringLiteral("floatype.pkg"));
+  const QString checksum = package + QStringLiteral(".sha256");
+  const auto failed = [this, folder](const char* text) {
+    QDir(folder->path()).removeRecursively();
+    update_ = floatype::UpdateCheck();
+    updateButton_->setText(Text("更新を確認"));
+    ShowUpdate(text, /*busy=*/false);
+  };
+  RunCurl(
+      {QStringLiteral("-f"), QStringLiteral("-o"), checksum,
+       QString::fromStdString(update_.checksum_url)},
+      60,
+      [this, folder, package, checksum, failed](bool ok, const QByteArray&) {
+        if (!ok) {
+          failed("ダウンロードできませんでした");
+          return;
+        }
+        RunCurl(
+            {QStringLiteral("-f"), QStringLiteral("-o"), package,
+             QString::fromStdString(update_.package_url)},
+            900, [this, package, checksum, failed](bool ok, const QByteArray&) {
+              QFile file(package);
+              QFile named(checksum);
+              QCryptographicHash hash(QCryptographicHash::Sha256);
+              if (!ok || !file.open(QIODevice::ReadOnly) ||
+                  !named.open(QIODevice::ReadOnly) || !hash.addData(&file)) {
+                failed("ダウンロードできませんでした");
+                return;
+              }
+              if (!floatype::ChecksumMatches(
+                      named.readAll().toStdString(),
+                      hash.result().toHex().toStdString())) {
+                failed(
+                    "ダウンロードした物の SHA-256 が合わないので、"
+                    "消しました");
+                return;
+              }
+              // The Installer replaces this dialog too.
+              QProcess::startDetached(UpdateOpen(), {package});
+              QWidget::close();
+            });
+      });
 }
 
 QPushButton* ConfigDialog::NewColorButton(const char* field, const char* label,

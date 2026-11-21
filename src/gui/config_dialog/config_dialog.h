@@ -32,19 +32,26 @@
 #ifndef MOZC_GUI_CONFIG_DIALOG_CONFIG_DIALOG_H_
 #define MOZC_GUI_CONFIG_DIALOG_CONFIG_DIALOG_H_
 
+#include <QByteArray>
 #include <QFormLayout>
+#include <QLabel>
 #include <QObject>
 #include <QPainter>
+#include <QPushButton>
 #include <QRectF>
 #include <QSlider>
 #include <QStackedWidget>
+#include <QString>
+#include <QStringList>
 #include <QTimer>
+#include <functional>
 #include <map>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "client/client_interface.h"
+#include "floatype/update/update_check.h"
 #include "gui/config_dialog/ui_config_dialog.h"
 #include "protocol/config.pb.h"
 
@@ -111,6 +118,29 @@ class ConfigDialog : public QDialog, private Ui::ConfigDialog {
   // that the upstream .ui file and its translations stay as they are.
   void SetUpFloatypeSettings();
   void SetUpFooter();
+  // floatype: the 更新 group of the last tab. Its button asks GitHub for the
+  // latest release when pressed, and at no other time; a second press
+  // downloads the package, checks its SHA-256 and opens it in the Installer.
+  // Nothing else in floatype uses the network.
+  void SetUpUpdate();
+  void UpdateClicked();
+  void CheckForUpdate();
+  void DownloadUpdate();
+  // Runs curl over https with a time limit and calls `done` with whether it
+  // succeeded and what it printed.
+  void RunCurl(const QStringList& arguments, int seconds,
+               std::function<void(bool ok, const QByteArray& output)> done);
+  void ShowUpdate(const char* text, bool busy);
+  QPushButton* updateButton_;
+  QLabel* updateLabel_;
+  floatype::UpdateCheck update_;
+
+ public:
+  // Tests put scripts in place of curl and open.
+  static void SetUpdateToolsForTesting(const QString& curl,
+                                       const QString& open);
+
+ private:
   QCheckBox* useZenzCheckBox_;
   QSpinBox* zenzTimeoutSpinBox_;
   QCheckBox* zenzSuggestionLearningCheckBox_;

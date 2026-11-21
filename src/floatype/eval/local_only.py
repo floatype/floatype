@@ -7,6 +7,10 @@
 2. Lists the networking functions and frameworks each executable links (the
    scorer and, with --pkg, everything the installer puts in place), and fails
    on any outside a short list of known, local uses.
+3. Lists the executables that name the one address floatype may ask, the
+   latest release on GitHub. The settings dialog asks it through curl when
+   the user presses its update button, which no symbol shows; more than one
+   executable holding it fails.
 
 Run from src/ after building the scorer (floatype/scorer/CMakeLists.txt) and
   bazelisk build --config release_build //floatype/eval:replay_main
@@ -75,6 +79,20 @@ def static_check(paths):
   return failures
 
 
+# The update button's address (floatype/update/update_check.h).
+UPDATE_ADDRESS = b"api.github.com/repos/floatype/floatype/releases/latest"
+
+
+def update_askers(paths):
+  """The executables that hold the address the update button asks."""
+  askers = []
+  for path in paths:
+    with open(path, "rb") as f:
+      if UPDATE_ADDRESS in f.read():
+        askers.append(path)
+  return askers
+
+
 def sandboxed_replay(replay, scorer):
   lines = "".join(f"{left}\t{reading}\n" for left, reading in SENTENCES)
   done = subprocess.run(
@@ -123,6 +141,11 @@ def main():
                      check=True, capture_output=True)
       paths += list(mach_o_files(expanded))
     if static_check(paths):
+      failed = True
+    askers = update_askers(paths)
+    print("更新の確認先を持つ実行ファイル（設定画面の 1 つだけのはず）: "
+          + (" ".join(os.path.basename(a) for a in askers) or "なし"))
+    if len(askers) > 1:
       failed = True
 
   print("失敗" if failed else "ローカルで完結している")
