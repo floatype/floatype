@@ -95,7 +95,8 @@ ABSL_FLAG(bool, mixed_english_leading_symbols, true,
 ABSL_FLAG(bool, keys, false,
           "live mode: each reading is the keys to type, so a space is the "
           "Space key, a carriage return the Enter key, a shift-out character "
-          "(0x0E) the Down key, a vertical tab a pause "
+          "(0x0E) the Down key, a backspace character (0x08) the Backspace "
+          "key, a vertical tab a pause "
           "after the key before it, and an upper-case letter is typed as it "
           "is; the text committed is everything the keys commit, not only "
           "the last Enter");
@@ -334,6 +335,8 @@ class Replayer {
         input.mutable_key()->set_special_key(commands::KeyEvent::ENTER);
       } else if (key_code == '\x0e') {
         input.mutable_key()->set_special_key(commands::KeyEvent::DOWN);
+      } else if (key_code == '\b') {
+        input.mutable_key()->set_special_key(commands::KeyEvent::BACKSPACE);
       } else {
         input.mutable_key()->set_key_code(key_code);
       }
@@ -461,8 +464,9 @@ class Replayer {
       // Lower-case letters, digits and ASCII symbols are typed as they are:
       // an English word, 2026, before/after.
       if (c < 0x7F &&
-          (absl::GetFlag(FLAGS_keys) ? c >= U' ' || c == U'\r' || c == U'\x0e'
-                                     : c > U' ' && !(c >= U'A' && c <= U'Z'))) {
+          (absl::GetFlag(FLAGS_keys)
+               ? c >= U' ' || c == U'\r' || c == U'\x0e' || c == U'\b'
+               : c > U' ' && !(c >= U'A' && c <= U'Z'))) {
         if (!flush()) return std::nullopt;
         keys.emplace_back(static_cast<char>(c), false);
         continue;
