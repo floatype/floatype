@@ -135,6 +135,8 @@ class ConfigDialog : public QDialog, private Ui::ConfigDialog {
   QCheckBox* mixedEnglishSpaceCommitsCheckBox_;
   QCheckBox* mixedEnglishEnterCommitsCheckBox_;
   QCheckBox* mixedEnglishLeadingSymbolsCheckBox_;
+  // The trial setting mixed_english_rewrite; the index is its value.
+  QComboBox* mixedEnglishRewriteComboBox_;
   QCheckBox* slashAfterAsciiCheckBox_;
   QCheckBox* suggestAddedWordsCheckBox_;
   QCheckBox* kindMarkCheckBox_;

@@ -441,6 +441,34 @@ class Session {
   // nothing composed, ends the run; so does a caret the app reports
   // elsewhere than after the word and its space (a click).
   bool english_run_ = false;
+  // A trial (the setting mixed_english_rewrite): English typed word by word
+  // before a word told it was English. Each word here was converted by Space,
+  // as its kana read as Japanese, and committed by the key after (nice came
+  // out 偽, to came out と). When the next word is committed in letters
+  // (meet), the output tells the client to write these again
+  // (commands::Output::rewrite). Any other commit, and any other key or
+  // command of the user's, drops them.
+  struct TypedWord {
+    std::string keys;
+    std::string committed;
+  };
+  std::vector<TypedWord> typed_words_;
+  // The last key was the Space that converted the composition.
+  bool space_converted_ = false;
+  // What FollowTypedWords() needs to know from before a key.
+  struct BeforeKey {
+    bool rewrites = false;
+    ImeContext::State state = ImeContext::NONE;
+    bool live = false;
+    bool space_converted = false;
+    std::string keys;
+  };
+  BeforeKey LookBeforeKey() const;
+  // After a key: notes a word of typed_words_, tells the client to write them
+  // again, or drops them.
+  void FollowTypedWords(const BeforeKey& before, commands::Command* command);
+  // SendKey() but for FollowTypedWords().
+  bool SendKeyInternal(commands::Command* command);
   // The composition as typed, before a live conversion kept a word that ends
   // it in loose letters: the user may have paused inside a syllable
   // (きょうは + s reads "has", but may go on to きょうはしる). The next letter
