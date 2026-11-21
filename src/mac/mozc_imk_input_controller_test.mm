@@ -611,23 +611,24 @@ TEST_F(MozcImkInputControllerTest, SwitchMode) {
 TEST_F(MozcImkInputControllerTest, SwitchDisplayMode) {
   EXPECT_TRUE(mock_client_.selectedMode.empty());
   EXPECT_EQ(controller_.mode, commands::DIRECT);
+  // floatype declares no mode for letters, so direct input selects nothing.
+  [controller_ switchDisplayMode];
+  EXPECT_EQ([mock_client_ getCounter:"selectInputMode:"], 0);
+  [controller_ switchMode:commands::HIRAGANA client:mock_client_];
   [controller_ switchDisplayMode];
   EXPECT_EQ([mock_client_ getCounter:"selectInputMode:"], 1);
-  EXPECT_EQ(mock_client_.selectedMode, "com.apple.inputmethod.Roman");
+  EXPECT_EQ(mock_client_.selectedMode, "com.apple.inputmethod.Japanese");
 
   // Does not change the display mode for MS Word.  See
   // MozcImkInputController.mm for the detailed information.
   ResetClientBundleIdentifier(@"com.microsoft.Word");
-  [controller_ switchMode:commands::HIRAGANA client:mock_client_];
-  EXPECT_EQ(controller_.mode, commands::HIRAGANA);
   [controller_ switchDisplayMode];
   // still remains 1 and display mode does not change.
   EXPECT_EQ([mock_client_ getCounter:"selectInputMode:"], 1);
-  EXPECT_EQ(mock_client_.selectedMode, "com.apple.inputmethod.Roman");
 }
 
-// floatype: Info.plist names two input modes; the converter's other modes
-// are shown as one of them.
+// floatype: Info.plist names one input mode, the Japanese one; the
+// converter's kana modes are shown as it, and its modes of letters as nothing.
 TEST_F(MozcImkInputControllerTest, SwitchDisplayModeSelectsOnlyDeclaredModes) {
   for (const commands::CompositionMode mode :
        {commands::HIRAGANA, commands::FULL_KATAKANA, commands::HALF_KATAKANA,
@@ -637,9 +638,17 @@ TEST_F(MozcImkInputControllerTest, SwitchDisplayModeSelectsOnlyDeclaredModes) {
     [controller_ switchDisplayMode];
     EXPECT_EQ(mock_client_.selectedMode, "com.apple.inputmethod.Japanese") << mode;
   }
-  [controller_ switchMode:commands::HALF_ASCII client:mock_client_];
-  [controller_ switchDisplayMode];
-  EXPECT_EQ(mock_client_.selectedMode, "com.apple.inputmethod.Roman");
+  // No alphanumeric mode is declared: nothing is selected for letters.
+  const int selected = [mock_client_ getCounter:"selectInputMode:"];
+  for (const commands::CompositionMode mode : {commands::HALF_ASCII, commands::DIRECT}) {
+    [controller_ switchMode:mode client:mock_client_];
+    [controller_ switchDisplayMode];
+  }
+  EXPECT_EQ([mock_client_ getCounter:"selectInputMode:"], selected);
+  EXPECT_EQ(mock_client_.selectedMode, "com.apple.inputmethod.Japanese");
+  // The Kana key selects the Japanese mode again, which is Hiragana.
+  EXPECT_EQ([controller_ modeForSelectedInputMode:@"com.apple.inputmethod.Japanese"],
+            commands::HIRAGANA);
 }
 
 // macOS reports the mode switchDisplayMode selected; that must not take the

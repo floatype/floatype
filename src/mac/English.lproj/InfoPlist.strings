@@ -3,4 +3,3 @@
 CFBundleName = "${CF_BUNDLE_NAME_EN}";
 NSHumanReadableCopyright = "${NS_HUMAN_READABLE_COPYRIGHT}";
 com.apple.inputmethod.Japanese = "Hiragana (${INPUT_MODE_ANNOTATION})";
-com.apple.inputmethod.Roman = "Alphanumeric (${INPUT_MODE_ANNOTATION})";

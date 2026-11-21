@@ -461,6 +461,11 @@ bool CanSurroundingText(absl::string_view bundle_id) {
   }
 
   absl::string_view mode_id = GetModeId(mode_);
+  // floatype declares the Japanese mode alone: for letters the user has
+  // macOS's ABC, which the Eisu key goes to. There is no mode to select then.
+  if (mode_id == kRomanModeId) {
+    return;
+  }
   [[self client] selectInputMode:[NSString stringWithUTF8String:mode_id.data()]];
 }
 
