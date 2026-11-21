@@ -1475,19 +1475,6 @@ message Output {
   optional mozc.config.Config.CandidateStyle suggest_style = 1006;
   // floatype: whether to draw the footer's dot (candidate_kind_mark).
   optional bool candidate_kind_mark = 1007;
-  // floatype, a trial (the setting mixed_english_rewrite): with `result`, the
-  // text committed just before this result's composition began that was
-  // English after all (nice to meet you came out 偽とmeet you). Where the
-  // client reads `before` back right before the composition, it replaces it
-  // by `after`; otherwise it commits the result alone.
-  message Rewrite {
-    optional string before = 1;
-    optional string after = 2;
-    // Where the client cannot read `before` back, as in a terminal, it types
-    // a Backspace character for each character of it instead.
-    optional bool by_backspace = 3;
-  }
-  optional Rewrite rewrite = 1008;
   // floatype: the reading to show above a live conversion; unset shows none.
   optional string live_reading = 1004;
   // floatype: how to draw it.

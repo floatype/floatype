@@ -766,13 +766,9 @@ void ConfigDialog::SetUpFloatypeSettings() {
       assist,
       "　└ かなの無い入力は、頭の記号も打ったとおりにする（/review、"
       "--help）");
-  mixedEnglishRewriteComboBox_ =
-      AddComboBox(assist, "　└ 先に確定した語を英字に書き直す（試作）",
-                  {"しない", "前の文字を見せるアプリだけ",
-                   "見せないアプリ（ターミナル）では Backspace も送る"});
   for (QWidget* part : std::initializer_list<QWidget*>{
            mixedEnglishSpaceCommitsCheckBox_, mixedEnglishEnterCommitsCheckBox_,
-           mixedEnglishLeadingSymbolsCheckBox_, mixedEnglishRewriteComboBox_}) {
+           mixedEnglishLeadingSymbolsCheckBox_}) {
     connect(mixedEnglishCheckBox_, &QCheckBox::toggled, part,
             &QWidget::setEnabled);
   }
@@ -1539,11 +1535,9 @@ void ConfigDialog::ConvertFromProto(const config::Config& config) {
   SET_CHECKBOX(mixedEnglishEnterCommitsCheckBox_, mixed_english_enter_commits);
   SET_CHECKBOX(mixedEnglishLeadingSymbolsCheckBox_,
                mixed_english_leading_symbols);
-  mixedEnglishRewriteComboBox_->setCurrentIndex(
-      std::min<int>(config.mixed_english_rewrite(), 2));
   for (QWidget* part : std::initializer_list<QWidget*>{
            mixedEnglishSpaceCommitsCheckBox_, mixedEnglishEnterCommitsCheckBox_,
-           mixedEnglishLeadingSymbolsCheckBox_, mixedEnglishRewriteComboBox_}) {
+           mixedEnglishLeadingSymbolsCheckBox_}) {
     part->setEnabled(config.mixed_english());
   }
   SET_CHECKBOX(slashAfterAsciiCheckBox_, slash_after_ascii);
@@ -1678,8 +1672,6 @@ void ConfigDialog::ConvertToProto(config::Config* config) const {
   GET_CHECKBOX(mixedEnglishEnterCommitsCheckBox_, mixed_english_enter_commits);
   GET_CHECKBOX(mixedEnglishLeadingSymbolsCheckBox_,
                mixed_english_leading_symbols);
-  config->set_mixed_english_rewrite(
-      mixedEnglishRewriteComboBox_->currentIndex());
   GET_CHECKBOX(slashAfterAsciiCheckBox_, slash_after_ascii);
   GET_CHECKBOX(suggestAddedWordsCheckBox_, suggest_added_words);
   GET_CHECKBOX(displayAmbiguousCheckBox_, display_ambiguous_romaji);

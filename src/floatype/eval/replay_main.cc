@@ -89,10 +89,6 @@ ABSL_FLAG(bool, mixed_english_space_commits, true,
 ABSL_FLAG(bool, mixed_english_enter_commits, true,
           "the setting mixed_english_enter_commits: Enter before the pause "
           "commits an English word in letters");
-ABSL_FLAG(int, mixed_english_rewrite, 0,
-          "the setting mixed_english_rewrite: 1 or 2 writes again, as English, "
-          "the words committed before a word told it was English; the tool "
-          "then does what a client that reads its text back does");
 ABSL_FLAG(bool, mixed_english_leading_symbols, true,
           "the setting mixed_english_leading_symbols: symbols before the "
           "first word of a composition with no kana stay as typed");
@@ -308,15 +304,9 @@ class Replayer {
     return absl::StrJoin(values, "|");
   }
 
-  // Adds what `output` commits to `text`, writing again what it says to
-  // (commands::Output::rewrite), as a client that reads its text back does.
+  // Adds what `output` commits to `text`.
   static void AppendCommitted(const commands::Output& output,
                               std::string* text) {
-    if (output.has_result() && output.has_rewrite() &&
-        text->ends_with(output.rewrite().before())) {
-      text->resize(text->size() - output.rewrite().before().size());
-      text->append(output.rewrite().after());
-    }
     text->append(output.result().value());
   }
 
@@ -351,11 +341,6 @@ class Replayer {
       if (!absl::GetFlag(FLAGS_unknown_context)) {
         input.mutable_context()->set_preceding_text(
             absl::StrCat(left_context, before));
-      }
-      // A client that can delete what it committed, as most apps can.
-      if (absl::GetFlag(FLAGS_mixed_english_rewrite) > 0) {
-        input.mutable_capability()->set_text_deletion(
-            commands::Capability::DELETE_PRECEDING_TEXT);
       }
       commands::Output output = Eval(std::move(input));
       AppendCommitted(output, &before);
@@ -420,8 +405,6 @@ class Replayer {
         absl::GetFlag(FLAGS_mixed_english_enter_commits));
     input.mutable_config()->set_mixed_english_leading_symbols(
         absl::GetFlag(FLAGS_mixed_english_leading_symbols));
-    input.mutable_config()->set_mixed_english_rewrite(
-        absl::GetFlag(FLAGS_mixed_english_rewrite));
     input.mutable_config()->set_display_ambiguous_romaji(
         absl::GetFlag(FLAGS_display_ambiguous));
     input.mutable_config()->set_suggest_added_words(

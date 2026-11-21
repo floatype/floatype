@@ -478,68 +478,6 @@ bool CanSurroundingText(absl::string_view bundle_id) {
   replacementRange_ = NSMakeRange(NSNotFound, 0);
 }
 
-- (BOOL)commitText:(const char *)text
-         rewriting:(const mozc::commands::Output::Rewrite &)rewrite
-            client:(id)sender {
-  if (text == nullptr || rewrite.before().empty() || !CanSelectedRange(clientBundle_)) {
-    return NO;
-  }
-  NSString *before = [NSString stringWithUTF8String:rewrite.before().c_str()];
-  NSString *after = [NSString stringWithUTF8String:rewrite.after().c_str()];
-  NSString *committed = [NSString stringWithUTF8String:text];
-  if (before == nil || after == nil || committed == nil) {
-    return NO;
-  }
-  NSString *written = [after stringByAppendingString:committed];
-  // Where the result goes: the composition, or with none, the selection.
-  NSRange composition = [sender markedRange];
-  if (composition.location == NSNotFound) {
-    composition = [sender selectedRange];
-  }
-  NSString *shown = nil;
-  if (composition.location != NSNotFound && composition.length != NSNotFound &&
-      composition.location >= [before length]) {
-    const NSRange range = NSMakeRange(composition.location - [before length], [before length]);
-    shown = [[sender attributedSubstringFromRange:range] string];
-    if ([shown isEqualToString:before]) {
-      // Apps take no range that starts before a composition (Notes and TextEdit wrote the words
-      // twice), so the composition is committed first. Then the words go as Undo's do, which
-      // those apps take: a composition over the range, and its commit. Where the app does not
-      // show the commit right before the cursor, it stays as committed.
-      [sender insertText:committed replacementRange:replacementRange_];
-      replacementRange_ = NSMakeRange(NSNotFound, 0);
-      NSString *stale = [before stringByAppendingString:committed];
-      const NSRange cursor = [sender selectedRange];
-      if (cursor.location == NSNotFound || cursor.location < [stale length]) {
-        return YES;
-      }
-      const NSRange all = NSMakeRange(cursor.location - [stale length], [stale length]);
-      if ([[[sender attributedSubstringFromRange:all] string] isEqualToString:stale]) {
-        [sender setMarkedText:written
-               selectionRange:NSMakeRange([written length], 0)
-             replacementRange:all];
-        [sender insertText:written replacementRange:NSMakeRange(NSNotFound, 0)];
-      }
-      return YES;
-    }
-  }
-  // Text that is something else is left alone. Backspace is for an application that shows no text
-  // there at all, where its shell or editor may take the character as the key.
-  if (!rewrite.by_backspace() || [shown length] > 0) {
-    return NO;
-  }
-  NSMutableString *typed = [NSMutableString string];
-  [before enumerateSubstringsInRange:NSMakeRange(0, [before length])
-                             options:NSStringEnumerationByComposedCharacterSequences
-                          usingBlock:^(NSString *, NSRange, NSRange, BOOL *) {
-                            [typed appendString:@"\x7f"];
-                          }];
-  [typed appendString:written];
-  [sender insertText:typed replacementRange:replacementRange_];
-  replacementRange_ = NSMakeRange(NSNotFound, 0);
-  return YES;
-}
-
 - (void)launchWordRegisterTool:(id)client {
   ::setenv(mozc::kWordRegisterEnvironmentName, "", 1);
   if (CanSelectedRange(clientBundle_)) {
@@ -630,12 +568,7 @@ bool CanSurroundingText(absl::string_view bundle_id) {
   }
 
   if (output->has_result()) {
-    // floatype: a commit may come with words to write again before it.
-    if (!(output->has_rewrite() && [self commitText:output->result().value().c_str()
-                                          rewriting:output->rewrite()
-                                             client:sender])) {
-      [self commitText:output->result().value().c_str() client:sender];
-    }
+    [self commitText:output->result().value().c_str() client:sender];
   }
 
   // Handles deletion range.  We do not even handle it for some

@@ -515,12 +515,6 @@ message Config {
   // before its first letter or digit stay as typed (/review, --help). Off,
   // they are what the symbol settings write (・review).
   optional bool mixed_english_leading_symbols = 1032 [default = true];
-  // floatype, with mixed_english, a trial: English typed word by word whose
-  // first words read as Japanese is written again once a word tells it is
-  // English (nice to meet you: 偽と becomes nice to). 0 is off. 1 rewrites
-  // where the app shows the text before the caret. 2 also types Backspace
-  // characters where it does not, as in terminals.
-  optional uint32 mixed_english_rewrite = 1033 [default = 0];
   // floatype: romaji still open to a longer rule shows what it gives now (ん
   // for n, ます for ms with a custom ms rule) instead of the letters.
   optional bool display_ambiguous_romaji = 1018 [default = false];

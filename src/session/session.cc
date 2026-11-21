@@ -445,8 +445,6 @@ bool Session::SendCommand(commands::Command* command) {
       commit_after_zenz_ = false;
       space_after_commit_ = false;
       english_run_ = false;
-      typed_words_.clear();
-      space_converted_ = false;
       zenz_indices_.clear();
       mozc_segments_.reset();
       live_conversion_ = false;
@@ -581,11 +579,6 @@ bool Session::SendCommand(commands::Command* command) {
       break;
   }
   TypeLettersHalfWidth(state_before, command);
-  // A commit that a timer callback made is not a word of typed_words_.
-  if (command->output().has_result()) {
-    typed_words_.clear();
-    space_converted_ = false;
-  }
   RememberSecureCommit(*command);
   SetIndicator(command);
   SetCandidateLook(command);
@@ -691,10 +684,8 @@ bool Session::TestSendKey(commands::Command* command) {
 
 bool Session::SendKey(commands::Command* command) {
   const ImeContext::State state = context_->state();
-  const BeforeKey before = LookBeforeKey();
   const bool result = SendKeyInternal(command);
   TypeLettersHalfWidth(state, command);
-  FollowTypedWords(before, command);
   return result;
 }
 
@@ -736,87 +727,6 @@ void Session::TypeLettersHalfWidth(ImeContext::State before,
   if (before == ImeContext::COMPOSITION && output->has_result()) {
     half(output->mutable_result()->mutable_value());
   }
-}
-
-Session::BeforeKey Session::LookBeforeKey() const {
-  BeforeKey before;
-  before.rewrites = floatype::SessionFeaturesEnabled() &&
-                    context_->GetConfig().mixed_english() &&
-                    context_->GetConfig().mixed_english_rewrite() > 0;
-  if (!before.rewrites) {
-    return before;
-  }
-  before.state = context_->state();
-  before.live = live_conversion_;
-  before.space_converted = space_converted_;
-  if (before.state == ImeContext::COMPOSITION ||
-      before.state == ImeContext::CONVERSION) {
-    before.keys = context_->composer().GetRawString();
-  }
-  return before;
-}
-
-void Session::FollowTypedWords(const BeforeKey& before,
-                               commands::Command* command) {
-  space_converted_ = false;
-  if (!before.rewrites) {
-    typed_words_.clear();
-    return;
-  }
-  const commands::KeyEvent& key = command->input().key();
-  const commands::Output& output = command->output();
-  const bool character = key.has_key_code() && key.modifier_keys_size() == 0;
-  if (!output.has_result()) {
-    // Typing goes on, and so does the Space that converts a word.
-    space_converted_ =
-        IsPureSpaceKey(key) && context_->state() == ImeContext::CONVERSION &&
-        (before.state == ImeContext::COMPOSITION ||
-         (before.state == ImeContext::CONVERSION && before.live));
-    if (!output.consumed() || !(character || space_converted_)) {
-      typed_words_.clear();
-    }
-    return;
-  }
-  const auto lower = [](absl::string_view keys) {
-    return !keys.empty() && std::all_of(keys.begin(), keys.end(), [](char c) {
-      return absl::ascii_islower(static_cast<unsigned char>(c));
-    });
-  };
-  // The list has words of three letters and more.
-  constexpr absl::string_view kShortWords[] = {
-      "a",  "i",  "an", "as", "at", "be", "by", "do", "go", "he",
-      "hi", "if", "in", "is", "it", "me", "my", "no", "of", "oh",
-      "ok", "on", "or", "so", "to", "up", "us", "we"};
-  const std::shared_ptr<const floatype::EnglishWords> words =
-      floatype::CurrentEnglishWords();
-  const std::string& committed = output.result().value();
-  // A word that Space converted and this key committed as it was.
-  if (character && before.space_converted &&
-      before.state == ImeContext::CONVERSION && lower(before.keys) &&
-      (before.keys.size() >= 3
-           ? words->Contains(before.keys)
-           : std::find(std::begin(kShortWords), std::end(kShortWords),
-                       before.keys) != std::end(kShortWords))) {
-    typed_words_.push_back({before.keys, committed});
-    return;
-  }
-  // A word committed in its letters: what came before it was English too.
-  absl::string_view word = committed;
-  absl::ConsumeSuffix(&word, " ");
-  if (!typed_words_.empty() && word == before.keys && word.size() >= 3 &&
-      lower(word) && words->Contains(word) &&
-      (context_->client_capability().text_deletion() &
-       commands::Capability::DELETE_PRECEDING_TEXT)) {
-    commands::Output::Rewrite* rewrite =
-        command->mutable_output()->mutable_rewrite();
-    for (const TypedWord& typed : typed_words_) {
-      rewrite->mutable_before()->append(typed.committed);
-      absl::StrAppend(rewrite->mutable_after(), typed.keys, " ");
-    }
-    rewrite->set_by_backspace(context_->GetConfig().mixed_english_rewrite() >=
-                              2);
-  }
-  typed_words_.clear();
 }
 
 bool Session::SendKeyInternal(commands::Command* command) {

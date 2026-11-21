@@ -143,7 +143,7 @@ def main():
   parser.add_argument("--model", help="the zenz model (default: replay_main's)")
   parser.add_argument(
       "--replay_flag", action="append", default=[],
-      help="a flag for replay_main, such as --mixed_english_rewrite=1; may be "
+      help="a flag for replay_main, such as --mixed_english_space_commits=false; may be "
       "given more than once")
   parser.add_argument(
       "--out", type=Path,

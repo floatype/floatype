@@ -226,15 +226,6 @@
  */
 - (void)commitText:(const char *)text client:(id)sender;
 
-/** floatype, a trial: commits |text| after writing again, as |rewrite| says, what was committed
- * before the composition (English typed word by word that came out Japanese). Where |sender| shows
- * that text right before the composition, the two are replaced together. Where it shows no text
- * there at all, as a terminal does, and |rewrite| asks for it, a Backspace character is typed for
- * each character instead. Returns NO, having done nothing, in any other case. */
-- (BOOL)commitText:(const char *)text
-         rewriting:(const mozc::commands::Output::Rewrite &)rewrite
-            client:(id)sender;
-
 /** Conducts the reconvert event.  It could have several tricks such like invoking UNDO instead if
  * nothing is selected.  |sender| has to be the proxy object to the client application, which might
  * not be same as the sender of the click event itself when the user clicks the menu item.

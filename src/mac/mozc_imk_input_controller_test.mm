@@ -51,22 +51,6 @@
 #include "testing/gmock.h"
 #include "testing/gunit.h"
 
-// An input method's client names the selection differently from the text view
-// behind it.
-@interface NSTextView (ImkClientForTesting)
-- (void)setMarkedText:(id)string
-       selectionRange:(NSRange)selection
-     replacementRange:(NSRange)replacement;
-@end
-
-@implementation NSTextView (ImkClientForTesting)
-- (void)setMarkedText:(id)string
-       selectionRange:(NSRange)selection
-     replacementRange:(NSRange)replacement {
-  [self setMarkedText:string selectedRange:selection replacementRange:replacement];
-}
-@end
-
 @interface MockIMKServer : NSObject <ServerCallback> {
   // The controller which accepts user's clicks
   __weak id<ControllerCallback> expectedController_;
@@ -105,7 +89,6 @@
   NSDictionary *expectedAttributes;
   std::string selectedMode_;
   NSString *insertedText_;
-  NSRange insertedRange_;
   NSString *overriddenLayout_;
   NSAttributedString *attributedString_;
   absl::flat_hash_map<std::string, int> counters_;
@@ -116,7 +99,6 @@
 @property(readwrite, assign) NSRange expectedRange;
 @property(readonly) std::string selectedMode;
 @property(readonly) NSString *insertedText;
-@property(readonly) NSRange insertedRange;
 @property(readonly) NSString *overriddenLayout;
 @end
 
@@ -127,7 +109,6 @@
 @synthesize expectedRange;
 @synthesize selectedMode = selectedMode_;
 @synthesize insertedText = insertedText_;
-@synthesize insertedRange = insertedRange_;
 @synthesize overriddenLayout = overriddenLayout_;
 
 - (MockClient *)init {
@@ -191,7 +172,6 @@
 - (void)insertText:(NSString *)result replacementRange:(NSRange)range {
   counters_["insertText:replacementRange:"]++;
   insertedText_ = result;
-  insertedRange_ = range;
 }
 
 - (void)overrideKeyboardWithKeyboardNamed:(NSString *)newLayout {
@@ -696,124 +676,6 @@ TEST_F(MozcImkInputControllerTest, commitText) {
   EXPECT_TRUE([@"foo" isEqualToString:mock_client_.insertedText]);
   // location has to be cleared after the commit.
   EXPECT_EQ([controller_ replacementRange].location, NSNotFound);
-}
-
-// floatype, a trial: a commit that comes with words to write again before it
-// (nice to meet you came out 偽とmeet you).
-TEST_F(MozcImkInputControllerTest, ACommitStaysWhereTheClientDoesNotShowItAfterwards) {
-  commands::Output output;
-  output.set_consumed(true);
-  output.mutable_result()->set_value("meet ");
-  output.mutable_rewrite()->set_before("偽と");
-  output.mutable_rewrite()->set_after("nice to ");
-  // The app shows 偽と right before the composition (めえｔ at 3..6), and after the commit
-  // still the same text: the commit alone, with no range, as with no rewrite.
-  [mock_client_ setAttributedString:[[NSAttributedString alloc] initWithString:@"a偽とめえｔ"]];
-  mock_client_.expectedRange = NSMakeRange(3, 3);
-  [controller_ processOutput:&output client:mock_client_];
-  EXPECT_EQ([mock_client_ getCounter:"insertText:replacementRange:"], 1);
-  EXPECT_TRUE([@"meet " isEqualToString:mock_client_.insertedText]);
-  EXPECT_EQ(mock_client_.insertedRange.location, NSNotFound);
-  EXPECT_EQ([mock_client_ getCounter:"setMarkedText:selectionRange:replacementRange:"], 0);
-  EXPECT_EQ([controller_ replacementRange].location, NSNotFound);
-}
-
-TEST_F(MozcImkInputControllerTest, ACommitLeavesAloneTextThatIsSomethingElse) {
-  commands::Output output;
-  output.set_consumed(true);
-  output.mutable_result()->set_value("meet ");
-  output.mutable_rewrite()->set_before("偽と");
-  output.mutable_rewrite()->set_after("nice to ");
-  // Backspace is for an app that shows no text, not for one that shows other
-  // text.
-  output.mutable_rewrite()->set_by_backspace(true);
-  [mock_client_ setAttributedString:[[NSAttributedString alloc] initWithString:@"abcめえｔ"]];
-  mock_client_.expectedRange = NSMakeRange(3, 3);
-  [controller_ processOutput:&output client:mock_client_];
-  EXPECT_EQ([mock_client_ getCounter:"insertText:replacementRange:"], 1);
-  EXPECT_TRUE([@"meet " isEqualToString:mock_client_.insertedText]);
-  EXPECT_EQ(mock_client_.insertedRange.location, NSNotFound);
-}
-
-TEST_F(MozcImkInputControllerTest, ACommitTypesBackspaceOnlyWhereAskedAndNoTextShows) {
-  commands::Output output;
-  output.set_consumed(true);
-  output.mutable_result()->set_value("meet ");
-  output.mutable_rewrite()->set_before("偽と");
-  output.mutable_rewrite()->set_after("nice to ");
-  // An app that shows no text, as a terminal: the result alone.
-  [controller_ processOutput:&output client:mock_client_];
-  EXPECT_TRUE([@"meet " isEqualToString:mock_client_.insertedText]);
-  EXPECT_EQ(mock_client_.insertedRange.location, NSNotFound);
-  // Asked to, it types a Backspace for each character of 偽と first.
-  output.mutable_rewrite()->set_by_backspace(true);
-  [controller_ processOutput:&output client:mock_client_];
-  EXPECT_EQ([mock_client_ getCounter:"insertText:replacementRange:"], 2);
-  EXPECT_TRUE([@"\x7f\x7fnice to meet " isEqualToString:mock_client_.insertedText]);
-  EXPECT_EQ(mock_client_.insertedRange.location, NSNotFound);
-}
-
-// Against AppKit's own text view, the class most apps edit with. The proxy an
-// input method reaches an app through is not part of this: through it, Notes
-// and TextEdit took no range that starts before the composition, which this
-// view takes.
-TEST_F(MozcImkInputControllerTest, ACommitWritesAgainInAnAppKitTextView) {
-  const auto composing = [](NSString *before) {
-    NSTextView *view = [[NSTextView alloc] initWithFrame:NSMakeRect(0, 0, 300, 100)];
-    [view setString:before];
-    [view setSelectedRange:NSMakeRange([before length], 0)];
-    [view setMarkedText:@"めえｔ"
-           selectedRange:NSMakeRange(3, 0)
-        replacementRange:NSMakeRange(NSNotFound, 0)];
-    return view;
-  };
-  NSTextView *view = composing(@"a偽と");
-  ASSERT_TRUE([view respondsToSelector:@selector(attributedSubstringFromRange:)]);
-  ASSERT_TRUE([view respondsToSelector:@selector(markedRange)]);
-  ASSERT_TRUE([[view string] isEqualToString:@"a偽とめえｔ"]) << [[view string] UTF8String];
-  ASSERT_TRUE(NSEqualRanges([view markedRange], NSMakeRange(3, 3)));
-
-  commands::Output::Rewrite rewrite;
-  rewrite.set_before("偽と");
-  rewrite.set_after("nice to ");
-  EXPECT_TRUE([controller_ commitText:"meet " rewriting:rewrite client:(id)view]);
-  EXPECT_TRUE([[view string] isEqualToString:@"anice to meet "]) << [[view string] UTF8String];
-  EXPECT_FALSE([view hasMarkedText]);
-  EXPECT_TRUE(NSEqualRanges([view selectedRange], NSMakeRange(14, 0)));
-
-  // A commit with no rewrite replaces the composition alone.
-  view = composing(@"a偽と");
-  [controller_ commitText:"meet " client:(id)view];
-  EXPECT_TRUE([[view string] isEqualToString:@"a偽とmeet "]) << [[view string] UTF8String];
-
-  // Text that is something else before the composition is left alone.
-  view = composing(@"abc");
-  EXPECT_FALSE([controller_ commitText:"meet " rewriting:rewrite client:(id)view]);
-  EXPECT_TRUE([[view string] isEqualToString:@"abcめえｔ"]) << [[view string] UTF8String];
-  EXPECT_TRUE([view hasMarkedText]);
-}
-
-// A commit with no rewrite, and Undo's deletion range, are as before.
-TEST_F(MozcImkInputControllerTest, ACommitAndADeletionRangeWithoutARewrite) {
-  [mock_client_ setAttributedString:[[NSAttributedString alloc] initWithString:@"a偽とめえｔ"]];
-  mock_client_.expectedRange = NSMakeRange(3, 3);
-  commands::Output committed;
-  committed.set_consumed(true);
-  committed.mutable_result()->set_value("meet ");
-  [controller_ processOutput:&committed client:mock_client_];
-  EXPECT_TRUE([@"meet " isEqualToString:mock_client_.insertedText]);
-  EXPECT_EQ(mock_client_.insertedRange.location, NSNotFound);
-  EXPECT_EQ([mock_client_ getCounter:"markedRange"], 0);
-
-  // Undo: the range is kept for the composition that comes back.
-  mock_client_.expectedRange = NSMakeRange(6, 0);
-  commands::Output undone;
-  undone.set_consumed(true);
-  undone.mutable_deletion_range()->set_offset(-5);
-  undone.mutable_deletion_range()->set_length(5);
-  [controller_ processOutput:&undone client:mock_client_];
-  EXPECT_EQ([mock_client_ getCounter:"insertText:replacementRange:"], 1);
-  EXPECT_TRUE(NSEqualRanges([controller_ replacementRange], NSMakeRange(1, 5)));
 }
 
 TEST_F(MozcImkInputControllerTest, handleConfig) {
