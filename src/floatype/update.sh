@@ -12,7 +12,7 @@ app="/Library/Input Methods/floatype.app"
 plist="$app/Contents/Info.plist"
 
 log="$HOME/Library/Logs/floatype-update.log"
-echo "floatype: ビルドしています（変更が無ければ数秒、初回は数分。記録は ${log}）"
+echo "floatype: ビルドしています（記録は ${log}）"
 # Only errors are worth reading here; the full output goes to the log.
 build() {
   nix develop .. --command bash -c '

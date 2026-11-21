@@ -61,7 +61,7 @@ floatype の pkg には Apple の署名と公証がありません。そのた�
 
 ## 自分でビルドする
 
-Xcode と Nix が要ります。`src/floatype/update.sh` が、採点プロセスと zenz のモデル、足した辞書を用意してビルドし、この Mac に入れ直します（初回は数分、変更が無ければ数秒）。
+Xcode と Nix が要ります。`src/floatype/update.sh` が、採点プロセスと zenz のモデル、足した辞書を用意してビルドし、この Mac に入れ直します。
 
 ## ライセンス
 
