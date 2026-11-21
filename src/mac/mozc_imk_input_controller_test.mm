@@ -726,6 +726,45 @@ TEST_F(MozcImkInputControllerTest, ACommitTypesBackspaceOnlyWhereAskedAndNoTextS
   EXPECT_EQ(mock_client_.insertedRange.location, NSNotFound);
 }
 
+// The same against AppKit's own text view, the class most apps edit with: it
+// takes a replacement range that starts before the composition. The proxy an
+// input method reaches an app through is not part of this.
+TEST_F(MozcImkInputControllerTest, ACommitWritesAgainInAnAppKitTextView) {
+  const auto composing = [](NSString *before) {
+    NSTextView *view = [[NSTextView alloc] initWithFrame:NSMakeRect(0, 0, 300, 100)];
+    [view setString:before];
+    [view setSelectedRange:NSMakeRange([before length], 0)];
+    [view setMarkedText:@"めえｔ"
+           selectedRange:NSMakeRange(3, 0)
+        replacementRange:NSMakeRange(NSNotFound, 0)];
+    return view;
+  };
+  NSTextView *view = composing(@"a偽と");
+  ASSERT_TRUE([view respondsToSelector:@selector(attributedSubstringFromRange:)]);
+  ASSERT_TRUE([view respondsToSelector:@selector(markedRange)]);
+  ASSERT_TRUE([[view string] isEqualToString:@"a偽とめえｔ"]) << [[view string] UTF8String];
+  ASSERT_TRUE(NSEqualRanges([view markedRange], NSMakeRange(3, 3)));
+
+  commands::Output::Rewrite rewrite;
+  rewrite.set_before("偽と");
+  rewrite.set_after("nice to ");
+  EXPECT_TRUE([controller_ commitText:"meet " rewriting:rewrite client:(id)view]);
+  EXPECT_TRUE([[view string] isEqualToString:@"anice to meet "]) << [[view string] UTF8String];
+  EXPECT_FALSE([view hasMarkedText]);
+  EXPECT_TRUE(NSEqualRanges([view selectedRange], NSMakeRange(14, 0)));
+
+  // A commit with no rewrite replaces the composition alone.
+  view = composing(@"a偽と");
+  [controller_ commitText:"meet " client:(id)view];
+  EXPECT_TRUE([[view string] isEqualToString:@"a偽とmeet "]) << [[view string] UTF8String];
+
+  // Text that is something else before the composition is left alone.
+  view = composing(@"abc");
+  EXPECT_FALSE([controller_ commitText:"meet " rewriting:rewrite client:(id)view]);
+  EXPECT_TRUE([[view string] isEqualToString:@"abcめえｔ"]) << [[view string] UTF8String];
+  EXPECT_TRUE([view hasMarkedText]);
+}
+
 // A commit with no rewrite, and Undo's deletion range, are as before.
 TEST_F(MozcImkInputControllerTest, ACommitAndADeletionRangeWithoutARewrite) {
   [mock_client_ setAttributedString:[[NSAttributedString alloc] initWithString:@"a偽とめえｔ"]];
