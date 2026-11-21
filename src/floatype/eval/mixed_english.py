@@ -100,7 +100,8 @@ def replay(items, args):
   done = subprocess.run(
       [args.replay, "--live", "--mixed_english", f"--scorer={args.scorer}"]
       + (["--keys"] if items and is_typing(items[0]["set"]) else [])
-      + ([f"--model={args.model}"] if args.model else []),
+      + ([f"--model={args.model}"] if args.model else [])
+      + args.replay_flag,
       input="".join(f"{i['context']}\t{i['keys']}\n" for i in items),
       capture_output=True, encoding="utf-8", errors="replace", check=True)
   lines = done.stdout.splitlines()
@@ -140,6 +141,10 @@ def main():
   parser.add_argument("--replay", default="bazel-bin/floatype/eval/replay_main")
   parser.add_argument("--scorer", default="floatype/scorer/build/floatype_scorer")
   parser.add_argument("--model", help="the zenz model (default: replay_main's)")
+  parser.add_argument(
+      "--replay_flag", action="append", default=[],
+      help="a flag for replay_main, such as --mixed_english_rewrite=1; may be "
+      "given more than once")
   parser.add_argument(
       "--out", type=Path,
       help="write every item: set, category, left context, keys, expected, "

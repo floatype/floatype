@@ -89,6 +89,10 @@ ABSL_FLAG(bool, mixed_english_space_commits, true,
 ABSL_FLAG(bool, mixed_english_enter_commits, true,
           "the setting mixed_english_enter_commits: Enter before the pause "
           "commits an English word in letters");
+ABSL_FLAG(int, mixed_english_rewrite, 0,
+          "the setting mixed_english_rewrite: 1 or 2 writes again, as English, "
+          "the words committed before a word told it was English; the tool "
+          "then does what a client that reads its text back does");
 ABSL_FLAG(bool, mixed_english_leading_symbols, true,
           "the setting mixed_english_leading_symbols: symbols before the "
           "first word of a composition with no kana stay as typed");
@@ -304,6 +308,18 @@ class Replayer {
     return absl::StrJoin(values, "|");
   }
 
+  // Adds what `output` commits to `text`, writing again what it says to
+  // (commands::Output::rewrite), as a client that reads its text back does.
+  static void AppendCommitted(const commands::Output& output,
+                              std::string* text) {
+    if (output.has_result() && output.has_rewrite() &&
+        text->ends_with(output.rewrite().before())) {
+      text->resize(text->size() - output.rewrite().before().size());
+      text->append(output.rewrite().after());
+    }
+    text->append(output.result().value());
+  }
+
   // Types `reading` key by key as romaji after `left_context`, lets the timer
   // callbacks run where the user pauses, and commits with Enter.
   std::string ReplayLive(absl::string_view left_context,
@@ -336,12 +352,17 @@ class Replayer {
         input.mutable_context()->set_preceding_text(
             absl::StrCat(left_context, before));
       }
+      // A client that can delete what it committed, as most apps can.
+      if (absl::GetFlag(FLAGS_mixed_english_rewrite) > 0) {
+        input.mutable_capability()->set_text_deletion(
+            commands::Capability::DELETE_PRECEDING_TEXT);
+      }
       commands::Output output = Eval(std::move(input));
-      before += output.result().value();
+      AppendCommitted(output, &before);
       if (pause && output.has_callback()) {
         polls += RunCallbacks(output, changes);
         // A callback may commit too (a direct commit that waited for zenz).
-        before += output.result().value();
+        AppendCommitted(output, &before);
         // Three in a row: one or two may be a syllable still being typed.
         int run = 0, longest = 0;
         for (const char c : Preedit(output)) {
@@ -379,9 +400,10 @@ class Replayer {
       clear_prediction.set_type(commands::Input::CLEAR_USER_PREDICTION);
       Eval(std::move(clear_prediction));
     }
-    return before + committed.result().value() + '\t' +
-           committed.result().key() + '\t' + std::to_string(polls) + '\t' +
-           std::to_string(changes) + '\t' + std::to_string(words);
+    AppendCommitted(committed, &before);
+    return before + '\t' + committed.result().key() + '\t' +
+           std::to_string(polls) + '\t' + std::to_string(changes) + '\t' +
+           std::to_string(words);
   }
 
   void SetConfig(int wait_for_zenz, bool zenz_teaches_mozc = false) {
@@ -398,6 +420,8 @@ class Replayer {
         absl::GetFlag(FLAGS_mixed_english_enter_commits));
     input.mutable_config()->set_mixed_english_leading_symbols(
         absl::GetFlag(FLAGS_mixed_english_leading_symbols));
+    input.mutable_config()->set_mixed_english_rewrite(
+        absl::GetFlag(FLAGS_mixed_english_rewrite));
     input.mutable_config()->set_display_ambiguous_romaji(
         absl::GetFlag(FLAGS_display_ambiguous));
     input.mutable_config()->set_suggest_added_words(
