@@ -444,12 +444,19 @@ class Session {
   // Mixed English input, around Backspace. Beside a word kept in letters the
   // composer goes on in letters for good, as Mozc does beside letters typed
   // in a mode of letters (sits, Backspace, agaki stayed sitagaki instead of
-  // したがき). Before the key: where the composition ends in such a word, its
-  // keys are typed again as kana but for its last letter, which Backspace
-  // then deletes as it shows. Returns whether Hiragana is to be set again
-  // after the key, which EndBackspaceInKana() does.
-  bool BeginBackspaceInKana();
-  void EndBackspaceInKana(commands::Command* command);
+  // したがき). Before the key, where the composition ends in such a word:
+  // - what is left of it is a word too (take of takes, sit of sits): it stays
+  //   in letters, and `typed` gets its keys as kana where a letter of them
+  //   is left over, for the next letter key to go on from (しt, then a);
+  // - else its keys are typed again as kana but for the last letter, which
+  //   Backspace then deletes as it shows (update to うpだt).
+  // Returns whether EndBackspaceInKana() is to follow the key: it sets
+  // Hiragana again and keeps `typed` as english_undo_.
+  bool BeginBackspaceInKana(std::optional<composer::Composer>* typed);
+  void EndBackspaceInKana(std::optional<composer::Composer> typed,
+                          commands::Command* command);
+  // english_undo_ is from a Backspace, not from a live conversion.
+  bool english_undo_after_backspace_ = false;
   // SendKey() but for TypeLettersHalfWidth().
   bool SendKeyInternal(commands::Command* command);
   // Where the setting has letters typed half width (the rule for "A", the

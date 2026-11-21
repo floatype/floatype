@@ -2079,20 +2079,21 @@ TEST_F(FloatypeZenzTest, MixedEnglishGoesOnInKanaAfterBackspace) {
   *input.mutable_config() = config;
   Eval(std::move(input));
 
-  // A typo of した that is a word: one letter goes, as it shows, and the rest
-  // is the kana typed.
+  // A typo of した that is a word. What is left is a word too, so it stays in
+  // letters; the next letter goes on from the kana typed.
   ASSERT_EQ(Preedit(PollWhileAsked(CallBack(SendKeys({"s", "i", "t", "s"})))),
             "sits");
-  EXPECT_EQ(Preedit(SendKeys({"Backspace"})), "しt");
+  EXPECT_EQ(Preedit(SendKeys({"Backspace"})), "sit");
   EXPECT_EQ(Preedit(SendKeys({"a", "g", "a", "k", "i"})), "したがき");
   SendKeys({"Escape"});
   SendKeys({"Escape"});
 
-  // The keys before the letter are the kana they typed.
+  // A word whose keys are all kana stays the word, and kana follow it.
   ASSERT_EQ(
       Preedit(PollWhileAsked(CallBack(SendKeys({"n", "o", "t", "e", "s"})))),
       "notes");
-  EXPECT_EQ(Preedit(SendKeys({"Backspace"})), "のて");
+  EXPECT_EQ(Preedit(SendKeys({"Backspace"})), "note");
+  EXPECT_EQ(Preedit(SendKeys({"w", "o"})), "noteを");
   SendKeys({"Escape"});
   SendKeys({"Escape"});
 

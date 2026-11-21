@@ -685,11 +685,13 @@ bool Session::TestSendKey(commands::Command* command) {
 bool Session::SendKey(commands::Command* command) {
   const ImeContext::State state = context_->state();
   const commands::KeyEvent& key = command->input().key();
+  std::optional<composer::Composer> typed;
   const bool in_kana = key.special_key() == commands::KeyEvent::BACKSPACE &&
-                       key.modifier_keys_size() == 0 && BeginBackspaceInKana();
+                       key.modifier_keys_size() == 0 &&
+                       BeginBackspaceInKana(&typed);
   const bool result = SendKeyInternal(command);
   if (in_kana) {
-    EndBackspaceInKana(command);
+    EndBackspaceInKana(std::move(typed), command);
   }
   TypeLettersHalfWidth(state, command);
   return result;
@@ -735,7 +737,7 @@ void Session::TypeLettersHalfWidth(ImeContext::State before,
   }
 }
 
-bool Session::BeginBackspaceInKana() {
+bool Session::BeginBackspaceInKana(std::optional<composer::Composer>* typed) {
   composer::Composer* composer = context_->mutable_composer();
   const transliteration::TransliterationType mode = composer->GetInputMode();
   // shortcut: only where every key types the same whatever came before it,
@@ -767,6 +769,23 @@ bool Session::BeginBackspaceInKana() {
   // A letter that shows as typed where the keys type something else: the end
   // of a word kept in letters.
   if (shown.back() == raw.back() && type(raw).GetStringForPreedit() != shown) {
+    size_t letters = 0;
+    while (letters < shown.size() &&
+           absl::ascii_islower(
+               static_cast<unsigned char>(shown[shown.size() - 1 - letters]))) {
+      ++letters;
+    }
+    const absl::string_view left =
+        absl::string_view(shown).substr(shown.size() - letters, letters - 1);
+    if (left.size() >= 3 && floatype::CurrentEnglishWords()->Contains(left)) {
+      composer::Composer keys =
+          type(absl::string_view(raw).substr(0, raw.size() - 1));
+      const std::string query = keys.GetQueryForConversion();
+      if (absl::ascii_isalpha(static_cast<unsigned char>(query.back()))) {
+        *typed = std::move(keys);
+      }
+      return true;
+    }
     composer::Composer again =
         type(absl::string_view(raw).substr(0, raw.size() - 1));
     again.SetTemporaryInputMode(transliteration::HALF_ASCII);
@@ -778,22 +797,32 @@ bool Session::BeginBackspaceInKana() {
   return true;
 }
 
-void Session::EndBackspaceInKana(commands::Command* command) {
+void Session::EndBackspaceInKana(std::optional<composer::Composer> typed,
+                                 commands::Command* command) {
   composer::Composer* composer = context_->mutable_composer();
-  if (context_->state() != ImeContext::COMPOSITION ||
-      composer->GetInputMode() == transliteration::HIRAGANA) {
+  if (context_->state() != ImeContext::COMPOSITION) {
     return;
   }
-  // After kana deleted beside a word kept in letters (update を).
-  composer->SetInputMode(transliteration::HIRAGANA);
-  OutputMode(command);
+  if (typed.has_value()) {
+    english_undo_ = std::move(typed);
+    english_undo_after_backspace_ = true;
+  }
+  // After kana deleted beside a word kept in letters (update を), or a letter
+  // of it.
+  if (composer->GetInputMode() != transliteration::HIRAGANA) {
+    composer->SetInputMode(transliteration::HIRAGANA);
+    OutputMode(command);
+  }
 }
 
 bool Session::SendKeyInternal(commands::Command* command) {
   // floatype: a letter right after a live conversion that kept a word ending
   // in loose letters goes on with the keys as typed.
-  if (std::optional<composer::Composer> typed = std::exchange(english_undo_, std::nullopt);
-      typed.has_value() && live_conversion_) {
+  const bool after_backspace =
+      std::exchange(english_undo_after_backspace_, false);
+  if (std::optional<composer::Composer> typed =
+          std::exchange(english_undo_, std::nullopt);
+      typed.has_value() && (live_conversion_ || after_backspace)) {
     const commands::KeyEvent& key = command->input().key();
     // ー follows kana, never letters: after a word typed wholly into kana
     // (のて shown as note), its key goes on in kana too (のてーま).
