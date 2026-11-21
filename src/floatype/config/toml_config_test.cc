@@ -183,6 +183,14 @@ TEST(UpdateTomlConfigTest, ReadsBackWhatItWrites) {
   config.add_overlay_keymaps(Config::MSIME);
   config.set_direct_commit_characters("。\"\\");
   config.set_custom_roman_table("a\tあ\n\"b\"\tび\n'c'\n");
+  // The settings of 2026-11-21, each away from its default.
+  config.set_zenz_teaches_mozc(true);
+  config.set_zenz_remembered_min_chars(7);
+  config.set_zenz_context_from_commits(false);
+  config.set_mixed_english_space_commits(false);
+  config.set_mixed_english_enter_commits(false);
+  config.set_mixed_english_leading_symbols(false);
+  config.set_mixed_english_rewrite(2);
   config.mutable_information_list_config()->set_use_local_usage_dictionary(
       false);
   config.mutable_indicator_style()->set_placement(
