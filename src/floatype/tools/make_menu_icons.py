@@ -31,7 +31,8 @@ F_BOX = (225, 196, 855, 884)
 # (character, horizontal scale, framed). Half-width ASCII is drawn narrower so
 # that it differs from full-width.
 MODES = {
-    "hiragana": ("あ", 1.0, True),
+    # The Japanese mode is floatype itself: the F alone, in the middle.
+    "hiragana": ("", 1.0, True),
     "full_katakana": ("ア", 1.0, True),
     "half_katakana": ("ｱ", 1.0, True),
     "full_ascii": ("Ａ", 1.0, True),
@@ -76,9 +77,16 @@ def draw_char(img, char, cx, cy, height, xscale):
 def render(char, xscale, framed):
     w, h = WIDTH * SS, HEIGHT * SS
     marks = Image.new("L", (w, h), 0)
-    # The F on the left, the character on the right.
-    draw_f(ImageDraw.Draw(marks), w * 0.17, h * 0.27, h * 0.46, weight=0.60)
-    draw_char(marks, char, w * 0.68, h * 0.50, h * 0.48, xscale)
+    if char:
+        # The F on the left, the character on the right.
+        draw_f(ImageDraw.Draw(marks), w * 0.17, h * 0.27, h * 0.46,
+               weight=0.60)
+        draw_char(marks, char, w * 0.68, h * 0.50, h * 0.48, xscale)
+    else:
+        f_height = h * 0.56
+        f_width = f_height * (F_BOX[2] - F_BOX[0]) / (F_BOX[3] - F_BOX[1])
+        draw_f(ImageDraw.Draw(marks), (w - f_width) / 2, (h - f_height) / 2,
+               f_height, weight=0.60)
     if not framed:
         return marks
     # A filled badge with the marks cut out, like macOS's own input sources:
