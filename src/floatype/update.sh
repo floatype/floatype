@@ -14,7 +14,8 @@ plist="$app/Contents/Info.plist"
 log="$HOME/Library/Logs/floatype-update.log"
 echo "floatype: ビルドしています（変更が無ければ数秒、初回は数分。記録は ${log}）"
 # Only errors are worth reading here; the full output goes to the log.
-if ! nix develop .. --command bash -c '
+build() {
+  nix develop .. --command bash -c '
   set -euo pipefail
   cmake -S floatype/scorer -B floatype/scorer/build -DCMAKE_BUILD_TYPE=Release
   cmake --build floatype/scorer/build -j --target floatype_scorer zenz_repacked
@@ -24,7 +25,20 @@ if ! nix develop .. --command bash -c '
   # Warnings come from upstream Mozc and Xcode; errors still show.
   bazelisk build --config release_build --define=floatype_zenz=bundle \
     --output_filter=DONT_MATCH_ANYTHING package
-' >"$log" 2>&1; then
+  ' >"$log" 2>&1
+}
+# A Bazel server left from before a logout cannot read the new login's
+# environment ("Failed to initialize sandbox: getconf failed"): stop it and
+# build once more.
+built=0
+build || built=$?
+if [ "$built" -ne 0 ] && grep -q "Failed to initialize sandbox" "$log"; then
+  echo "floatype: 前のログインのビルドサーバーが残っていたので、止めてやり直します"
+  nix develop .. --command bazelisk shutdown >/dev/null 2>&1 || true
+  built=0
+  build || built=$?
+fi
+if [ "$built" -ne 0 ]; then
   errors="$(grep -E "error:|ERROR:|Error|Traceback" "$log" | tail -20 || true)"
   echo "${errors:-$(tail -30 "$log")}"
   echo "floatype: ビルドに失敗しました。全体は ${log} にあります。"
