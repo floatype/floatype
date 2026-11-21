@@ -83,10 +83,10 @@ def render(char, xscale, framed):
                weight=0.60)
         draw_char(marks, char, w * 0.68, h * 0.50, h * 0.48, xscale)
     else:
-        f_height = h * 0.56
+        f_height = h * 0.66
         f_width = f_height * (F_BOX[2] - F_BOX[0]) / (F_BOX[3] - F_BOX[1])
         draw_f(ImageDraw.Draw(marks), (w - f_width) / 2, (h - f_height) / 2,
-               f_height, weight=0.60)
+               f_height, weight=1.0)
     if not framed:
         return marks
     # A filled badge with the marks cut out, like macOS's own input sources:

@@ -2,4 +2,4 @@
 
 CFBundleName = "${CF_BUNDLE_NAME_JA}";
 NSHumanReadableCopyright = "${NS_HUMAN_READABLE_COPYRIGHT}";
-com.apple.inputmethod.Japanese = "ひらがな (${INPUT_MODE_ANNOTATION})";
+com.apple.inputmethod.Japanese = "${INPUT_MODE_ANNOTATION}";
