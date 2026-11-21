@@ -81,10 +81,16 @@ jobs:
         # The version is version.bzl's: floatype's, then the Mozc it is built on
         # (0.1.0+mozc.3.35.6354). A tag must name the floatype part (v0.1.0).
         run: |
-          props=src/bazel-bin/base/mozc_version.txt
-          get() { sed -n "s/^$1=//p" "$props"; }
+          # Read from version.bzl itself: bazel-bin holds no mozc_version.txt
+          # after a build with --macos_cpus (it is made for another
+          # configuration), which failed the first tagged run.
+          get() { sed -n "s/^$1 = \([0-9][0-9]*\)$/\1/p" src/version.bzl; }
           short="$(get FLOATYPE_MAJOR).$(get FLOATYPE_MINOR).$(get FLOATYPE_PATCH)"
-          version="$short+mozc.$(get MAJOR).$(get MINOR).$(get BUILD)"
+          version="$short+mozc.$(get MAJOR).$(get MINOR).$(get BUILD_OSS)"
+          case "$version" in
+            [0-9]*.[0-9]*.[0-9]*+mozc.[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "::error::cannot read the version from version.bzl: $version"; exit 1 ;;
+          esac
           if [ "$REF_TYPE" = tag ]; then
             if [ "$REF_NAME" != "v$short" ]; then
               echo "::error::tag $REF_NAME does not match version.bzl (v$short)"
