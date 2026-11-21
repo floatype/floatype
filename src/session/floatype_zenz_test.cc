@@ -18,6 +18,7 @@
 #include "base/system_util.h"
 #include "composer/key_parser.h"
 #include "config/config_handler.h"
+#include "engine/engine.h"
 #include "engine/mock_data_engine_factory.h"
 #include "floatype/zenz/scorer_client.h"
 #include "floatype/zenz/zenz_corrector.h"
@@ -77,8 +78,9 @@ class FloatypeZenzTest : public testing::SessionHandlerTestBase {
         std::vector<std::string>{::mozc::testing::GetSourceFileOrDie(
                                      {"floatype", "zenz", "fake_scorer"}),
                                  answers_});
-    handler_ = std::make_unique<SessionHandler>(
-        MockDataEngineFactory::Create().value());
+    std::unique_ptr<Engine> engine = MockDataEngineFactory::Create().value();
+    engine_ = engine.get();
+    handler_ = std::make_unique<SessionHandler>(std::move(engine));
     StartSession(/*zenz=*/true);
   }
 
@@ -93,6 +95,10 @@ class FloatypeZenzTest : public testing::SessionHandlerTestBase {
   }
 
   commands::Output Eval(commands::Input input) {
+    // The input history loads and saves on a thread (after a settings change,
+    // and when a session goes), and a commit while it does is not learned. A
+    // user's keys come long after; the test's come at once, so it waits.
+    engine_->Wait();
     commands::Command command;
     *command.mutable_input() = std::move(input);
     command.mutable_input()->set_id(id_);
@@ -268,6 +274,7 @@ class FloatypeZenzTest : public testing::SessionHandlerTestBase {
   std::string answers_;
   std::unique_ptr<floatype::ScorerClient> client_;
   std::unique_ptr<SessionHandler> handler_;
+  Engine* engine_ = nullptr;  // Owned by handler_.
   uint64_t id_ = 0;
 };
 

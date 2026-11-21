@@ -716,6 +716,7 @@ mozc_cc_test(
         "//base:system_util",
         "//composer:key_parser",
         "//config:config_handler",
+        "//engine",
         "//engine:mock_data_engine_factory",
         "//floatype/zenz:scorer_client",
         "//floatype/zenz:zenz_corrector",
