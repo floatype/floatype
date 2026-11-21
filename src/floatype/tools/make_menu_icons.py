@@ -1,16 +1,17 @@
 """Renders floatype's menu bar icons as template images: the floatype F mark
-with the input mode's character in its lower right, both cut out of a filled
-rounded square of the size and corners of macOS's own input sources (direct
-input has no badge).
+with the input mode's character beside it, both cut out of a filled rounded
+rectangle of the size and corners of macOS's own input sources (direct input
+has no badge).
 
-macOS's own icons (ABC's A, the Japanese input's あ) are 16x16 points and fill
-their canvas: see Hiragana.tiff and Roman.tiff inside
-/System/Library/Input Methods/JapaneseIM-RomajiTyping.app. A wider icon stands
-out beside them in the menu bar.
+macOS draws its own icons (ABC's A, the Japanese input's あ) 22x16 points in
+the menu bar and in the input menu: measured on a screenshot of the menu,
+where they are 44x32 pixels at 2x. The TIFFs inside
+/System/Library/Input Methods/JapaneseIM-RomajiTyping.app are 16x16, which is
+not what shows; a 16x16 icon looks small beside them.
 
 Run from src/ on macOS (Hiragino Maru Gothic and tiffutil come with the system):
   uv run --with pillow python floatype/tools/make_menu_icons.py
-It writes data/images/mac/<mode>.tiff with 16x16 and 32x32 images, and a
+It writes data/images/mac/<mode>.tiff with 22x16 and 44x32 images, and a
 preview of light and dark menu bars to /tmp/floatype-menu-icons/preview.png.
 """
 import subprocess
@@ -20,7 +21,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 FONT = "/System/Library/Fonts/ヒラギノ丸ゴ ProN W4.ttc"
-WIDTH, HEIGHT = 16, 16  # The size of macOS's own input source icons.
+WIDTH, HEIGHT = 22, 16  # The size macOS draws its own input sources at.
 SS = 16  # Supersampling factor.
 # The floatype F: a polyline stroked with round caps and joins, traced from the
 # 1080px logo.
@@ -75,9 +76,9 @@ def draw_char(img, char, cx, cy, height, xscale):
 def render(char, xscale, framed):
     w, h = WIDTH * SS, HEIGHT * SS
     marks = Image.new("L", (w, h), 0)
-    # The F's lower right is empty, where the character sits.
-    draw_f(ImageDraw.Draw(marks), w * 0.10, h * 0.12, h * 0.50, weight=0.85)
-    draw_char(marks, char, w * 0.71, h * 0.69, h * 0.44, xscale)
+    # The F on the left, the character on the right.
+    draw_f(ImageDraw.Draw(marks), w * 0.11, h * 0.19, h * 0.62, weight=0.85)
+    draw_char(marks, char, w * 0.72, h * 0.52, h * 0.56, xscale)
     if not framed:
         return marks
     # A filled badge with the marks cut out, like macOS's own input sources:
