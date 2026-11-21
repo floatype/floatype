@@ -205,7 +205,7 @@ Mozc の文節のままでは書けない答えは、文節を区切り直して
     - `mixed_english_space_commits`：英単語のあとの Space で、変換せずに確定して半角の空白を入れる。オフにすると、Space は Mozc と同じく変換する（update + Space で update が変換として出て、Enter で確定する。空白は入らない）。空白で区切って英語を続けて打つ動き（meet you、git commit -m）は、これがオンのときだけ。
     - `mixed_english_enter_commits`：英単語のあと、手を止める前に Enter を押しても英字で確定する。オフにすると、画面に出ているとおりに確定する（うpだて）。
     - `mixed_english_leading_symbols`：かなが 1 つも無い入力の、頭の記号を打ったとおりにする（/review、--help、@src/app.ts）。オフにすると、頭の記号は記号の設定に従う（・review、ーーhelp、＠src/app.ts）。語の間の記号（config.toml、src/main）は変わらない。空白で区切って英語を打っているときの引数（git commit のあとの -m、--help のあとに Space）は、オフでも打ったとおり。
-  - 空白で区切って打つ英文（nice to meet you）は扱わない。最初の語が日本語として確定されるので、偽とmeet you になる。英文は、英数キーで macOS の ABC に切り替えて打つ。確定した語をあとから英字に書き直す試作（`mixed_english_rewrite`）は、2026-11-21 に実機で試してやめ、設定ごと消した。ターミナルでは動いたが、純正のメモと TextEdit では二重になり（偽とnice to meet you）、直した版も、確定した文字があとから書き換わる動きが受け入れられなかった。日本語を 1 語ずつ変換する打ち方で 俺python が ore python になる害もあった。
+  - 空白で区切って打つ英文（nice to meet you）は扱わない。最初の語が日本語として確定されるので、偽とmeet you になる。英文は、英数キーで macOS の ABC に切り替えて打つ。確定した語をあとから英字に書き直す試作（`mixed_english_rewrite`）は、2026-11-21 に実機で試してやめ、設定ごと消した。ターミナルでは動いたが、純正のメモと TextEdit では二重になった（偽とnice to meet you）。先に確定してから置き換える形に作り直したが、確定した文字があとから書き換わる動きそのものを利用者が望まず、やめた。空白で区切って英語を続ける動き（英単語のあとの Space で確定し、次の語も英字で続く。meet you、git commit -m）は、そのまま残る。日本語を 1 語ずつ変換する打ち方で 俺python が ore python になる害もあった。
   - 文の途中でも単語ごとに見る。「きょうは update する」は 今日はupdateする、「update を」は updateを になる。
   - 手を止めた（ライブ変換）か変換したときに、その語を打ったとおりの英字に置き換える。そのあと打つかなは、英字のあとに かな で続く。Backspace は英字を 1 字ずつ消す。
   - 英単語の最後の子音が次のかなとつながったときも拾う（test + する は てsつる、email + を は えまいlwお と出るが、testする、emailを になる）。
