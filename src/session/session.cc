@@ -684,7 +684,13 @@ bool Session::TestSendKey(commands::Command* command) {
 
 bool Session::SendKey(commands::Command* command) {
   const ImeContext::State state = context_->state();
+  const commands::KeyEvent& key = command->input().key();
+  const bool in_kana = key.special_key() == commands::KeyEvent::BACKSPACE &&
+                       key.modifier_keys_size() == 0 && BeginBackspaceInKana();
   const bool result = SendKeyInternal(command);
+  if (in_kana) {
+    EndBackspaceInKana(command);
+  }
   TypeLettersHalfWidth(state, command);
   return result;
 }
@@ -727,6 +733,60 @@ void Session::TypeLettersHalfWidth(ImeContext::State before,
   if (before == ImeContext::COMPOSITION && output->has_result()) {
     half(output->mutable_result()->mutable_value());
   }
+}
+
+bool Session::BeginBackspaceInKana() {
+  composer::Composer* composer = context_->mutable_composer();
+  const transliteration::TransliterationType mode = composer->GetInputMode();
+  // shortcut: only where every key types the same whatever came before it,
+  // at the end, in Hiragana; with a capital or a symbol typed, Backspace is
+  // Mozc's, to upgrade when such a composition is seen to stay in letters.
+  const std::string raw = composer->GetRawString();
+  if (!floatype::SessionFeaturesEnabled() ||
+      !context_->GetConfig().mixed_english() ||
+      (context_->state() != ImeContext::COMPOSITION &&
+       !(live_conversion_ && context_->state() == ImeContext::CONVERSION)) ||
+      mode != transliteration::HIRAGANA ||
+      composer->GetComebackInputMode() != mode ||
+      composer->GetCursor() != composer->GetLength() || raw.empty() ||
+      !std::all_of(raw.begin(), raw.end(), [](char c) {
+        return absl::ascii_islower(static_cast<unsigned char>(c)) ||
+               absl::ascii_isdigit(static_cast<unsigned char>(c)) || c == '-';
+      })) {
+    return false;
+  }
+  const auto type = [composer](absl::string_view keys) {
+    composer::Composer again = *composer;
+    again.EditErase();
+    for (const char c : keys) {
+      again.InsertCharacter(std::string(1, c));
+    }
+    return again;
+  };
+  const std::string shown = composer->GetStringForPreedit();
+  // A letter that shows as typed where the keys type something else: the end
+  // of a word kept in letters.
+  if (shown.back() == raw.back() && type(raw).GetStringForPreedit() != shown) {
+    composer::Composer again =
+        type(absl::string_view(raw).substr(0, raw.size() - 1));
+    again.SetTemporaryInputMode(transliteration::HALF_ASCII);
+    again.InsertCharacter(std::string(1, raw.back()));
+    again.SetInputMode(mode);
+    *composer = std::move(again);
+    english_undo_.reset();
+  }
+  return true;
+}
+
+void Session::EndBackspaceInKana(commands::Command* command) {
+  composer::Composer* composer = context_->mutable_composer();
+  if (context_->state() != ImeContext::COMPOSITION ||
+      composer->GetInputMode() == transliteration::HIRAGANA) {
+    return;
+  }
+  // After kana deleted beside a word kept in letters (update を).
+  composer->SetInputMode(transliteration::HIRAGANA);
+  OutputMode(command);
 }
 
 bool Session::SendKeyInternal(commands::Command* command) {

@@ -1853,13 +1853,15 @@ TEST_F(FloatypeZenzTest, MixedEnglishKeepsAWordWhenTypingOn) {
   EXPECT_EQ(Preedit(typed), "updateを");
   EXPECT_FALSE(typed.indicator().english()) << "the caret follows を";
   EXPECT_EQ(Preedit(PollWhileAsked(CallBack(typed))), "updateを");
-  // Backspace edits the letters as typed.
+  // Backspace leaves the word in letters while it is whole. A letter off it,
+  // it is the keys typed again, so that typing goes on in kana (see
+  // MixedEnglishGoesOnInKanaAfterBackspace).
   SendKeys({"Escape"});
   const commands::Output back = SendKeys({"Backspace"});
   EXPECT_EQ(Preedit(back), "update");
   EXPECT_TRUE(back.indicator().english());
-  EXPECT_EQ(Preedit(SendKeys({"Backspace"})), "updat");
-  EXPECT_EQ(SendKeys({"Enter"}).result().value(), "updat");
+  EXPECT_EQ(Preedit(SendKeys({"Backspace"})), "うpだt");
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(), "うpだt");
 }
 
 // Enter before the pause that would show the word in letters commits the
@@ -2064,6 +2066,49 @@ TEST_F(FloatypeZenzTest, MixedEnglishUndoesAWordWhenTheSyllableGoesOn) {
             "keyboard");
   EXPECT_EQ(Preedit(PollWhileAsked(CallBack(SendKeys({"w", "o"})))),
             "keyboardを");
+}
+
+// Backspace after a word was kept in letters: typing goes on in kana, not in
+// letters for good (sits, Backspace, agaki stayed sitagaki).
+TEST_F(FloatypeZenzTest, MixedEnglishGoesOnInKanaAfterBackspace) {
+  floatype::EnableSessionFeatures(true);
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_mixed_english(true);
+  commands::Input input;
+  input.set_type(commands::Input::SET_CONFIG);
+  *input.mutable_config() = config;
+  Eval(std::move(input));
+
+  // A typo of した that is a word: one letter goes, as it shows, and the rest
+  // is the kana typed.
+  ASSERT_EQ(Preedit(PollWhileAsked(CallBack(SendKeys({"s", "i", "t", "s"})))),
+            "sits");
+  EXPECT_EQ(Preedit(SendKeys({"Backspace"})), "しt");
+  EXPECT_EQ(Preedit(SendKeys({"a", "g", "a", "k", "i"})), "したがき");
+  SendKeys({"Escape"});
+  SendKeys({"Escape"});
+
+  // The keys before the letter are the kana they typed.
+  ASSERT_EQ(
+      Preedit(PollWhileAsked(CallBack(SendKeys({"n", "o", "t", "e", "s"})))),
+      "notes");
+  EXPECT_EQ(Preedit(SendKeys({"Backspace"})), "のて");
+  SendKeys({"Escape"});
+  SendKeys({"Escape"});
+
+  // Kana deleted after a word leaves the word in letters, and the next keys
+  // are kana again.
+  ASSERT_EQ(Preedit(PollWhileAsked(
+                CallBack(SendKeys({"u", "p", "d", "a", "t", "e"})))),
+            "update");
+  SendKeys({"w", "o"});
+  EXPECT_EQ(Preedit(SendKeys({"Backspace"})), "update");
+  EXPECT_EQ(Preedit(SendKeys({"n", "o"})), "updateの");
+  // Deleted back into the word, it is the keys typed.
+  SendKeys({"Backspace"});
+  EXPECT_EQ(Preedit(SendKeys({"Backspace"})), "うpだt");
+  EXPECT_EQ(Preedit(PollWhileAsked(CallBack(SendKeys({"e", "w", "o"})))),
+            "updateを");
 }
 
 TEST_F(FloatypeZenzTest, WithoutMixedEnglishAWordInsideJapaneseIsKana) {
