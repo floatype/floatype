@@ -83,6 +83,15 @@ ABSL_FLAG(bool, suggest, false,
           "after the last key, separated by |; with --live, after the pause "
           "that follows it");
 ABSL_FLAG(bool, mixed_english, false, "live mode: turn mixed English input on");
+ABSL_FLAG(bool, mixed_english_space_commits, true,
+          "the setting mixed_english_space_commits: Space after an English "
+          "word commits it and types a space");
+ABSL_FLAG(bool, mixed_english_enter_commits, true,
+          "the setting mixed_english_enter_commits: Enter before the pause "
+          "commits an English word in letters");
+ABSL_FLAG(bool, mixed_english_leading_symbols, true,
+          "the setting mixed_english_leading_symbols: symbols before the "
+          "first word of a composition with no kana stay as typed");
 ABSL_FLAG(bool, keys, false,
           "live mode: each reading is the keys to type, so a space is the "
           "Space key, a carriage return the Enter key, a shift-out character "
@@ -383,6 +392,12 @@ class Replayer {
         wait_for_zenz);
     input.mutable_config()->set_mixed_english(
         absl::GetFlag(FLAGS_mixed_english));
+    input.mutable_config()->set_mixed_english_space_commits(
+        absl::GetFlag(FLAGS_mixed_english_space_commits));
+    input.mutable_config()->set_mixed_english_enter_commits(
+        absl::GetFlag(FLAGS_mixed_english_enter_commits));
+    input.mutable_config()->set_mixed_english_leading_symbols(
+        absl::GetFlag(FLAGS_mixed_english_leading_symbols));
     input.mutable_config()->set_display_ambiguous_romaji(
         absl::GetFlag(FLAGS_display_ambiguous));
     input.mutable_config()->set_suggest_added_words(

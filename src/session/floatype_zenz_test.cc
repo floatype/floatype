@@ -1865,6 +1865,75 @@ TEST_F(FloatypeZenzTest, MixedEnglishEnterBeforeThePauseCommitsTheWord) {
   EXPECT_EQ(SendKeys({"Enter"}).result().value(), Preedit(typed));
 }
 
+// The parts of mixed English input that have their own settings, turned off
+// one at a time.
+TEST_F(FloatypeZenzTest, MixedEnglishWithOnePartTurnedOff) {
+  floatype::EnableSessionFeatures(true);
+  const auto set = [&](void (config::Config::*part)(bool)) {
+    config::Config config = config::ConfigHandler::DefaultConfig();
+    config.set_mixed_english(true);
+    config.set_use_live_conversion(false);
+    if (part != nullptr) {
+      (config.*part)(false);
+    }
+    commands::Input input;
+    input.set_type(commands::Input::SET_CONFIG);
+    *input.mutable_config() = config;
+    Eval(std::move(input));
+  };
+  const auto type = [&](absl::string_view keys) {
+    commands::Output output;
+    for (const char key : keys) {
+      output = SendKeys({std::string(1, key)});
+    }
+    return output;
+  };
+  const auto space = [&]() {
+    return PollWhileAsked(SendKeys({"Space"})).result().value();
+  };
+
+  // Space converts the word, as Mozc's Space does; Enter commits it with no
+  // space after it.
+  set(&config::Config::set_mixed_english_space_commits);
+  type("update");
+  const commands::Output converted = SendKeys({"Space"});
+  EXPECT_FALSE(converted.has_result());
+  EXPECT_EQ(Preedit(converted), "update");
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(), "update");
+  // The other two are as they were.
+  type("update");
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(), "update");
+  type("/review");
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(), "/review");
+
+  // Enter before the pause commits what the screen shows.
+  set(&config::Config::set_mixed_english_enter_commits);
+  const std::string typed = Preedit(type("update"));
+  EXPECT_NE(typed, "update");
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(), typed);
+  type("update");
+  EXPECT_EQ(space(), "update ");
+
+  // The symbol before the first word is the symbol settings'; one between
+  // words is as typed.
+  set(&config::Config::set_mixed_english_leading_symbols);
+  type("/review");
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(), "・review");
+  type("--help");
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(), "ーーhelp");
+  type("@src/app.ts");
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(), "＠src/app.ts");
+  type("src/main");
+  EXPECT_EQ(space(), "src/main ");
+  type("update");
+  EXPECT_EQ(SendKeys({"Enter"}).result().value(), "update");
+
+  // With all of them on, the head symbol is as typed.
+  set(nullptr);
+  type("/review");
+  EXPECT_EQ(space(), "/review ");
+}
+
 // English written word by word: the last word, with Enter before the pause,
 // is committed as the pause would have shown it.
 TEST_F(FloatypeZenzTest, MixedEnglishEnterBeforeThePauseEndsARunOfEnglish) {

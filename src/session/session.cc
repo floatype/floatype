@@ -2229,7 +2229,8 @@ bool Session::CommitInternal(commands::Command* command,
 
   PushUndoContext();
 
-  if (context_->state() == ImeContext::COMPOSITION) {
+  if (context_->state() == ImeContext::COMPOSITION &&
+      context_->GetConfig().mixed_english_enter_commits()) {
     // floatype: an English word is committed in its letters though the key
     // came before the pause that shows them (mixed English input): update,
     // not うｐだて, and v1.2.3, not ｖ1．2．3. It is what the pause would
@@ -2245,7 +2246,11 @@ bool Session::CommitInternal(commands::Command* command,
     if (!MaybeConvertAsEnglish(&shown) && floatype::SessionFeaturesEnabled() &&
         context_->GetConfig().mixed_english() &&
         mode != transliteration::HALF_ASCII &&
-        mode != transliteration::FULL_ASCII &&
+        mode != transliteration::FULL_ASCII && !query.empty() &&
+        // A symbol at the head that the setting leaves to the symbol
+        // settings (＠src) is not typed again here either.
+        (context_->GetConfig().mixed_english_leading_symbols() ||
+         absl::ascii_isalnum(static_cast<unsigned char>(query.front()))) &&
         std::all_of(query.begin(), query.end(),
                     [](char c) {
                       return absl::ascii_isgraph(static_cast<unsigned char>(c));
@@ -3262,10 +3267,22 @@ bool Session::KeepEnglishWordsIn(composer::Composer* composer,
       spans.push_back(std::move(name));
     }
   }
-  // With no kana left, the symbols between the words stay as typed too.
+  // With no kana left, the symbols between the words stay as typed too, and
+  // those before the first letter or digit where the setting says so.
+  const auto first = std::find_if(
+      view.raws.begin(), view.raws.end(), [](const std::string& raw) {
+        return std::any_of(raw.begin(), raw.end(), [](char c) {
+          return absl::ascii_isalnum(static_cast<unsigned char>(c));
+        });
+      });
+  const size_t leading = context_->GetConfig().mixed_english_leading_symbols()
+                             ? 0
+                             : static_cast<size_t>(first - view.raws.begin());
   for (floatype::EnglishSpan& symbol : floatype::SymbolsAsTyped(
            view.raws, view.query, view.preedit, spans, prose)) {
-    spans.push_back(std::move(symbol));
+    if (symbol.begin >= leading) {
+      spans.push_back(std::move(symbol));
+    }
   }
   if (spans.empty()) {
     return false;  // Moving the cursor would turn the mode to the letters'.
@@ -3316,6 +3333,14 @@ void Session::PreferTypedLetters() {
   // A / in the reading was typed as it is (IsSlashAfterAscii()); the symbol
   // setting's own is the middle dot.
   const bool slashes = context_->GetConfig().slash_after_ascii();
+  // A symbol at the head stays as typed where the setting says so, or where
+  // the composition already holds it as typed (-m in a run of English); ＠
+  // reads @ in the conversion's key though it was not typed again.
+  const std::string head = context_->composer().GetStringForPreedit();
+  const bool leading_symbols =
+      context_->GetConfig().mixed_english_leading_symbols() ||
+      (!head.empty() &&
+       absl::ascii_isgraph(static_cast<unsigned char>(head.front())));
   if (!floatype::SessionFeaturesEnabled() || (!letters && !slashes) ||
       context_->state() != ImeContext::CONVERSION) {
     return;
@@ -3358,7 +3383,8 @@ void Session::PreferTypedLetters() {
       }
       if (after < segments.size() && !segments[after].key().empty() &&
           alnum(segments[after].key().front()) &&
-          (before == 0 || alnum(segments[before - 1].key().back())) &&
+          (before == 0 ? leading_symbols
+                       : alnum(segments[before - 1].key().back())) &&
           (has_letter(segments[after].key()) ||
            (before > 0 && has_letter(segments[before - 1].key())))) {
         for (int c = 1; c < segment.candidates_size() && index == 0 &&
@@ -3473,6 +3499,7 @@ void Session::AppendCommittedSpace(commands::Command* command) {
 bool Session::TypeSpaceAfterEnglish(bool live, commands::Command* command) {
   if (!floatype::SessionFeaturesEnabled() ||
       !context_->GetConfig().mixed_english() ||
+      !context_->GetConfig().mixed_english_space_commits() ||
       !IsPureSpaceKey(command->input().key())) {
     return false;
   }

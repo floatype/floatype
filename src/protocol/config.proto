@@ -502,6 +502,19 @@ message Config {
   // left over and a word list, converts to its letters, and the indicator
   // shows あ or A for the word before the caret.
   optional bool mixed_english = 1017 [default = false];
+  // floatype, with mixed_english: Space after an English word commits it and
+  // types a half-width space, and while English goes on with spaces a word is
+  // English whatever kana its keys type (you, are). Off, Space converts, as
+  // Mozc's does.
+  optional bool mixed_english_space_commits = 1030 [default = true];
+  // floatype, with mixed_english: Enter before the pause that would show an
+  // English word in letters commits the letters (update, not うｐだて). Off,
+  // Enter commits what the screen shows.
+  optional bool mixed_english_enter_commits = 1031 [default = true];
+  // floatype, with mixed_english: in a composition with no kana, the symbols
+  // before its first letter or digit stay as typed (/review, --help). Off,
+  // they are what the symbol settings write (・review).
+  optional bool mixed_english_leading_symbols = 1032 [default = true];
   // floatype: romaji still open to a longer rule shows what it gives now (ん
   // for n, ます for ms with a custom ms rule) instead of the letters.
   optional bool display_ambiguous_romaji = 1018 [default = false];

@@ -748,6 +748,22 @@ void ConfigDialog::SetUpFloatypeSettings() {
       assist,
       "かなの入力中に打った英単語を英字のままにし、インジケータに あ / A "
       "を出す");
+  mixedEnglishSpaceCommitsCheckBox_ = AddCheckBox(
+      assist,
+      "　└ 英単語のあとの Space は、変換せずに確定して半角の空白を入れる");
+  mixedEnglishEnterCommitsCheckBox_ = AddCheckBox(
+      assist,
+      "　└ 英単語のあとすぐ Enter を押しても、英字で確定する（update）");
+  mixedEnglishLeadingSymbolsCheckBox_ = AddCheckBox(
+      assist,
+      "　└ かなの無い入力は、頭の記号も打ったとおりにする（/review、"
+      "--help）");
+  for (QCheckBox* box :
+       {mixedEnglishSpaceCommitsCheckBox_, mixedEnglishEnterCommitsCheckBox_,
+        mixedEnglishLeadingSymbolsCheckBox_}) {
+    connect(mixedEnglishCheckBox_, &QCheckBox::toggled, box,
+            &QWidget::setEnabled);
+  }
   slashAfterAsciiCheckBox_ = AddCheckBox(
       assist,
       "英字や数字のすぐ後の / を、・ ではなく / のまま打つ（2026/11/20、"
@@ -1332,6 +1348,15 @@ void ConfigDialog::ConvertFromProto(const config::Config& config) {
     directCommitCheckBoxes_[i]->setEnabled(config.use_direct_commit());
   }
   SET_CHECKBOX(mixedEnglishCheckBox_, mixed_english);
+  SET_CHECKBOX(mixedEnglishSpaceCommitsCheckBox_, mixed_english_space_commits);
+  SET_CHECKBOX(mixedEnglishEnterCommitsCheckBox_, mixed_english_enter_commits);
+  SET_CHECKBOX(mixedEnglishLeadingSymbolsCheckBox_,
+               mixed_english_leading_symbols);
+  for (QCheckBox* box :
+       {mixedEnglishSpaceCommitsCheckBox_, mixedEnglishEnterCommitsCheckBox_,
+        mixedEnglishLeadingSymbolsCheckBox_}) {
+    box->setEnabled(config.mixed_english());
+  }
   SET_CHECKBOX(slashAfterAsciiCheckBox_, slash_after_ascii);
   SET_CHECKBOX(suggestAddedWordsCheckBox_, suggest_added_words);
   SET_CHECKBOX(displayAmbiguousCheckBox_, display_ambiguous_romaji);
@@ -1460,6 +1485,10 @@ void ConfigDialog::ConvertToProto(config::Config* config) const {
   }
   config->set_direct_commit_characters(characters);
   GET_CHECKBOX(mixedEnglishCheckBox_, mixed_english);
+  GET_CHECKBOX(mixedEnglishSpaceCommitsCheckBox_, mixed_english_space_commits);
+  GET_CHECKBOX(mixedEnglishEnterCommitsCheckBox_, mixed_english_enter_commits);
+  GET_CHECKBOX(mixedEnglishLeadingSymbolsCheckBox_,
+               mixed_english_leading_symbols);
   GET_CHECKBOX(slashAfterAsciiCheckBox_, slash_after_ascii);
   GET_CHECKBOX(suggestAddedWordsCheckBox_, suggest_added_words);
   GET_CHECKBOX(displayAmbiguousCheckBox_, display_ambiguous_romaji);

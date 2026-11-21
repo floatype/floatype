@@ -87,6 +87,17 @@
 ## インジケータの右端に、いまの語を日本語（あ）と英字（A）のどちらで扱っているかを出す。
 # mixed_english = false
 
+## mixed_english がオンのときの動きを、1 つずつオフにできる（どれも既定はオン）。
+## 英単語のあとの Space は、変換せずに確定して半角の空白を入れる（update + Space で「update 」）。
+## 英語を空白で区切って続けて打てる（meet you）。オフなら Space は Mozc と同じく変換する。
+# mixed_english_space_commits = true
+## 英単語のあと、手を止めずに Enter を押しても英字で確定する（画面が うｐだて でも update）。
+## オフなら、画面に出ているとおりに確定する。
+# mixed_english_enter_commits = true
+## かなが 1 つも無い入力は、頭の記号も打ったとおりにする（/review、--help、@src/app.ts）。
+## オフなら、頭の記号は記号の設定に従う（・review）。語の間の記号（config.toml）は変わらない。
+# mixed_english_leading_symbols = true
+
 ## 英字や数字のすぐ後の / を、中黒（・）ではなく / のまま打つ（2026/11/20、確定した英単語のすぐ後）。
 ## mixed_english がオンなら、打っている途中の英単語の後でも効く（before/after、test/spec、src/）。
 ## かなの後や、何も打っていないときの / は今までどおり記号の設定（既定は ・）に従う。z/ はいつも ・。

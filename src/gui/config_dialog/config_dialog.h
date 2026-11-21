@@ -129,6 +129,12 @@ class ConfigDialog : public QDialog, private Ui::ConfigDialog {
   // One per character Mozkey offers, in kDirectCommitCharacters' order.
   std::vector<QCheckBox*> directCommitCheckBoxes_;
   QCheckBox* mixedEnglishCheckBox_;
+  // The parts of mixed English input that can be turned off one by one, in
+  // the order of the settings mixed_english_space_commits,
+  // mixed_english_enter_commits and mixed_english_leading_symbols.
+  QCheckBox* mixedEnglishSpaceCommitsCheckBox_;
+  QCheckBox* mixedEnglishEnterCommitsCheckBox_;
+  QCheckBox* mixedEnglishLeadingSymbolsCheckBox_;
   QCheckBox* slashAfterAsciiCheckBox_;
   QCheckBox* suggestAddedWordsCheckBox_;
   QCheckBox* kindMarkCheckBox_;
