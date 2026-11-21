@@ -406,7 +406,14 @@ std::pair<bool, absl::string_view> CharChunk::AddInputInternal(
     // A result was found, but it is still ambiguous.
     // e.g. "n" with "n->ん and na->な".
     pending_ = key;
-    ambiguous_ = entry->result();
+    // floatype: a rule that leaves keys pending ("ww" -> "っ" and "w", with
+    // "www" -> "w" and "ww") is fixed as typed: its result alone dropped a
+    // key (すごいww converted as すごいっ), and the keys are what shows.
+    if (entry->pending().empty()) {
+      ambiguous_ = entry->result();
+    } else {
+      ambiguous_.clear();
+    }
   }
 
   // If the lookup is deterministically done (e.g. fixed is true and input is

@@ -1566,6 +1566,19 @@ TEST_F(CompositionTest, GrassHack) {
 
   pos = composition_.InsertAt(pos, "e");
   EXPECT_EQ(composition_.GetString(), "ｗっうぇ");
+
+  // floatype: "ww" at the end converts as typed, not as "っ" alone.
+  composition_.Erase();
+  pos = composition_.InsertAt(0, "w");
+  pos = composition_.InsertAt(pos, "w");
+  EXPECT_EQ(composition_.GetString(), "ｗｗ");
+  EXPECT_EQ(composition_.GetStringWithTrimMode(FIX), "ｗｗ");
+  // "n" still fixes as "ん".
+  table_->AddRule("n", "ん", "");
+  table_->AddRule("na", "な", "");
+  composition_.Erase();
+  composition_.InsertAt(0, "n");
+  EXPECT_EQ(composition_.GetStringWithTrimMode(FIX), "ん");
 }
 
 TEST_F(CompositionTest, RulesForFirstKeyEvents) {
