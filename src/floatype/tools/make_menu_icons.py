@@ -63,7 +63,7 @@ def draw_char(img, char, cx, cy, height, xscale):
     size = int(height * 4.4)
     glyph = Image.new("L", (size, size), 0)
     g = ImageDraw.Draw(glyph)
-    bold = max(1, int(height * 0.07))  # Hiragino Maru comes in W4 only.
+    bold = max(1, int(height * 0.02))  # A little heavier than W4, as macOS's.
     l, t, r, b = g.textbbox((0, 0), char, font=font, stroke_width=bold)
     g.text((size / 2 - (l + r) / 2, size / 2 - (t + b) / 2), char, font=font,
            fill=255, stroke_width=bold, stroke_fill=255)
@@ -77,15 +77,15 @@ def render(char, xscale, framed):
     w, h = WIDTH * SS, HEIGHT * SS
     marks = Image.new("L", (w, h), 0)
     # The F on the left, the character on the right.
-    draw_f(ImageDraw.Draw(marks), w * 0.11, h * 0.19, h * 0.62, weight=0.85)
-    draw_char(marks, char, w * 0.72, h * 0.52, h * 0.56, xscale)
+    draw_f(ImageDraw.Draw(marks), w * 0.17, h * 0.27, h * 0.46, weight=0.60)
+    draw_char(marks, char, w * 0.68, h * 0.50, h * 0.48, xscale)
     if not framed:
         return marks
     # A filled badge with the marks cut out, like macOS's own input sources:
     # it fills the canvas, and its corners are theirs.
     img = Image.new("L", (w, h), 0)
     ImageDraw.Draw(img).rounded_rectangle((0, 0, w - 1, h - 1),
-                                          radius=h * 0.17, fill=255)
+                                          radius=h * 0.30, fill=255)
     img.paste(0, (0, 0), mask=marks)
     return img
 
