@@ -86,12 +86,15 @@ absl::StatusOr<UserDictionary::Entry> ParseEntry(absl::string_view line) {
   }
   const std::pair<absl::string_view, absl::string_view> pos = absl::StrSplit(
       absl::StripAsciiWhitespace(fields[2]), absl::MaxSplits(':', 1));
-  UserDictionary::Entry entry;
-  entry.set_pos(dictionary::UserPos::ToPosType(pos.first));
-  if (!UserDictionary::PosType_IsValid(entry.pos())) {
+  // Checked before it is set: a debug build stops on a value that is no type.
+  const UserDictionary::PosType type =
+      dictionary::UserPos::ToPosType(pos.first);
+  if (!UserDictionary::PosType_IsValid(type)) {
     return absl::InvalidArgumentError(
         absl::StrCat("品詞「", pos.first, "」はありません"));
   }
+  UserDictionary::Entry entry;
+  entry.set_pos(type);
   absl::string_view key = fields[0];
   *entry.mutable_key() = absl::ConsumePrefix(&key, kFullWidthHash)
                              ? absl::StrCat(kHash, key)
