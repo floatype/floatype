@@ -24,9 +24,13 @@ let pages = [
 
 public struct SettingsView: View {
   @ObservedObject var store: SettingsStore
-  @State private var page = pages[0]
+  @State private var page: Page
 
-  public init(store: SettingsStore) { self.store = store }
+  /// `page` names the page shown first ("general", "dictionary", ...).
+  public init(store: SettingsStore, page: String = "general") {
+    self.store = store
+    _page = State(initialValue: pages.first { $0.id == page } ?? pages[0])
+  }
 
   public var body: some View {
     HStack(spacing: 0) {
@@ -48,6 +52,10 @@ public struct SettingsView: View {
             } else {
               switch page.id {
               case "general": GeneralPage(store: store)
+              case "dictionary": DictionaryPage(store: store)
+              case "assist": AssistPage(store: store)
+              case "suggest": SuggestPage(store: store)
+              case "privacy": PrivacyPage(store: store)
               default: NotYetPage()
               }
             }
@@ -181,7 +189,8 @@ struct Switch: View {
   }
 }
 
-struct Milliseconds: View {
+/// A number with its unit, and a stepper.
+struct Amount: View {
   let value: Binding<Int>
   let range: ClosedRange<Int>
   let step: Int
@@ -189,7 +198,7 @@ struct Milliseconds: View {
 
   var body: some View {
     HStack(spacing: 6) {
-      Text("\(value.wrappedValue) \(unit)")
+      Text(unit.isEmpty ? "\(value.wrappedValue)" : "\(value.wrappedValue) \(unit)")
         .monospacedDigit()
       Stepper("", value: value, in: range, step: step).labelsHidden()
     }
@@ -256,11 +265,11 @@ struct GeneralPage: View {
           Switch(isOn: store.bool("use_live_conversion"))
         }
         Row(title: "変換するまでの待ち時間") {
-          Milliseconds(value: store.number("live_conversion_delay_millisec"),
+          Amount(value: store.number("live_conversion_delay_millisec"),
                        range: 0...2000, step: 10)
         }.disabled(!live)
         Row(title: "変換を始める文字数") {
-          Milliseconds(value: store.number("live_conversion_min_chars"),
+          Amount(value: store.number("live_conversion_min_chars"),
                        range: 1...10, step: 1, unit: "文字")
         }.disabled(!live)
       }
@@ -269,13 +278,13 @@ struct GeneralPage: View {
           Switch(isOn: store.bool("use_zenz"))
         }
         Row(title: "zenz に頼むまでの待ち時間") {
-          Milliseconds(value: store.number("zenz_delay_millisec"), range: 0...5000, step: 10)
+          Amount(value: store.number("zenz_delay_millisec"), range: 0...5000, step: 10)
         }.disabled(!zenz)
         Row(title: "答えを待つ上限") {
-          Milliseconds(value: store.number("zenz_timeout_millisec"), range: 50...5000, step: 50)
+          Amount(value: store.number("zenz_timeout_millisec"), range: 50...5000, step: 50)
         }.disabled(!zenz)
         Row(title: "ライブ変換で zenz の答えを待つ上限", detail: "0 で待たない") {
-          Milliseconds(value: store.number("live_conversion_waits_for_zenz_millisec"),
+          Amount(value: store.number("live_conversion_waits_for_zenz_millisec"),
                        range: 0...1000, step: 10)
         }.disabled(!zenz)
         Row(title: "直前に確定した文を zenz に見せる",
@@ -283,6 +292,7 @@ struct GeneralPage: View {
           Switch(isOn: store.bool("zenz_context_from_commits"))
         }.disabled(!zenz)
       }
+      InputAssistGroup(store: store)
     }
   }
 }

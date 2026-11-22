@@ -47,6 +47,42 @@ public final class SettingsStore: ObservableObject {
       set: { self.set(key, String($0)) })
   }
 
+  /// A string; config.proto's strings here are short and plain, so only
+  /// \" and \\ are escaped.
+  public func text(_ key: String) -> Binding<String> {
+    Binding(
+      get: {
+        guard let value = self.values[key], value.count >= 2 else { return "" }
+        return String(value.dropFirst().dropLast())
+          .replacingOccurrences(of: "\\\"", with: "\"")
+          .replacingOccurrences(of: "\\\\", with: "\\")
+      },
+      set: {
+        let escaped = $0.replacingOccurrences(of: "\\", with: "\\\\")
+          .replacingOccurrences(of: "\"", with: "\\\"")
+        self.set(key, "\"\(escaped)\"")
+      })
+  }
+
+  /// One bit of a number holding flags (auto_conversion_key).
+  public func flag(_ key: String, _ bit: Int) -> Binding<Bool> {
+    let number = self.number(key)
+    return Binding(
+      get: { number.wrappedValue & bit != 0 },
+      set: { number.wrappedValue = $0 ? number.wrappedValue | bit : number.wrappedValue & ~bit })
+  }
+
+  /// Whether the string `key` holds `character` (direct_commit_characters).
+  public func contains(_ key: String, _ character: Character) -> Binding<Bool> {
+    let text = self.text(key)
+    return Binding(
+      get: { text.wrappedValue.contains(character) },
+      set: {
+        let rest = text.wrappedValue.filter { $0 != character }
+        text.wrappedValue = $0 ? rest + String(character) : rest
+      })
+  }
+
   private func set(_ key: String, _ value: String) {
     guard values[key] != value else { return }
     if let failure = save("\(key) = \(value)\n") {

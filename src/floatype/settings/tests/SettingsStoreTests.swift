@@ -29,6 +29,31 @@ final class SettingsStoreTests: XCTestCase {
     XCTAssertEqual(store.error, "だめ")
   }
 
+  func testFlagsAndCharacters() {
+    var saved: [String] = []
+    let store = SettingsStore(
+      lines: "auto_conversion_key = 13\ndirect_commit_characters = \"、。\"\n",
+      save: { saved.append($0); return nil })
+    XCTAssertTrue(store.flag("auto_conversion_key", 4).wrappedValue)
+    XCTAssertFalse(store.flag("auto_conversion_key", 2).wrappedValue)
+    store.flag("auto_conversion_key", 2).wrappedValue = true
+    store.flag("auto_conversion_key", 1).wrappedValue = false
+    XCTAssertEqual(store.number("auto_conversion_key").wrappedValue, 14)
+    XCTAssertTrue(store.contains("direct_commit_characters", "。").wrappedValue)
+    store.contains("direct_commit_characters", "。").wrappedValue = false
+    store.contains("direct_commit_characters", "！").wrappedValue = true
+    XCTAssertEqual(store.text("direct_commit_characters").wrappedValue, "、！")
+    XCTAssertEqual(saved.last, "direct_commit_characters = \"、！\"\n")
+  }
+
+  func testQuotesAndBackslashesInText() {
+    var saved: [String] = []
+    let store = SettingsStore(lines: "", save: { saved.append($0); return nil })
+    store.text("candidate_style.font_family").wrappedValue = "a\"b\\c"
+    XCTAssertEqual(saved, ["candidate_style.font_family = \"a\\\"b\\\\c\"\n"])
+    XCTAssertEqual(store.text("candidate_style.font_family").wrappedValue, "a\"b\\c")
+  }
+
   func testWithoutSettingsShowsNothing() {
     XCTAssertFalse(SettingsStore(lines: nil, save: { _ in nil }).loaded)
   }
