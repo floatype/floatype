@@ -42,6 +42,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QFontDatabase>
+#include <QFontMetrics>
 #include <QFormLayout>
 #include <QFrame>
 #include <QGuiApplication>
@@ -86,9 +87,11 @@
 #include "base/version.h"
 #include "client/client.h"
 #include "config/config_handler.h"
+#include "floatype/config/settings_file.h"
 #include "floatype/look/window_look.h"
 #include "gui/base/stats_config_util.h"
 #include "gui/base/util.h"
+#include "gui/config_dialog/english_words_dialog.h"
 #include "gui/config_dialog/keymap_editor.h"
 #include "gui/config_dialog/look_preview.h"
 #include "gui/config_dialog/roman_table_editor.h"
@@ -766,6 +769,20 @@ void ConfigDialog::SetUpFloatypeSettings() {
       assist,
       "　└ かなの無い入力は、頭の記号も打ったとおりにする（/review、"
       "--help）");
+  QPushButton* englishWords = new QPushButton(Text("英単語を編集…"));
+  englishWords->setObjectName(QStringLiteral("englishWordsButton"));
+  englishWords->setProperty("changes_nothing", true);
+  // Without the user files' directory there is no file to edit.
+  englishWords->setEnabled(
+      !floatype::UserFilePath(floatype::kEnglishWordsFile).empty());
+  connect(englishWords, &QPushButton::clicked, this,
+          [this] { NewEnglishWordsDialog(this)->exec(); });
+  QHBoxLayout* englishWordsRow = new QHBoxLayout();
+  englishWordsRow->addSpacing(
+      QFontMetrics(font()).horizontalAdvance(Text("　└ ")));
+  englishWordsRow->addWidget(englishWords);
+  englishWordsRow->addStretch();
+  assist->addRow(englishWordsRow);
   for (QWidget* part : std::initializer_list<QWidget*>{
            mixedEnglishSpaceCommitsCheckBox_, mixedEnglishEnterCommitsCheckBox_,
            mixedEnglishLeadingSymbolsCheckBox_}) {

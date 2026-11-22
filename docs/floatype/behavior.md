@@ -347,6 +347,7 @@ Mozc の辞書に、ビルドのときに作る辞書を足す（`floatype/tools
 - 日英混在入力で英単語とみなす語を、`~/.config/floatype/english_words.txt` で足したり外したりできる。1 行に 1 語で、大文字と小文字は区別しない。`#` で始まる行と空行は読み飛ばす。
   - 語をそのまま書くと、足す。ここに足した語は、その語だけで打ったとき、ローマ字が全部かなになる綴りでも、いつも英字にする（6 章）。
   - 頭に `-` を付けて書くと、外す（`-time`）。初めから足してある語にも、SCOWL の語にも効く。外した語は英単語として拾わない。
+  - 設定画面の「入力補助」タブの「英単語を編集…」でも足したり外したりできる。一覧には、ファイルの語と、初めから足してある語が並ぶ（SCOWL の語は多すぎるので出さない）。画面はファイルの行だけを書き換え、手で書いたコメントと空行は残す。開いたあとにファイルが手で書き換えられていたら、書き込まずに読み直して知らせる。
 - 初めから足してある語が 166 語ある（ソースの `src/floatype/english/preset_words.txt`）。自分で足した語と同じ扱いで、ファイルが無くても効く。
   - かなが辞書で読めてしまうが、その語だけを日本語として打つことがまず無い語（62 語）：page、menu、data、time、code、token、video、note、main、idea、area、redo、safe、zone、wide、guide、pane、core、case、cache、icon、encode、unicode、secure、notice、queue、require、unique、cookie、sequence、delete、device、voice、native、move、save、remove、invite、engine、origin、resize、hidden、domain、define、session、feature、issue、route、remote、separate、position、message、join、region、wifi、azure、debian、apache、ubuntu、heroku、notion、openai。
   - 小文字で書くことの多いソフトウェアの語（ほとんどは SCOWL に無い）：json、yaml、toml、config、env、npm、async、auth、backend、frontend、localhost、readme、webhook、gitlab、figma、vscode、xcode、mozc、zenz、dev、utf など 94 語。
