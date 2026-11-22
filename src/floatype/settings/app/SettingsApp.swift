@@ -21,7 +21,7 @@ func saveSettings(_ toml: String) -> String? {
 @main
 struct SettingsApp: App {
   @StateObject private var store = SettingsStore(
-    lines: loadSettings() ?? "", save: saveSettings)
+    lines: loadSettings(), save: saveSettings)
 
   var body: some Scene {
     WindowGroup {

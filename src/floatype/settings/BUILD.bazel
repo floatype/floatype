@@ -1,5 +1,5 @@
 load("@build_bazel_rules_apple//apple:macos.bzl", "macos_application")
-load("@build_bazel_rules_swift//swift:swift.bzl", "swift_binary", "swift_interop_hint", "swift_library")
+load("@build_bazel_rules_swift//swift:swift.bzl", "swift_binary", "swift_interop_hint", "swift_library", "swift_test")
 load("//:build_defs.bzl", "mozc_cc_library", "mozc_cc_test")
 load("//:config.bzl", "MACOS_MIN_OS_VER")
 
@@ -74,6 +74,14 @@ swift_library(
     name = "settings_ui",
     srcs = glob(["ui/*.swift"]),
     module_name = "FloatypeSettingsUI",
+)
+
+# Also what has CI compile the Swift code, which `test --build_tests_only`
+# reaches only through tests.
+swift_test(
+    name = "settings_store_test",
+    srcs = glob(["tests/*.swift"]),
+    deps = [":settings_ui"],
 )
 
 swift_library(

@@ -41,9 +41,15 @@ public struct SettingsView: View {
           .padding(.bottom, 12)
         ScrollView {
           Group {
-            switch page.id {
-            case "general": GeneralPage(store: store)
-            default: NotYetPage()
+            if !store.loaded {
+              Text("変換エンジンにつながらないので、設定を読めませんでした。")
+                .foregroundColor(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+              switch page.id {
+              case "general": GeneralPage(store: store)
+              default: NotYetPage()
+              }
             }
           }
           .padding(.horizontal, 28)
@@ -131,11 +137,13 @@ struct Row<Control: View>: View {
   let title: String
   var detail: String? = nil
   @ViewBuilder let control: Control
+  @Environment(\.isEnabled) private var isEnabled
 
   var body: some View {
     HStack(alignment: .center, spacing: 16) {
       VStack(alignment: .leading, spacing: 2) {
         Text(title)
+          .foregroundColor(isEnabled ? .primary : .secondary)
         if let detail {
           Text(detail)
             .font(.system(size: 11))

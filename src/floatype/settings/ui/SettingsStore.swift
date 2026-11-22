@@ -13,11 +13,16 @@ public final class SettingsStore: ObservableObject {
 
   private let save: (String) -> String?
 
-  /// `lines` as the bridge loads them; `save` takes TOML and returns why it
-  /// failed, or nil.
-  public init(lines: String, save: @escaping (String) -> String?) {
+  /// Whether the settings could be read; without them nothing is shown, so
+  /// that nothing shown as off or 0 can be saved.
+  public let loaded: Bool
+
+  /// `lines` as the bridge loads them, nil if it could not; `save` takes TOML
+  /// and returns why it failed, or nil.
+  public init(lines: String?, save: @escaping (String) -> String?) {
     self.save = save
-    for line in lines.split(separator: "\n") {
+    loaded = lines != nil
+    for line in (lines ?? "").split(separator: "\n") {
       guard let equals = line.range(of: " = ") else { continue }
       values[String(line[..<equals.lowerBound])] = String(line[equals.upperBound...])
     }
