@@ -164,6 +164,8 @@ struct Row<Control: View>: View {
     }
     .padding(.horizontal, 14)
     .padding(.vertical, 9)
+    // The controls carry no label of their own; VoiceOver reads the row's.
+    .accessibilityElement(children: .combine)
   }
 }
 

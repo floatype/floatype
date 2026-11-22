@@ -1,3 +1,4 @@
+load("@bazel_skylib//rules:build_test.bzl", "build_test")
 load("@build_bazel_rules_apple//apple:macos.bzl", "macos_application")
 load("@build_bazel_rules_swift//swift:swift.bzl", "swift_binary", "swift_interop_hint", "swift_library", "swift_test")
 load("//:build_defs.bzl", "mozc_cc_library", "mozc_cc_test")
@@ -108,4 +109,14 @@ macos_application(
     minimum_os_version = MACOS_MIN_OS_VER,
     version = "//:version_macos",
     deps = [":settings_app_lib"],
+)
+
+# CI runs `test --build_tests_only`, which builds no app: this has it build
+# the app and the capture tool, which link the bridge and the client.
+build_test(
+    name = "settings_app_build_test",
+    targets = [
+        ":settings_app",
+        ":settings_capture",
+    ],
 )
