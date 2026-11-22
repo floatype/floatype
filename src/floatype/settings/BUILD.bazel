@@ -1,5 +1,7 @@
-load("@build_bazel_rules_swift//swift:swift.bzl", "swift_interop_hint")
+load("@build_bazel_rules_apple//apple:macos.bzl", "macos_application")
+load("@build_bazel_rules_swift//swift:swift.bzl", "swift_binary", "swift_interop_hint", "swift_library")
 load("//:build_defs.bzl", "mozc_cc_library", "mozc_cc_test")
+load("//:config.bzl", "MACOS_MIN_OS_VER")
 
 package(default_visibility = ["//visibility:private"])
 
@@ -64,4 +66,38 @@ mozc_cc_test(
         "//testing:gunit_main",
         "@com_google_absl//absl/strings",
     ],
+)
+
+# The screen, apart from the bridge, so that it can be drawn without a
+# converter (settings_capture).
+swift_library(
+    name = "settings_ui",
+    srcs = glob(["ui/*.swift"]),
+    module_name = "FloatypeSettingsUI",
+)
+
+swift_library(
+    name = "settings_app_lib",
+    srcs = glob(["app/*.swift"]),
+    module_name = "FloatypeSettings",
+    deps = [
+        ":bridge",
+        ":settings_ui",
+    ],
+)
+
+swift_binary(
+    name = "settings_capture",
+    srcs = glob(["capture/*.swift"]),
+    deps = [":settings_ui"],
+)
+
+macos_application(
+    name = "settings_app",
+    bundle_id = "org.floatype.settings",
+    bundle_name = "Settings",
+    infoplists = ["Info.plist"],
+    minimum_os_version = MACOS_MIN_OS_VER,
+    version = "//:version_macos",
+    deps = [":settings_app_lib"],
 )
