@@ -25,12 +25,12 @@
 #include "base/strings/unicode.h"
 #include "base/util.h"
 #include "floatype/config/settings_file.h"
+#include "floatype/english/user_words.h"
 
 namespace mozc::floatype {
 
 namespace {
 #include "floatype/english/english_words.inc"
-#include "floatype/english/preset_words.inc"
 
 // The lines of `text` in lower case, sorted, each once.
 std::vector<std::string> SortedWords(absl::string_view text) {
@@ -42,13 +42,6 @@ std::vector<std::string> SortedWords(absl::string_view text) {
   std::sort(words.begin(), words.end());
   words.erase(std::unique(words.begin(), words.end()), words.end());
   return words;
-}
-
-// The preset words, one a line.
-const std::string& PresetWords() {
-  static absl::NoDestructor<std::string> words(
-      ParseUserEnglishWords(kPresetWords).words);
-  return *words;
 }
 }  // namespace
 
@@ -76,32 +69,9 @@ bool EnglishWords::ContainsUser(absl::string_view word) const {
 }
 
 const EnglishWords& EnglishWords::Default() {
-  static absl::NoDestructor<EnglishWords> words(kEnglishWords, PresetWords());
+  static absl::NoDestructor<EnglishWords> words(kEnglishWords,
+                                                PresetEnglishWords());
   return *words;
-}
-
-UserEnglishWords ParseUserEnglishWords(absl::string_view text) {
-  UserEnglishWords user;
-  const std::vector<absl::string_view> lines = absl::StrSplit(text, '\n');
-  for (size_t i = 0; i < lines.size(); ++i) {
-    const absl::string_view line = absl::StripAsciiWhitespace(lines[i]);
-    if (line.empty() || line.starts_with('#')) {
-      continue;
-    }
-    const bool removes = line.starts_with('-');
-    const absl::string_view word =
-        absl::StripAsciiWhitespace(line.substr(removes ? 1 : 0));
-    // EnglishSpans takes 3 to 32 letters, LooksEnglish 3 or more.
-    if (word.size() < 3 || word.size() > 32 ||
-        !std::all_of(word.begin(), word.end(), [](char c) {
-          return absl::ascii_isalpha(static_cast<unsigned char>(c));
-        })) {
-      user.left_out.push_back(absl::StrCat(i + 1, " 行目「", line, "」"));
-      continue;
-    }
-    absl::StrAppend(removes ? &user.removed : &user.words, word, "\n");
-  }
-  return user;
 }
 
 std::shared_ptr<const EnglishWords> CurrentEnglishWords() {
@@ -137,7 +107,8 @@ std::shared_ptr<const EnglishWords> CurrentEnglishWords() {
                      "：英字だけの 3〜32 文字の語が使えます"));
   }
   state->words = std::make_shared<const EnglishWords>(
-      kEnglishWords, absl::StrCat(PresetWords(), user.words), user.removed);
+      kEnglishWords, absl::StrCat(PresetEnglishWords(), user.words),
+      user.removed);
   return state->words;
 }
 

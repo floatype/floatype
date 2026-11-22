@@ -22,11 +22,24 @@ mozc_embed_file(
 )
 
 mozc_cc_library(
+    name = "user_words",
+    srcs = [
+        "user_words.cc",
+        ":preset_words_data",
+    ],
+    hdrs = ["user_words.h"],
+    visibility = ["//gui/config_dialog:__pkg__"],
+    deps = [
+        "@com_google_absl//absl/base:no_destructor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+mozc_cc_library(
     name = "english_words",
     srcs = [
         "english_words.cc",
         ":english_words_data",
-        ":preset_words_data",
     ],
     hdrs = ["english_words.h"],
     visibility = [
@@ -34,6 +47,7 @@ mozc_cc_library(
         "//session:__pkg__",
     ],
     deps = [
+        ":user_words",
         "//base:file_util",
         "//base:util",
         "//base/strings:unicode",
@@ -54,6 +68,7 @@ mozc_cc_test(
     data = ["preset_words.txt"],
     deps = [
         ":english_words",
+        ":user_words",
         "//base:clock",
         "//base:clock_mock",
         "//base:file_util",

@@ -13,6 +13,7 @@
 
 #include "absl/functional/function_ref.h"
 #include "absl/strings/string_view.h"
+#include "floatype/english/user_words.h"
 
 namespace mozc::floatype {
 
@@ -40,17 +41,6 @@ class EnglishWords {
   std::vector<std::string> words_;       // Lower case, sorted.
   std::vector<std::string> user_words_;  // Lower case, sorted.
 };
-
-// The words a user's english_words.txt adds, one a line, the words it takes
-// out of the lists ("-time", a line starting with -), and the lines left out
-// ("N 行目「go」"): those not 3 to 32 ASCII letters, which no span takes.
-// Lines starting with # and blank lines are comments.
-struct UserEnglishWords {
-  std::string words;    // One a line.
-  std::string removed;  // One a line.
-  std::vector<std::string> left_out;
-};
-UserEnglishWords ParseUserEnglishWords(absl::string_view text);
 
 // The words that count as English: Default(), and while the user has an
 // english_words.txt next to config.toml, with the words it adds and without
