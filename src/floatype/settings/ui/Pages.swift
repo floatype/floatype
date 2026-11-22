@@ -175,7 +175,7 @@ struct AssistPage: View {
                        unit: "文字以上")
         }
         Row(title: "学習データ", detail: "退けた語、すぐ出す補正、止めた補正") {
-          Button("見る…") { showLearned = true }
+          Button("学習データを見る…") { showLearned = true }
         }
       }
     }
