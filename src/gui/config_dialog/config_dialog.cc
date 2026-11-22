@@ -91,6 +91,7 @@
 #include "gui/base/util.h"
 #include "gui/config_dialog/keymap_editor.h"
 #include "gui/config_dialog/look_preview.h"
+#include "gui/config_dialog/modern_look.h"
 #include "gui/config_dialog/roman_table_editor.h"
 #include "gui/config_dialog/zenz_memory_dialog.h"
 #include "protocol/config.pb.h"
@@ -173,6 +174,7 @@ ConfigDialog::ConfigDialog()
   SetUpFooter();
   SetUpUpdate();
   WrapTabsInScrollAreas();
+  ApplyModernLook(configDialogTabWidget);  // floatype
 
   punctuationsSettingComboBox->addItem(QString::fromUtf8("、。"));
   punctuationsSettingComboBox->addItem(QString::fromUtf8("，．"));
