@@ -26,11 +26,15 @@ let pages = [
 public struct SettingsView: View {
   @ObservedObject var store: SettingsStore
   @State private var page: Page
+  private let lookTarget: String
 
-  /// `page` names the page shown first ("general", "dictionary", ...).
+  /// `page` names the page shown first ("general", "dictionary", ...; for
+  /// 外観, "look" or "look.ruby" with what it shows first).
   public init(store: SettingsStore, page: String = "general") {
     self.store = store
-    _page = State(initialValue: pages.first { $0.id == page } ?? pages[0])
+    let parts = page.split(separator: ".", maxSplits: 1).map(String.init)
+    _page = State(initialValue: pages.first { $0.id == parts.first } ?? pages[0])
+    lookTarget = parts.count > 1 ? parts[1] : "candidate"
   }
 
   public var body: some View {
@@ -56,9 +60,9 @@ public struct SettingsView: View {
               case "dictionary": DictionaryPage(store: store)
               case "assist": AssistPage(store: store)
               case "suggest": SuggestPage(store: store)
+              case "look": LookPage(store: store, target: lookTarget)
               case "privacy": PrivacyPage(store: store)
-              case "misc": MiscPage(store: store)
-              default: NotYetPage()
+              default: MiscPage(store: store)
               }
             }
           }
@@ -221,15 +225,6 @@ struct Amount: View {
         .monospacedDigit()
       Stepper(title, value: value, in: range, step: step).labelsHidden()
     }
-  }
-}
-
-struct NotYetPage: View {
-  var body: some View {
-    Text("このページはまだ移していません。")
-      .foregroundColor(.secondary)
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .padding(.top, 8)
   }
 }
 

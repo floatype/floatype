@@ -51,6 +51,7 @@ public final class SettingsStore: ObservableObject {
       read[String(line[..<equals.lowerBound])] = String(line[equals.upperBound...])
     }
     values = read
+    saved = read
   }
 
   public func bool(_ key: String) -> Binding<Bool> {
@@ -108,6 +109,37 @@ public final class SettingsStore: ObservableObject {
       })
   }
 
+  /// The settings shown, as lines, for what reads them whole (外観's preview).
+  public var lines: String {
+    values.map { "\($0.key) = \($0.value)\n" }.joined()
+  }
+
+  /// A number shown at once and saved once it stops changing (a slider).
+  public func numberSoon(_ key: String) -> Binding<Double> {
+    Binding(
+      get: { self.values[key].flatMap { Double($0) } ?? 0 },
+      set: { self.setSoon(key, String(Int($0.rounded()))) })
+  }
+
+  /// A color, 0xRRGGBB, shown at once and saved once it stops changing (one
+  /// dragged in the color panel); `shown` gives it while unset.
+  public func color(_ key: String, shown: UInt32) -> Binding<CGColor> {
+    Binding(
+      get: {
+        let rgb = self.values[key].flatMap { UInt32($0) } ?? shown
+        return CGColor(
+          srgbRed: CGFloat((rgb >> 16) & 0xff) / 255, green: CGFloat((rgb >> 8) & 0xff) / 255,
+          blue: CGFloat(rgb & 0xff) / 255, alpha: 1)
+      },
+      set: {
+        guard let srgb = $0.converted(
+          to: CGColorSpace(name: CGColorSpace.sRGB)!, intent: .defaultIntent, options: nil),
+          let parts = srgb.components, parts.count >= 3 else { return }
+        let byte = { (part: CGFloat) in UInt32((min(max(part, 0), 1) * 255).rounded()) }
+        self.setSoon(key, String(byte(parts[0]) << 16 | byte(parts[1]) << 8 | byte(parts[2])))
+      })
+  }
+
   private func set(_ key: String, _ value: String) {
     guard values[key] != value else { return }
     if let failure = save("\(key) = \(value)\n") {
@@ -115,6 +147,37 @@ public final class SettingsStore: ObservableObject {
     } else {
       error = nil
       values[key] = value
+      saved[key] = value
+    }
+  }
+
+  /// What the converter has, for putting back what failed to save.
+  private var saved: [String: String] = [:]
+  private var pending: [String: String] = [:]
+  private var flush: DispatchWorkItem?
+
+  private func setSoon(_ key: String, _ value: String) {
+    guard values[key] != value else { return }
+    values[key] = value
+    pending[key] = value
+    flush?.cancel()
+    let work = DispatchWorkItem { [weak self] in self?.savePending() }
+    flush = work
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: work)
+  }
+
+  /// Saves what changed soon, now; also before the app quits.
+  public func savePending() {
+    flush?.cancel()
+    guard !pending.isEmpty else { return }
+    let changes = pending
+    pending = [:]
+    if let failure = save(changes.map { "\($0.key) = \($0.value)\n" }.joined()) {
+      error = failure
+      for key in changes.keys { values[key] = saved[key] }
+    } else {
+      error = nil
+      saved.merge(changes) { $1 }
     }
   }
 }

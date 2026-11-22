@@ -97,11 +97,22 @@ swift_test(
 )
 
 swift_library(
+    name = "settings_bridge_actions",
+    srcs = glob(["bridge_swift/*.swift"]),
+    module_name = "FloatypeSettingsBridgeActions",
+    deps = [
+        ":bridge",
+        ":settings_ui",
+    ],
+)
+
+swift_library(
     name = "settings_app_lib",
     srcs = glob(["app/*.swift"]),
     module_name = "FloatypeSettings",
     deps = [
         ":bridge",
+        ":settings_bridge_actions",
         ":settings_ui",
     ],
 )
@@ -109,7 +120,10 @@ swift_library(
 swift_binary(
     name = "settings_capture",
     srcs = glob(["capture/*.swift"]),
-    deps = [":settings_ui"],
+    deps = [
+        ":settings_bridge_actions",
+        ":settings_ui",
+    ],
 )
 
 macos_application(

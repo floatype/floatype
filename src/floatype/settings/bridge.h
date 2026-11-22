@@ -68,6 +68,7 @@ typedef struct {
   double focused_border_alpha;
   unsigned border;
   double border_alpha;
+  double size_percent;  // Of fonts and measures.
   double window_padding, row_height, row_padding, row_corner_radius;
   double number_width, footer_top_padding, footer_bottom_padding;
   double corner_radius, opacity;

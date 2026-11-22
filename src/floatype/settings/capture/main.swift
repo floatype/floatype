@@ -1,8 +1,9 @@
 // floatype: draws the settings window into PNGs, light and dark, from
 // settings in a file (ConfigLines), with nothing saved and no converter
-// reached: `settings_capture <lines file> <output folder> [height] [page]`.
+// reached (外観's preview is drawn through the bridge, which needs none): `settings_capture <lines file> <output folder> [height] [page]`.
 
 import AppKit
+import FloatypeSettingsBridgeActions
 import FloatypeSettingsUI
 import SwiftUI
 
@@ -15,7 +16,10 @@ let page = arguments.count > 4 ? arguments[4] : "general"
 
 _ = NSApplication.shared
 for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
-  let store = SettingsStore(lines: lines, save: { _ in nil })
+  var actions = SettingsActions.none()
+  actions.windowLook = bridgeActions.windowLook
+  actions.indicatorLabel = bridgeActions.indicatorLabel
+  let store = SettingsStore(lines: lines, save: { _ in nil }, actions: actions)
   let host = NSHostingView(rootView: SettingsView(store: store, page: page))
   let window = NSWindow(
     contentRect: NSRect(origin: .zero, size: size),

@@ -1,3 +1,4 @@
+import CoreGraphics
 import FloatypeSettingsUI
 import XCTest
 
@@ -20,6 +21,37 @@ final class SettingsStoreTests: XCTestCase {
     store.choice("preedit_method").wrappedValue = "KANA"
     XCTAssertEqual(saved, ["use_zenz = false\n", "preedit_method = \"KANA\"\n"])
     XCTAssertFalse(store.bool("use_zenz").wrappedValue)
+  }
+
+  func testSavesAColorOnceItStopsChanging() {
+    var saved: [String] = []
+    let store = SettingsStore(lines: "ruby_style.text_color = 0\n",
+                              save: { saved.append($0); return nil })
+    let color = store.color("ruby_style.text_color", shown: 0)
+    color.wrappedValue = CGColor(srgbRed: 1, green: 0, blue: 0, alpha: 1)
+    color.wrappedValue = CGColor(srgbRed: 0, green: 0, blue: 1, alpha: 1)
+    XCTAssertEqual(store.values["ruby_style.text_color"], "255", "shown at once")
+    XCTAssertTrue(saved.isEmpty, "not saved while it changes")
+    let deadline = Date().addingTimeInterval(2)
+    while saved.isEmpty && Date() < deadline {
+      RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+    }
+    XCTAssertEqual(saved, ["ruby_style.text_color = 255\n"])
+  }
+
+  func testPutsBackAColorNotSaved() {
+    let store = SettingsStore(lines: "ruby_style.text_color = 0\n", save: { _ in "だめ" })
+    store.numberSoon("ruby_style.text_color").wrappedValue = 255
+    store.savePending()
+    XCTAssertEqual(store.values["ruby_style.text_color"], "0")
+    XCTAssertEqual(store.error, "だめ")
+  }
+
+  func testShowsAnUnsetColorAsGiven() {
+    let store = SettingsStore(lines: "", save: { _ in nil })
+    let color = store.color("candidate_style.text_color", shown: 0x123456).wrappedValue
+    XCTAssertEqual(color.components?.map { Int(($0 * 255).rounded()) }, [0x12, 0x34, 0x56, 255])
+    XCTAssertNil(store.values["candidate_style.text_color"], "still unset")
   }
 
   func testKeepsTheValueWhenNotSaved() {
