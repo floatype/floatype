@@ -77,8 +77,9 @@ QIcon TabIcon(const QString& title, QColor color, int size) {
   return QIcon(pixmap);
 }
 
-// Mozc's group headers draw a line after the title; the boxes replace it.
-void HideHeaderLines(QWidget* page) {
+// Mozc's group headers draw a line after the title; the boxes replace it,
+// and a box with nothing in it goes.
+void TidyGroups(QWidget* page) {
   for (QFrame* frame : page->findChildren<QFrame*>()) {
     if (frame->frameShape() == QFrame::HLine &&
         frame->parentWidget()->property("class").toString() ==
@@ -88,6 +89,18 @@ void HideHeaderLines(QWidget* page) {
       if (QBoxLayout* row =
               qobject_cast<QBoxLayout*>(frame->parentWidget()->layout())) {
         row->addStretch();
+      }
+    }
+    // A group whose settings Mozc hides on this platform would show as an
+    // empty box.
+    if (frame->property("class").toString() ==
+        QStringLiteral("setting-group-layout")) {
+      const QList<QWidget*> parts =
+          frame->findChildren<QWidget*>(Qt::FindDirectChildrenOnly);
+      if (std::none_of(parts.begin(), parts.end(), [frame](QWidget* part) {
+            return part->isVisibleTo(frame);
+          })) {
+        frame->hide();
       }
     }
   }
@@ -111,7 +124,7 @@ void ApplyModernLook(QTabWidget* tabs) {
         title, sidebar);
     item->setSizeHint(QSize(0, 30));
     width = std::max(width, sidebar->fontMetrics().horizontalAdvance(title));
-    HideHeaderLines(tabs->widget(i));
+    TidyGroups(tabs->widget(i));
   }
   sidebar->setFixedWidth(width + 20 + 60);
 

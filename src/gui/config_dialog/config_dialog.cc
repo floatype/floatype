@@ -174,7 +174,6 @@ ConfigDialog::ConfigDialog()
   SetUpFooter();
   SetUpUpdate();
   WrapTabsInScrollAreas();
-  ApplyModernLook(configDialogTabWidget);  // floatype
 
   punctuationsSettingComboBox->addItem(QString::fromUtf8("、。"));
   punctuationsSettingComboBox->addItem(QString::fromUtf8("，．"));
@@ -330,6 +329,8 @@ ConfigDialog::ConfigDialog()
   }
 
   GuiUtil::ReplaceWidgetLabels(this);
+  // floatype: after Mozc hides what this platform lacks.
+  ApplyModernLook(configDialogTabWidget);
 
   Reload();
 
