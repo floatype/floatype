@@ -8,6 +8,7 @@ mozc_cc_library(
     name = "text_config",
     srcs = ["text_config.cc"],
     hdrs = ["text_config.h"],
+    visibility = ["//floatype/settings:__pkg__"],
     deps = [
         "//base/protobuf:descriptor",
         "//base/protobuf:text_format",
@@ -118,6 +119,7 @@ mozc_cc_library(
     hdrs = ["toml_config.h"],
     visibility = [
         "//config:__pkg__",
+        "//floatype/settings:__pkg__",
         "//gui/config_dialog:__pkg__",
         "//mac:__pkg__",
         "//server:__pkg__",

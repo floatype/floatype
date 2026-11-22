@@ -1,0 +1,149 @@
+load("@bazel_skylib//rules:build_test.bzl", "build_test")
+load("@build_bazel_rules_apple//apple:macos.bzl", "macos_application")
+load("@build_bazel_rules_swift//swift:swift.bzl", "swift_binary", "swift_interop_hint", "swift_library", "swift_test")
+load("//:build_defs.bzl", "mozc_cc_library", "mozc_cc_test", "mozc_select")
+load("//:config.bzl", "MACOS_MIN_OS_VER")
+
+package(default_visibility = ["//visibility:private"])
+
+mozc_cc_library(
+    name = "config_lines",
+    srcs = ["config_lines.cc"],
+    hdrs = ["config_lines.h"],
+    deps = [
+        "//base/protobuf:descriptor",
+        "//base/protobuf:message",
+        "//floatype/config:text_config",
+        "//floatype/config:toml_config",
+        "//protocol:config_cc_proto",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+    ],
+)
+
+mozc_cc_test(
+    name = "config_lines_test",
+    srcs = ["config_lines_test.cc"],
+    deps = [
+        ":config_lines",
+        "//config:config_handler",
+        "//protocol:config_cc_proto",
+        "//testing:gunit_main",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+swift_interop_hint(
+    name = "bridge_module",
+    module_name = "FloatypeSettingsBridge",
+)
+
+mozc_cc_library(
+    name = "bridge",
+    srcs = ["bridge.cc"],
+    hdrs = ["bridge.h"],
+    aspect_hints = [":bridge_module"],
+    deps = [
+        ":config_lines",
+        "//base:version",
+        "//client",
+        "//client:client_interface",
+        "//config:config_handler",
+        "//floatype/indicator:indicator_layout",
+        "//floatype/look:window_look",
+        "//floatype/update:update_check",
+        "//protocol:commands_cc_proto",
+        "//protocol:config_cc_proto",
+        "//protocol:renderer_cc_proto",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ] + mozc_select(
+        macos = ["//base/mac:mac_util"],
+    ),
+)
+
+mozc_cc_test(
+    name = "bridge_test",
+    srcs = ["bridge_test.cc"],
+    deps = [
+        ":bridge",
+        ":config_lines",
+        "//client",
+        "//client:client_interface",
+        "//client:client_mock",
+        "//config:config_handler",
+        "//protocol:config_cc_proto",
+        "//testing:gunit_main",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+# The screen, apart from the bridge, so that it can be drawn without a
+# converter (settings_capture).
+swift_library(
+    name = "settings_ui",
+    srcs = glob(["ui/*.swift"]),
+    module_name = "FloatypeSettingsUI",
+)
+
+# Also what has CI compile the Swift code, which `test --build_tests_only`
+# reaches only through tests.
+swift_test(
+    name = "settings_store_test",
+    srcs = glob(["tests/*.swift"]),
+    deps = [":settings_ui"],
+)
+
+swift_library(
+    name = "settings_bridge_actions",
+    srcs = glob(["bridge_swift/*.swift"]),
+    module_name = "FloatypeSettingsBridgeActions",
+    deps = [
+        ":bridge",
+        ":settings_ui",
+    ],
+)
+
+swift_library(
+    name = "settings_app_lib",
+    srcs = glob(["app/*.swift"]),
+    module_name = "FloatypeSettings",
+    deps = [
+        ":bridge",
+        ":settings_bridge_actions",
+        ":settings_ui",
+    ],
+)
+
+swift_binary(
+    name = "settings_capture",
+    srcs = glob(["capture/*.swift"]),
+    deps = [
+        ":settings_bridge_actions",
+        ":settings_ui",
+    ],
+)
+
+macos_application(
+    name = "settings_app",
+    app_icons = ["//data/images/mac:product_icon.icns"],
+    bundle_id = "org.floatype.settings",
+    bundle_name = "Settings",
+    infoplists = ["Info.plist"],
+    minimum_os_version = MACOS_MIN_OS_VER,
+    version = "//:version_macos",
+    deps = [":settings_app_lib"],
+)
+
+# CI runs `test --build_tests_only`, which builds no app: this has it build
+# the app and the capture tool, which link the bridge and the client.
+build_test(
+    name = "settings_app_build_test",
+    targets = [
+        ":settings_app",
+        ":settings_capture",
+    ],
+)
