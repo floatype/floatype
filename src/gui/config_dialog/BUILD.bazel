@@ -164,6 +164,7 @@ mozc_cc_qt_library(
         "character_form_editor.cc",
         "config_dialog.cc",
         "config_dialog_libmain.cc",
+        "english_words_dialog.cc",
         "generic_table_editor.cc",
         "keybinding_editor.cc",
         "keybinding_editor_delegate.cc",
@@ -183,6 +184,7 @@ mozc_cc_qt_library(
     hdrs = [
         "character_form_editor.h",
         "config_dialog.h",
+        "english_words_dialog.h",
         "generic_table_editor.h",
         "keybinding_editor.h",
         "keybinding_editor_delegate.h",
@@ -218,6 +220,8 @@ mozc_cc_qt_library(
         "//client:client_interface",
         "//composer:key_parser",
         "//config:config_handler",
+        "//floatype/config:settings_file",
+        "//floatype/english:user_words",
         "//floatype/indicator:indicator_layout",
         "//floatype/look:window_look",
         "//floatype/update:update_check",
@@ -235,6 +239,8 @@ mozc_cc_qt_library(
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:span",
     ] + mozc_select(
