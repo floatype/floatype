@@ -156,6 +156,7 @@ mozc_cc_library(
     srcs = ["zenz_memory.cc"],
     hdrs = ["zenz_memory.h"],
     visibility = [
+        "//floatype/settings:__pkg__",
         "//gui/config_dialog:__pkg__",
         "//session:__pkg__",
     ],

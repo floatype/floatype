@@ -41,6 +41,7 @@ mozc_cc_library(
         "//dictionary:__pkg__",
         "//floatype/english:__pkg__",
         "//floatype/eval:__pkg__",
+        "//floatype/settings:__pkg__",
         "//floatype/zenz:__pkg__",
         "//gui/config_dialog:__pkg__",
         "//gui/dictionary_tool:__pkg__",

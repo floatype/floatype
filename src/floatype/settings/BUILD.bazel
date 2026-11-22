@@ -42,26 +42,56 @@ swift_interop_hint(
 
 mozc_cc_library(
     name = "bridge",
-    srcs = ["bridge.cc"],
+    srcs = [
+        "bridge.cc",
+        "bridge_editors.cc",
+        "bridge_keymap.cc",
+    ],
     hdrs = ["bridge.h"],
     aspect_hints = [":bridge_module"],
     deps = [
         ":config_lines",
+        "//base:config_file_stream",
+        "//base:file_util",
+        "//base:system_util",
         "//base:version",
         "//client",
         "//client:client_interface",
+        "//composer:key_parser",
         "//config:config_handler",
+        "//floatype/config:settings_file",
+        "//floatype/english:user_words",
         "//floatype/indicator:indicator_layout",
         "//floatype/look:window_look",
         "//floatype/update:update_check",
+        "//floatype/zenz:zenz_memory",
         "//protocol:commands_cc_proto",
         "//protocol:config_cc_proto",
         "//protocol:renderer_cc_proto",
+        "//session:keymap",
+        "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
     ] + mozc_select(
         macos = ["//base/mac:mac_util"],
     ),
+)
+
+mozc_cc_test(
+    name = "bridge_editors_test",
+    srcs = ["bridge_editors_test.cc"],
+    deps = [
+        ":bridge",
+        "//base:file_util",
+        "//base:system_util",
+        "//floatype/config:settings_file",
+        "//floatype/zenz:zenz_memory",
+        "//testing:gunit_main",
+        "//testing:mozctest",
+        "@com_google_absl//absl/strings",
+    ],
 )
 
 mozc_cc_test(

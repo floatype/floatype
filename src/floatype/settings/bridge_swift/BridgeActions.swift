@@ -12,6 +12,33 @@ public func take(_ text: UnsafeMutablePointer<CChar>?) -> String? {
   return String(cString: text)
 }
 
+/// Rows as the bridge writes them, "<input>\t<output>\t<next>\n" each.
+func romanRows(_ text: String?) -> [RomanRow] {
+  (text ?? "").split(separator: "\n").compactMap { line in
+    let parts = line.split(separator: "\t", omittingEmptySubsequences: false)
+    guard parts.count == 3 else { return nil }
+    return RomanRow(input: String(parts[0]), output: String(parts[1]), next: String(parts[2]))
+  }
+}
+
+func romanText(_ rows: [RomanRow]) -> String {
+  rows.map { "\($0.input)\t\($0.output)\t\($0.next)\n" }.joined()
+}
+
+/// Rows as the bridge writes them, "<mode>\t<key>\t<command>\t<shown>\n".
+func keymapRows(_ text: String?) -> [KeymapRow] {
+  (text ?? "").split(separator: "\n").compactMap { line in
+    let parts = line.split(separator: "\t", omittingEmptySubsequences: false)
+    guard parts.count == 4 else { return nil }
+    return KeymapRow(mode: String(parts[0]), key: String(parts[1]), command: String(parts[2]),
+                     shown: parts[3] == "1")
+  }
+}
+
+func keymapText(_ rows: [KeymapRow]) -> String {
+  rows.map { "\($0.mode)\t\($0.key)\t\($0.command)\t\($0.shown ? 1 : 0)\n" }.joined()
+}
+
 public let bridgeActions = SettingsActions(
   version: take(FloatypeSettingsVersion()) ?? "",
   load: { take(FloatypeSettingsLoad()) },
@@ -65,4 +92,55 @@ public let bridgeActions = SettingsActions(
   },
   indicatorLabel: { take(FloatypeSettingsIndicatorLabel(Int32($0), $1)) ?? "" },
   numberForm: { Int(FloatypeSettingsNumberForm($0)) },
-  withNumberForm: { take(FloatypeSettingsWithNumberForm($0, Int32($1))) })
+  withNumberForm: { take(FloatypeSettingsWithNumberForm($0, Int32($1))) },
+  learned: {
+    (take(FloatypeSettingsZenzMemory()) ?? "").split(separator: "\n").compactMap { line in
+      let parts = line.split(separator: "\t", omittingEmptySubsequences: false)
+      guard parts.count == 3, let kind = Int(parts[0]) else { return nil }
+      return LearnedEntry(kind: kind, reading: String(parts[1]), text: String(parts[2]))
+    }
+  },
+  forget: { FloatypeSettingsZenzForget(Int32($0.kind), $0.reading, $0.text) },
+  forgetAll: { FloatypeSettingsZenzForgetAll() },
+  profileDirectory: { take(FloatypeSettingsProfileDirectory()) ?? "" },
+  englishWords: {
+    (take(FloatypeSettingsEnglishWords()) ?? "").split(separator: "\n").compactMap { line in
+      let parts = line.split(separator: "\t", omittingEmptySubsequences: false)
+      guard parts.count == 3, let from = Int(parts[2]) else { return nil }
+      return EnglishWord(word: String(parts[0]), kept: parts[1] == "1", from: from)
+    }
+  },
+  editEnglishWords: { take(FloatypeSettingsEditEnglishWords($0.joined(separator: "\n"), Int32($1))) },
+  userFilesDirectory: { take(FloatypeSettingsUserFilesDirectory()) ?? "" },
+  characterForms: { lines in
+    (take(FloatypeSettingsCharacterForms(lines)) ?? "").split(separator: "\n").compactMap { row in
+      let parts = row.split(separator: "\t", omittingEmptySubsequences: false)
+      guard parts.count == 3 else { return nil }
+      return CharacterFormRule(group: String(parts[0]), typed: String(parts[1]),
+                               converted: String(parts[2]))
+    }
+  },
+  withCharacterForms: { rules in
+    take(FloatypeSettingsWithCharacterForms(
+      rules.map { "\($0.group)\t\($0.typed)\t\($0.converted)\n" }.joined()))
+  },
+  romanTable: { romanRows(take(FloatypeSettingsRomanTable($0))) },
+  romanRows: { text in romanRows(take(FloatypeSettingsRomanRows(text))) },
+  romanTableText: { take(FloatypeSettingsRomanTableText(romanText($0))) ?? "" },
+  romanTableValue: { take(FloatypeSettingsRomanTableValue(romanText($0))) },
+  keymap: { keymapRows(take(FloatypeSettingsKeymap($0))) },
+  keymapPreset: { keymapRows(take(FloatypeSettingsKeymapPreset($0))) },
+  keymapRows: { keymapRows(take(FloatypeSettingsKeymapRows($0))) },
+  keymapText: { take(FloatypeSettingsKeymapText(keymapText($0))) ?? "" },
+  keymapValue: { take(FloatypeSettingsKeymapValue(keymapText($0))) },
+  keymapNames: {
+    var names = KeymapNames(modes: [], commands: [])
+    for line in (take(FloatypeSettingsKeymapNames()) ?? "").split(separator: "\n") {
+      let parts = line.split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
+      guard parts.count == 3 else { continue }
+      if parts[0] == "mode" { names.modes.append((parts[1], parts[2])) }
+      else { names.commands.append((parts[1], parts[2])) }
+    }
+    return names
+  },
+  keymapKeyIsValid: { FloatypeSettingsKeymapKeyIsValid($0) != 0 })

@@ -30,6 +30,7 @@ struct SubRow<Control: View>: View {
 
 struct InputAssistGroup: View {
   @ObservedObject var store: SettingsStore
+  @State private var showWords = false
 
   var body: some View {
     let direct = store.bool("use_direct_commit").wrappedValue
@@ -56,6 +57,9 @@ struct InputAssistGroup: View {
       SubRow(title: "かなの無い入力は、頭の記号も打ったとおりにする", detail: "/review、--help") {
         Switch(isOn: store.bool("mixed_english_leading_symbols"))
       }.disabled(!english)
+      SubRow(title: "英字のまま残す英単語", detail: "english_words.txt") {
+        Button("英単語を編集…") { showWords = true }
+      }
       Row(title: "英字や数字のすぐ後の / を、・ ではなく / のまま打つ",
           detail: "2026/11/20、test/spec") {
         Switch(isOn: store.bool("slash_after_ascii"))
@@ -64,6 +68,7 @@ struct InputAssistGroup: View {
         Switch(isOn: store.bool("display_ambiguous_romaji"))
       }
     }
+    .sheet(isPresented: $showWords) { EnglishWordsView(actions: store.actions) }
   }
 }
 
@@ -119,6 +124,8 @@ struct DictionaryPage: View {
 
 struct AssistPage: View {
   @ObservedObject var store: SettingsStore
+  @State private var showLearned = false
+  @State private var showForms = false
 
   var body: some View {
     let auto = store.bool("use_auto_conversion").wrappedValue
@@ -143,6 +150,9 @@ struct AssistPage: View {
         Row(title: "日本語入力では常に日本語キー配列を使う") {
           Switch(isOn: store.bool("use_japanese_layout"))
         }
+        Row(title: "半角・全角", detail: "文字グループごとに、変換前と変換中の形") {
+          Button("編集…") { showForms = true }
+        }
       }
       SettingsGroup(title: "zenz のメモリと学習") {
         Row(title: "打っていない間は止める",
@@ -164,8 +174,13 @@ struct AssistPage: View {
           Amount(value: store.number("zenz_remembered_min_chars"), range: 1...20, step: 1,
                        unit: "文字以上")
         }
+        Row(title: "学習データ", detail: "退けた語、すぐ出す補正、止めた補正") {
+          Button("見る…") { showLearned = true }
+        }
       }
     }
+    .sheet(isPresented: $showLearned) { LearningDataView(actions: store.actions) }
+    .sheet(isPresented: $showForms) { CharacterFormsView(store: store) }
   }
 }
 
