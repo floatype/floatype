@@ -104,6 +104,17 @@ int FloatypeSettingsNumberForm(const char* lines);
 // rule. To free.
 char* FloatypeSettingsWithNumberForm(const char* lines, int form);
 
+// zenz's learning data (学習データを見る…): one "<kind>\t<reading>\t<text>"
+// line each, kind 0 退けた語, 1 1 回退けた語, 2 すぐ出す補正, 3 止めた補正,
+// the newest of each first. To free.
+char* FloatypeSettingsZenzMemory(void);
+// Forgets one line of it, or all of it.
+void FloatypeSettingsZenzForget(int kind, const char* reading,
+                                const char* text);
+void FloatypeSettingsZenzForgetAll(void);
+// The folder the learning data is in. To free.
+char* FloatypeSettingsProfileDirectory(void);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif

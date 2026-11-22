@@ -119,6 +119,7 @@ struct DictionaryPage: View {
 
 struct AssistPage: View {
   @ObservedObject var store: SettingsStore
+  @State private var showLearned = false
 
   var body: some View {
     let auto = store.bool("use_auto_conversion").wrappedValue
@@ -164,8 +165,12 @@ struct AssistPage: View {
           Amount(value: store.number("zenz_remembered_min_chars"), range: 1...20, step: 1,
                        unit: "文字以上")
         }
+        Row(title: "学習データ", detail: "退けた語、すぐ出す補正、止めた補正") {
+          Button("見る…") { showLearned = true }
+        }
       }
     }
+    .sheet(isPresented: $showLearned) { LearningDataView(actions: store.actions) }
   }
 }
 

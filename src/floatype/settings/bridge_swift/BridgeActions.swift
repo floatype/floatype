@@ -65,4 +65,14 @@ public let bridgeActions = SettingsActions(
   },
   indicatorLabel: { take(FloatypeSettingsIndicatorLabel(Int32($0), $1)) ?? "" },
   numberForm: { Int(FloatypeSettingsNumberForm($0)) },
-  withNumberForm: { take(FloatypeSettingsWithNumberForm($0, Int32($1))) })
+  withNumberForm: { take(FloatypeSettingsWithNumberForm($0, Int32($1))) },
+  learned: {
+    (take(FloatypeSettingsZenzMemory()) ?? "").split(separator: "\n").compactMap { line in
+      let parts = line.split(separator: "\t", omittingEmptySubsequences: false)
+      guard parts.count == 3, let kind = Int(parts[0]) else { return nil }
+      return LearnedEntry(kind: kind, reading: String(parts[1]), text: String(parts[2]))
+    }
+  },
+  forget: { FloatypeSettingsZenzForget(Int32($0.kind), $0.reading, $0.text) },
+  forgetAll: { FloatypeSettingsZenzForgetAll() },
+  profileDirectory: { take(FloatypeSettingsProfileDirectory()) ?? "" })

@@ -42,11 +42,15 @@ swift_interop_hint(
 
 mozc_cc_library(
     name = "bridge",
-    srcs = ["bridge.cc"],
+    srcs = [
+        "bridge.cc",
+        "bridge_editors.cc",
+    ],
     hdrs = ["bridge.h"],
     aspect_hints = [":bridge_module"],
     deps = [
         ":config_lines",
+        "//base:system_util",
         "//base:version",
         "//client",
         "//client:client_interface",
@@ -54,6 +58,7 @@ mozc_cc_library(
         "//floatype/indicator:indicator_layout",
         "//floatype/look:window_look",
         "//floatype/update:update_check",
+        "//floatype/zenz:zenz_memory",
         "//protocol:commands_cc_proto",
         "//protocol:config_cc_proto",
         "//protocol:renderer_cc_proto",
@@ -62,6 +67,17 @@ mozc_cc_library(
     ] + mozc_select(
         macos = ["//base/mac:mac_util"],
     ),
+)
+
+mozc_cc_test(
+    name = "bridge_editors_test",
+    srcs = ["bridge_editors_test.cc"],
+    deps = [
+        ":bridge",
+        "//floatype/zenz:zenz_memory",
+        "//testing:gunit_main",
+        "//testing:mozctest",
+    ],
 )
 
 mozc_cc_test(

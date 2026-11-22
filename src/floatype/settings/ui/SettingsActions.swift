@@ -77,6 +77,21 @@ public struct WindowLook {
   }
 }
 
+/// One line of zenz's learning data; `kind` 0 退けた語, 1 1 回退けた語,
+/// 2 すぐ出す補正, 3 止めた補正.
+public struct LearnedEntry: Hashable, Identifiable {
+  public var kind: Int
+  public var reading: String
+  public var text: String
+  public var id: Self { self }
+
+  public init(kind: Int, reading: String, text: String) {
+    self.kind = kind
+    self.reading = reading
+    self.text = text
+  }
+}
+
 public struct SettingsActions {
   public var version: String
   /// The settings again, as lines, or nil.
@@ -104,6 +119,12 @@ public struct SettingsActions {
   /// character_form_rules's value with the digits' rule set to a 数字の入力
   /// (0 to 2), or nil without that rule.
   public var withNumberForm: (String, Int) -> String?
+  /// zenz's learning data, by kind, the newest of each first.
+  public var learned: () -> [LearnedEntry]
+  public var forget: (LearnedEntry) -> Void
+  public var forgetAll: () -> Void
+  /// The folder the learning data is in.
+  public var profileDirectory: () -> String
 
   public init(
     version: String, load: @escaping () -> String?, reset: @escaping () -> String?,
@@ -115,7 +136,11 @@ public struct SettingsActions {
     windowLook: @escaping (String, Bool, Bool) -> WindowLook? = { _, _, _ in nil },
     indicatorLabel: @escaping (Int, String) -> String = { _, _ in "" },
     numberForm: @escaping (String) -> Int = { _ in 3 },
-    withNumberForm: @escaping (String, Int) -> String? = { _, _ in nil }
+    withNumberForm: @escaping (String, Int) -> String? = { _, _ in nil },
+    learned: @escaping () -> [LearnedEntry] = { [] },
+    forget: @escaping (LearnedEntry) -> Void = { _ in },
+    forgetAll: @escaping () -> Void = {},
+    profileDirectory: @escaping () -> String = { "" }
   ) {
     self.version = version
     self.load = load
@@ -131,6 +156,10 @@ public struct SettingsActions {
     self.indicatorLabel = indicatorLabel
     self.numberForm = numberForm
     self.withNumberForm = withNumberForm
+    self.learned = learned
+    self.forget = forget
+    self.forgetAll = forgetAll
+    self.profileDirectory = profileDirectory
   }
 
   /// Actions that do nothing, for drawing the window.
