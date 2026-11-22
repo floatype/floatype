@@ -109,7 +109,9 @@ mozc_cc_qt_library(
     srcs = ["word_register_dialog_main.cc"],
     deps = [
         ":word_register_dialog",
+        "//base:file_util",
         "//base:init_mozc",
+        "//floatype/config:settings_file",
         "//gui/base:gui_base",
     ],
 )

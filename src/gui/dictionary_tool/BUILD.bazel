@@ -192,7 +192,9 @@ mozc_cc_qt_library(
     srcs = ["dictionary_tool_main.cc"],
     deps = [
         ":dictionary_tool",
+        "//base:file_util",
         "//base:init_mozc",
+        "//floatype/config:settings_file",
         "//gui/base:gui_base",
         "@com_google_absl//absl/flags:flag",
     ],

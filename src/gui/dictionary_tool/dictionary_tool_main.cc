@@ -27,7 +27,9 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include "base/file_util.h"
 #include "base/init_mozc.h"
+#include "floatype/config/settings_file.h"
 
 #ifdef _WIN32
 #include "base/win32/winmain.h"
@@ -37,5 +39,11 @@ int RunDictionaryTool(int argc, char *argv[]);
 
 int main(int argc, char *argv[]) {
   mozc::InitMozc(argv[0], &argc, &argv);
+  // floatype: the user dictionary is the text file next to config.toml, which
+  // the converter reads. On macOS this .app starts here, not through mozc_tool,
+  // which tells the other platforms' tools the same.
+  mozc::floatype::SetUserFilesDir(
+      mozc::FileUtil::Dirname(mozc::floatype::DefaultSettingsPath()),
+      /*report_errors=*/true);
   return RunDictionaryTool(argc, argv);
 }
