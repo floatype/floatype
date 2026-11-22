@@ -208,6 +208,7 @@ mozc_cc_library(
     hdrs = ["key_parser.h"],
     visibility = [
         "//client:__pkg__",
+        "//floatype/settings:__pkg__",
         "//gui/config_dialog:__pkg__",
         "//session:__pkg__",
         "//unix/emacs:__pkg__",

@@ -45,6 +45,22 @@ final class SettingsStoreTests: XCTestCase {
     XCTAssertEqual(saved.count, 1, "nothing to set, nothing saved")
   }
 
+  func testSavesTheCharacterFormTableWhole() {
+    var saved: [String] = []
+    let actions = SettingsActions(
+      version: "", load: { nil }, reset: { nil }, clearHistory: { nil },
+      openTool: { _ in nil }, startsAtLogin: { false }, setStartsAtLogin: { _ in },
+      latestReleaseURL: "", checkRelease: { _, _, _ in .failed },
+      checksumMatches: { _, _ in false },
+      characterForms: { _ in [CharacterFormRule(group: "0", typed: "HALF_WIDTH", converted: "HALF_WIDTH")] },
+      withCharacterForms: { "[\($0.map { "\($0.group):\($0.typed)" }.joined())]" })
+    let store = SettingsStore(lines: "", save: { saved.append($0); return nil }, actions: actions)
+    var table = store.characterForms().wrappedValue
+    table[0].typed = "FULL_WIDTH"
+    store.characterForms().wrappedValue = table
+    XCTAssertEqual(saved, ["character_form_rules = [0:FULL_WIDTH]\n"])
+  }
+
   func testSavesAColorOnceItStopsChanging() {
     var saved: [String] = []
     let store = SettingsStore(lines: "ruby_style.text_color = 0\n",

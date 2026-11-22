@@ -20,8 +20,38 @@ for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua
   actions.windowLook = bridgeActions.windowLook
   actions.indicatorLabel = bridgeActions.indicatorLabel
   actions.numberForm = bridgeActions.numberForm
+  // The editor windows ("learned", ...) with made-up data, nothing read.
+  actions.learned = {
+    [LearnedEntry(kind: 0, reading: "かんじ", text: "完治"),
+     LearnedEntry(kind: 1, reading: "きかい", text: "機会"),
+     LearnedEntry(kind: 2, reading: "よい", text: "良い"),
+     LearnedEntry(kind: 3, reading: "ほう", text: "方")]
+  }
+  actions.englishWords = {
+    [EnglishWord(word: "quokka", kept: true, from: 2),
+     EnglishWord(word: "page", kept: false, from: 1),
+     EnglishWord(word: "time", kept: true, from: 0)]
+  }
+  actions.characterForms = bridgeActions.characterForms
+  actions.romanTable = bridgeActions.romanTable
+  actions.keymap = bridgeActions.keymap
+  actions.keymapNames = bridgeActions.keymapNames
   let store = SettingsStore(lines: lines, save: { _ in nil }, actions: actions)
-  let host = NSHostingView(rootView: SettingsView(store: store, page: page))
+  let root: AnyView
+  switch page {
+  case "learned":
+    root = AnyView(LearningDataView(actions: actions).background(Color(nsColor: .windowBackgroundColor)))
+  case "words":
+    root = AnyView(EnglishWordsView(actions: actions).background(Color(nsColor: .windowBackgroundColor)))
+  case "forms":
+    root = AnyView(CharacterFormsView(store: store).background(Color(nsColor: .windowBackgroundColor)))
+  case "roman":
+    root = AnyView(RomanTableView(store: store).background(Color(nsColor: .windowBackgroundColor)))
+  case "keymap":
+    root = AnyView(KeymapView(store: store).background(Color(nsColor: .windowBackgroundColor)))
+  default: root = AnyView(SettingsView(store: store, page: page))
+  }
+  let host = NSHostingView(rootView: root)
   let window = NSWindow(
     contentRect: NSRect(origin: .zero, size: size),
     styleMask: [.titled, .fullSizeContentView], backing: .buffered, defer: false)

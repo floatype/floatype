@@ -77,6 +77,96 @@ public struct WindowLook {
   }
 }
 
+/// One line of zenz's learning data; `kind` 0 退けた語, 1 1 回退けた語,
+/// 2 すぐ出す補正, 3 止めた補正.
+public struct LearnedEntry: Hashable, Identifiable {
+  public var kind: Int
+  public var reading: String
+  public var text: String
+  public var id: Self { self }
+
+  public init(kind: Int, reading: String, text: String) {
+    self.kind = kind
+    self.reading = reading
+    self.text = text
+  }
+}
+
+/// One line of the English words list; `from` 0 the preset, 1 the preset
+/// changed in english_words.txt, 2 the file alone.
+public struct EnglishWord: Hashable, Identifiable {
+  public var word: String
+  public var kept: Bool
+  public var from: Int
+  public var id: String { word.lowercased() }
+
+  public init(word: String, kept: Bool, from: Int) {
+    self.word = word
+    self.kept = kept
+    self.from = from
+  }
+}
+
+/// One rule of the 全角・半角 table: a group of characters ("ア", "0", "A",
+/// "(){}[]") and its forms by name while typing and once converted
+/// ("FULL_WIDTH", "HALF_WIDTH", "LAST_FORM").
+public struct CharacterFormRule: Hashable, Identifiable {
+  public var group: String
+  public var typed: String
+  public var converted: String
+  public var id: String { group }
+
+  public init(group: String, typed: String, converted: String) {
+    self.group = group
+    self.typed = typed
+    self.converted = converted
+  }
+}
+
+/// One row of the romaji table: what is typed, the kana it gives, and the
+/// input that stays pending after it (kk → っ, k).
+public struct RomanRow: Hashable, Identifiable {
+  public var id = UUID()
+  public var input: String
+  public var output: String
+  public var next: String
+
+  public init(input: String, output: String, next: String) {
+    self.input = input
+    self.output = output
+    self.next = next
+  }
+}
+
+/// One row of the keymap: in `mode`, `key` does `command`. A row the Qt
+/// editor never showed (`shown` false: IME on and off, a command sequence) is
+/// not listed, and is saved back as it was.
+public struct KeymapRow: Hashable, Identifiable {
+  public var id = UUID()
+  public var mode: String
+  public var key: String
+  public var command: String
+  public var shown: Bool
+
+  public init(mode: String, key: String, command: String, shown: Bool = true) {
+    self.mode = mode
+    self.key = key
+    self.command = command
+    self.shown = shown
+  }
+}
+
+/// The keymap editor's modes and commands, (name, Japanese name) each.
+public struct KeymapNames {
+  public var modes: [(String, String)]
+  public var commands: [(String, String)]
+
+  public init(modes: [(String, String)], commands: [(String, String)]) {
+    self.modes = modes
+    self.commands = commands
+  }
+}
+
 public struct SettingsActions {
   public var version: String
   /// The settings again, as lines, or nil.
@@ -104,6 +194,45 @@ public struct SettingsActions {
   /// character_form_rules's value with the digits' rule set to a 数字の入力
   /// (0 to 2), or nil without that rule.
   public var withNumberForm: (String, Int) -> String?
+  /// zenz's learning data, by kind, the newest of each first.
+  public var learned: () -> [LearnedEntry]
+  public var forget: (LearnedEntry) -> Void
+  public var forgetAll: () -> Void
+  /// The folder the learning data is in.
+  public var profileDirectory: () -> String
+  /// english_words.txt's words and the preset ones, read again.
+  public var englishWords: () -> [EnglishWord]
+  /// Makes the words kept (0), taken out (1) or as the built-in lists say
+  /// (2); why nothing was written, or nil.
+  public var editEnglishWords: ([String], Int) -> String?
+  /// The folder english_words.txt is in.
+  public var userFilesDirectory: () -> String
+  /// The 全角・半角 table with the settings lines given.
+  public var characterForms: (String) -> [CharacterFormRule]
+  /// character_form_rules's value for a table, or nil.
+  public var withCharacterForms: ([CharacterFormRule]) -> String?
+  /// The romaji table with the settings lines given (Mozc's when none).
+  public var romanTable: (String) -> [RomanRow]
+  /// Rows from a table file's text, or Mozc's default table for nil.
+  public var romanRows: (String?) -> [RomanRow]
+  /// The table for rows, as a file holds it.
+  public var romanTableText: ([RomanRow]) -> String
+  /// custom_roman_table's value for rows, or nil for no usable row.
+  public var romanTableValue: ([RomanRow]) -> String?
+  /// The keymap with the settings lines given: the custom table, or the
+  /// preset's.
+  public var keymap: (String) -> [KeymapRow]
+  /// A preset's rows ("ATOK", "MSIME", "KOTOERI").
+  public var keymapPreset: (String) -> [KeymapRow]
+  /// Rows from a keymap file's text.
+  public var keymapRows: (String) -> [KeymapRow]
+  /// The table for rows, as a keymap file holds it.
+  public var keymapText: ([KeymapRow]) -> String
+  /// custom_keymap_table's value for rows, or nil without a row shown.
+  public var keymapValue: ([KeymapRow]) -> String?
+  public var keymapNames: () -> KeymapNames
+  /// Whether a key ("Ctrl Shift a") can be bound.
+  public var keymapKeyIsValid: (String) -> Bool
 
   public init(
     version: String, load: @escaping () -> String?, reset: @escaping () -> String?,
@@ -115,7 +244,27 @@ public struct SettingsActions {
     windowLook: @escaping (String, Bool, Bool) -> WindowLook? = { _, _, _ in nil },
     indicatorLabel: @escaping (Int, String) -> String = { _, _ in "" },
     numberForm: @escaping (String) -> Int = { _ in 3 },
-    withNumberForm: @escaping (String, Int) -> String? = { _, _ in nil }
+    withNumberForm: @escaping (String, Int) -> String? = { _, _ in nil },
+    learned: @escaping () -> [LearnedEntry] = { [] },
+    forget: @escaping (LearnedEntry) -> Void = { _ in },
+    forgetAll: @escaping () -> Void = {},
+    profileDirectory: @escaping () -> String = { "" },
+    englishWords: @escaping () -> [EnglishWord] = { [] },
+    editEnglishWords: @escaping ([String], Int) -> String? = { _, _ in nil },
+    userFilesDirectory: @escaping () -> String = { "" },
+    characterForms: @escaping (String) -> [CharacterFormRule] = { _ in [] },
+    withCharacterForms: @escaping ([CharacterFormRule]) -> String? = { _ in nil },
+    romanTable: @escaping (String) -> [RomanRow] = { _ in [] },
+    romanRows: @escaping (String?) -> [RomanRow] = { _ in [] },
+    romanTableText: @escaping ([RomanRow]) -> String = { _ in "" },
+    romanTableValue: @escaping ([RomanRow]) -> String? = { _ in nil },
+    keymap: @escaping (String) -> [KeymapRow] = { _ in [] },
+    keymapPreset: @escaping (String) -> [KeymapRow] = { _ in [] },
+    keymapRows: @escaping (String) -> [KeymapRow] = { _ in [] },
+    keymapText: @escaping ([KeymapRow]) -> String = { _ in "" },
+    keymapValue: @escaping ([KeymapRow]) -> String? = { _ in nil },
+    keymapNames: @escaping () -> KeymapNames = { KeymapNames(modes: [], commands: []) },
+    keymapKeyIsValid: @escaping (String) -> Bool = { _ in true }
   ) {
     self.version = version
     self.load = load
@@ -131,6 +280,26 @@ public struct SettingsActions {
     self.indicatorLabel = indicatorLabel
     self.numberForm = numberForm
     self.withNumberForm = withNumberForm
+    self.learned = learned
+    self.forget = forget
+    self.forgetAll = forgetAll
+    self.profileDirectory = profileDirectory
+    self.englishWords = englishWords
+    self.editEnglishWords = editEnglishWords
+    self.userFilesDirectory = userFilesDirectory
+    self.characterForms = characterForms
+    self.withCharacterForms = withCharacterForms
+    self.romanTable = romanTable
+    self.romanRows = romanRows
+    self.romanTableText = romanTableText
+    self.romanTableValue = romanTableValue
+    self.keymap = keymap
+    self.keymapPreset = keymapPreset
+    self.keymapRows = keymapRows
+    self.keymapText = keymapText
+    self.keymapValue = keymapValue
+    self.keymapNames = keymapNames
+    self.keymapKeyIsValid = keymapKeyIsValid
   }
 
   /// Actions that do nothing, for drawing the window.

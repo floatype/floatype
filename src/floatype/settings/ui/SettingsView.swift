@@ -230,6 +230,8 @@ struct Amount: View {
 
 struct GeneralPage: View {
   @ObservedObject var store: SettingsStore
+  @State private var showRoman = false
+  @State private var showKeymap = false
 
   var body: some View {
     let live = store.bool("use_live_conversion").wrappedValue
@@ -240,6 +242,9 @@ struct GeneralPage: View {
           Choice(selection: store.choice("preedit_method"),
                  items: [("ROMAN", "ローマ字入力"), ("KANA", "かな入力")])
         }
+        SubRow(title: "ローマ字テーブル") {
+          Button("編集…") { showRoman = true }
+        }.disabled(store.choice("preedit_method").wrappedValue != "ROMAN")
         Row(title: "句読点") {
           Choice(selection: store.choice("punctuation_method"),
                  items: [("TOUTEN_KUTEN", "、。"), ("COMMA_PERIOD", "，．"),
@@ -291,6 +296,7 @@ struct GeneralPage: View {
           Choice(selection: keymap,
                  items: (custom ? [("CUSTOM", "カスタム")] : [])
                    + [("ATOK", "ATOK"), ("MSIME", "MS-IME"), ("KOTOERI", "ことえり")])
+          Button("編集…") { showKeymap = true }
         }
       }
       SettingsGroup(title: "ライブ変換") {
@@ -327,6 +333,8 @@ struct GeneralPage: View {
       }
       InputAssistGroup(store: store)
     }
+    .sheet(isPresented: $showRoman) { RomanTableView(store: store) }
+    .sheet(isPresented: $showKeymap) { KeymapView(store: store) }
   }
 }
 
