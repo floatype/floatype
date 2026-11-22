@@ -163,21 +163,33 @@ struct Row<Control: View>: View {
         }
       }
       Spacer(minLength: 8)
-      control
+      control.environment(\.rowTitle, title)
     }
     .padding(.horizontal, 14)
     .padding(.vertical, 9)
-    // The controls carry no label of their own; VoiceOver reads the row's.
-    .accessibilityElement(children: .combine)
+  }
+}
+
+private struct RowTitleKey: EnvironmentKey {
+  static let defaultValue = ""
+}
+
+extension EnvironmentValues {
+  /// The name of the row a control sits in, which VoiceOver reads as the
+  /// control's label, the label shown being the row's.
+  var rowTitle: String {
+    get { self[RowTitleKey.self] }
+    set { self[RowTitleKey.self] = newValue }
   }
 }
 
 struct Choice: View {
   let selection: Binding<String>
   let items: [(String, String)]  // (value name, shown)
+  @Environment(\.rowTitle) private var title
 
   var body: some View {
-    Picker("", selection: selection) {
+    Picker(title, selection: selection) {
       ForEach(items, id: \.0) { Text($0.1).tag($0.0) }
     }
     .labelsHidden()
@@ -188,9 +200,10 @@ struct Choice: View {
 
 struct Switch: View {
   let isOn: Binding<Bool>
+  @Environment(\.rowTitle) private var title
 
   var body: some View {
-    Toggle("", isOn: isOn).labelsHidden().toggleStyle(.switch)
+    Toggle(title, isOn: isOn).labelsHidden().toggleStyle(.switch)
   }
 }
 
@@ -200,12 +213,13 @@ struct Amount: View {
   let range: ClosedRange<Int>
   let step: Int
   var unit = "ms"
+  @Environment(\.rowTitle) private var title
 
   var body: some View {
     HStack(spacing: 6) {
       Text(unit.isEmpty ? "\(value.wrappedValue)" : "\(value.wrappedValue) \(unit)")
         .monospacedDigit()
-      Stepper("", value: value, in: range, step: step).labelsHidden()
+      Stepper(title, value: value, in: range, step: step).labelsHidden()
     }
   }
 }

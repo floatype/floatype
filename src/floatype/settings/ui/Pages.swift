@@ -212,6 +212,9 @@ struct PrivacyPage: View {
         Row(title: "一時的にすべてのサジェスト機能を無効にする") {
           Switch(isOn: store.bool("presentation_mode"))
         }
+        // As the Qt screen: nothing to turn off when no suggestion is on.
+        .disabled(!["use_history_suggest", "use_dictionary_suggest", "use_realtime_conversion"]
+          .contains { store.bool($0).wrappedValue })
       }
     }
   }
