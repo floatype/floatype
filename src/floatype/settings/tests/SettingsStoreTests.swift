@@ -52,6 +52,22 @@ final class SettingsStoreTests: XCTestCase {
     let color = store.color("candidate_style.text_color", shown: 0x123456).wrappedValue
     XCTAssertEqual(color.components?.map { Int(($0 * 255).rounded()) }, [0x12, 0x34, 0x56, 255])
     XCTAssertNil(store.values["candidate_style.text_color"], "still unset")
+    store.color("candidate_style.text_color", shown: 0x123456).wrappedValue = color
+    store.savePending()
+    XCTAssertNil(store.values["candidate_style.text_color"], "the shown color handed back")
+  }
+
+  func testResetDropsAColorWaiting() {
+    var saved: [String] = []
+    var actions = SettingsActions.none()
+    actions.load = { "ruby_style.text_color = 0\n" }
+    let store = SettingsStore(lines: "ruby_style.text_color = 0\n",
+                              save: { saved.append($0); return nil }, actions: actions)
+    store.numberSoon("ruby_style.text_color").wrappedValue = 255
+    store.reset()
+    store.savePending()
+    XCTAssertTrue(saved.isEmpty)
+    XCTAssertEqual(store.values["ruby_style.text_color"], "0")
   }
 
   func testKeepsTheValueWhenNotSaved() {

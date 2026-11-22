@@ -177,6 +177,16 @@ TEST(BridgeLookTest, ResolvesTheWindowsLook) {
             0);
 }
 
+TEST(BridgeLookTest, ReadsTheLinesOfARealProfile) {
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  config.set_custom_roman_table("a\t\xe3\x81\x82\nka\t\xe3\x81\x8b\n");
+  config.set_custom_keymap_table("status\tkey\tcommand\n\"x\"\\\t\n");
+  const std::string lines = ConfigLines(config);
+  FloatypeWindowLook look{};
+  EXPECT_EQ(FloatypeSettingsWindowLook(lines.c_str(), 1, 0, &look), 1)
+      << "tables of several lines, quotes and backslashes";
+}
+
 TEST(BridgeLookTest, NamesTheIndicatorsStates) {
   for (const auto& [state, label, shown] :
        std::initializer_list<std::tuple<int, const char*, const char*>>{

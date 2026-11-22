@@ -43,6 +43,9 @@ public final class SettingsStore: ObservableObject {
   }
 
   private func read(_ lines: String?) {
+    // What waited to be saved is not saved over what is read.
+    flush?.cancel()
+    pending = [:]
     loaded = lines != nil
     guard let lines else { return }
     var read: [String: String] = [:]
@@ -132,11 +135,15 @@ public final class SettingsStore: ObservableObject {
           blue: CGFloat(rgb & 0xff) / 255, alpha: 1)
       },
       set: {
+        // The panel can hand back the color shown: an unset one stays unset.
+        let current = self.values[key].flatMap { UInt32($0) } ?? shown
         guard let srgb = $0.converted(
           to: CGColorSpace(name: CGColorSpace.sRGB)!, intent: .defaultIntent, options: nil),
           let parts = srgb.components, parts.count >= 3 else { return }
         let byte = { (part: CGFloat) in UInt32((min(max(part, 0), 1) * 255).rounded()) }
-        self.setSoon(key, String(byte(parts[0]) << 16 | byte(parts[1]) << 8 | byte(parts[2])))
+        let rgb = byte(parts[0]) << 16 | byte(parts[1]) << 8 | byte(parts[2])
+        guard rgb != current else { return }
+        self.setSoon(key, String(rgb))
       })
   }
 
