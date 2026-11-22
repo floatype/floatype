@@ -6,7 +6,10 @@ mozc_cc_library(
     name = "update_check",
     srcs = ["update_check.cc"],
     hdrs = ["update_check.h"],
-    visibility = ["//gui/config_dialog:__pkg__"],
+    visibility = [
+        "//floatype/settings:__pkg__",
+        "//gui/config_dialog:__pkg__",
+    ],
     deps = [
         "@com_google_absl//absl/strings",
     ],

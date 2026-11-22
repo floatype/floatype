@@ -7,6 +7,7 @@ mozc_cc_library(
     srcs = ["indicator_layout.cc"],
     hdrs = ["indicator_layout.h"],
     visibility = [
+        "//floatype/settings:__pkg__",
         "//gui/config_dialog:__pkg__",
         "//renderer:__pkg__",
     ],

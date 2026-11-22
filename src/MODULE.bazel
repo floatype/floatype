@@ -120,6 +120,15 @@ bazel_dep(
     repo_name = "build_bazel_rules_apple",
 )
 
+# rules_swift: 3.5.0, the version rules_apple 4.5.2 resolves.
+# https://github.com/bazelbuild/rules_swift
+# floatype: the settings screen is SwiftUI.
+bazel_dep(
+    name = "rules_swift",
+    version = "3.5.0",
+    repo_name = "build_bazel_rules_swift",
+)
+
 # apple_support: 2.4.0 2026-03-27
 # https://github.com/bazelbuild/apple_support/
 ## this must come above 'rules_cc'
