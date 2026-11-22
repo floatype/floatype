@@ -8,9 +8,9 @@
    scorer and, with --pkg, everything the installer puts in place), and fails
    on any outside a short list of known, local uses.
 3. Lists the executables that name the one address floatype may ask, the
-   latest release on GitHub. The settings dialog asks it through curl when
-   the user presses its update button, which no symbol shows; more than one
-   executable holding it fails.
+   latest release on GitHub. The settings screen (Settings.app) asks it
+   through curl when the user presses its update button, which no symbol
+   shows; an executable outside UPDATE_HOLDERS holding it fails.
 
 Run from src/ after building the scorer (floatype/scorer/CMakeLists.txt) and
   bazelisk build --config release_build //floatype/eval:replay_main
@@ -83,6 +83,13 @@ def static_check(paths):
 UPDATE_ADDRESS = b"api.github.com/repos/floatype/floatype/releases/latest"
 
 
+# The executables that may hold it: the settings screen, the Qt one kept in
+# the bundle for the Qt frameworks the other tools load, and the prelauncher,
+# which is mozc_tool and so links the Qt screen's code. Only the first is
+# opened for 環境設定….
+UPDATE_HOLDERS = {"Settings", "ConfigDialog", "floatypePrelauncher"}
+
+
 def update_askers(paths):
   """The executables that hold the address the update button asks."""
   askers = []
@@ -143,9 +150,9 @@ def main():
     if static_check(paths):
       failed = True
     askers = update_askers(paths)
-    print("更新の確認先を持つ実行ファイル（設定画面の 1 つだけのはず）: "
+    print("更新の確認先を持つ実行ファイル（設定画面、Qt の設定画面、prelauncher だけのはず）: "
           + (" ".join(os.path.basename(a) for a in askers) or "なし"))
-    if len(askers) > 1:
+    if any(os.path.basename(a) not in UPDATE_HOLDERS for a in askers):
       failed = True
 
   print("失敗" if failed else "ローカルで完結している")
