@@ -60,7 +60,7 @@ public struct LearningDataView: View {
         }
         Spacer()
         Text("\(shown.count) 件").foregroundColor(.secondary).monospacedDigit()
-        Button("閉じる") { dismiss() }.keyboardShortcut(.defaultAction)
+        Button("閉じる") { dismiss() }.keyboardShortcut(.cancelAction)
       }
       Text(note).font(.system(size: 11)).foregroundColor(.secondary)
         .fixedSize(horizontal: false, vertical: true)

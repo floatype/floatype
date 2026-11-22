@@ -57,7 +57,8 @@ public struct RomanTableView: View {
       HStack {
         Spacer()
         Button("キャンセル") { dismiss() }.keyboardShortcut(.cancelAction)
-        Button("保存", action: save).keyboardShortcut(.defaultAction)
+        // No Return shortcut: Return finishes a cell, and must not save.
+        Button("保存", action: save)
       }
     }
     .padding(20)
