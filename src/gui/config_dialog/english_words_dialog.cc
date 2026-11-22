@@ -59,6 +59,8 @@ struct File {
   std::string path;
   std::string text;
   floatype::FileStamp stamp;
+  // There but not read: never written over, which would lose its lines.
+  bool unreadable = false;
 };
 
 File Read(std::string path) {
@@ -67,6 +69,8 @@ File Read(std::string path) {
   if (absl::StatusOr<std::string> text = FileUtil::GetContents(file.path);
       text.ok()) {
     file.text = *std::move(text);
+  } else {
+    file.unreadable = file.stamp.size >= 0;
   }
   return file;
 }
@@ -221,6 +225,10 @@ std::unique_ptr<QDialog> NewEnglishWordsDialog(QWidget* parent) {
       show_message(
           Text("開いたあとに english_words.txt が書き換えられたので、"
                "変えずに読み直しました。もう一度操作してください。"));
+      return false;
+    }
+    if (file->unreadable) {
+      show_message(Text("english_words.txt を読めないので、変えませんでした。"));
       return false;
     }
     std::string text = file->stamp.size < 0 ? std::string(kHeader) : file->text;
