@@ -9,7 +9,11 @@
   <key>CFBundleIdentifier</key>
   <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
   <key>CFBundleName</key>
-  <string>$(PRODUCT_NAME)</string>
+  <string>Floatype</string>
+  <key>CFBundleDisplayName</key>
+  <string>Floatype</string>
+  <key>CFBundleIconFile</key>
+  <string>product_icon.icns</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>LSUIElement</key>

@@ -129,6 +129,7 @@ swift_binary(
 
 macos_application(
     name = "settings_app",
+    app_icons = ["//data/images/mac:product_icon.icns"],
     bundle_id = "org.floatype.settings",
     bundle_name = "Settings",
     infoplists = ["Info.plist"],
