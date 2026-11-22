@@ -141,6 +141,19 @@ char* FloatypeSettingsCharacterForms(const char* lines);
 // read. To free.
 char* FloatypeSettingsWithCharacterForms(const char* rows);
 
+// The romaji table (ローマ字テーブル), one "<input>\t<output>\t<next>" row
+// a line (next may be empty): from the settings `lines`, Mozc's default
+// table when they have none. To free.
+char* FloatypeSettingsRomanTable(const char* lines);
+// Rows from a table file's `text` (as imported), or Mozc's default table for
+// NULL; blank lines and lines of fewer than two fields are left out. To free.
+char* FloatypeSettingsRomanRows(const char* text);
+// The table for rows, as a table file holds it (exported). To free.
+char* FloatypeSettingsRomanTableText(const char* rows);
+// The value of custom_roman_table for rows: `""` when they are the default
+// table; NULL when no row has an input and an output or next. To free.
+char* FloatypeSettingsRomanTableValue(const char* rows);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif

@@ -230,6 +230,7 @@ struct Amount: View {
 
 struct GeneralPage: View {
   @ObservedObject var store: SettingsStore
+  @State private var showRoman = false
 
   var body: some View {
     let live = store.bool("use_live_conversion").wrappedValue
@@ -240,6 +241,9 @@ struct GeneralPage: View {
           Choice(selection: store.choice("preedit_method"),
                  items: [("ROMAN", "ローマ字入力"), ("KANA", "かな入力")])
         }
+        SubRow(title: "ローマ字テーブル") {
+          Button("編集…") { showRoman = true }
+        }.disabled(store.choice("preedit_method").wrappedValue != "ROMAN")
         Row(title: "句読点") {
           Choice(selection: store.choice("punctuation_method"),
                  items: [("TOUTEN_KUTEN", "、。"), ("COMMA_PERIOD", "，．"),
@@ -327,6 +331,7 @@ struct GeneralPage: View {
       }
       InputAssistGroup(store: store)
     }
+    .sheet(isPresented: $showRoman) { RomanTableView(store: store) }
   }
 }
 

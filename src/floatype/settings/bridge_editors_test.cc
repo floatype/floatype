@@ -61,6 +61,28 @@ TEST(BridgeCharacterFormsTest, ReadsAndWritesTheTable) {
   EXPECT_EQ(FloatypeSettingsWithCharacterForms(""), nullptr);
 }
 
+TEST(BridgeRomanTableTest, ReadsEditsAndKeepsTheDefaultAsNone) {
+  const std::string defaults = Take(FloatypeSettingsRomanRows(nullptr));
+  EXPECT_TRUE(absl::StrContains(defaults, "ka\tか\t\n")) << "Mozc's table";
+  EXPECT_EQ(Take(FloatypeSettingsRomanTable("")), defaults)
+      << "the default when the settings have none";
+  EXPECT_EQ(Take(FloatypeSettingsRomanTableValue(defaults.c_str())), "\"\"")
+      << "the default table is saved as none";
+
+  EXPECT_EQ(Take(FloatypeSettingsRomanRows("a\tあ\n\nkk\tっ\tk\nx\r\n")),
+            "a\tあ\t\nkk\tっ\tk\n")
+      << "a blank line and a line of one field left out";
+  const char kRows[] = "a\tあ\t\nkk\tっ\tk\n\tい\t\nq\t\t\n";
+  EXPECT_EQ(Take(FloatypeSettingsRomanTableText(kRows)), "a\tあ\nkk\tっ\tk\n")
+      << "rows without an input, or without output and next, left out";
+  const std::string value = Take(FloatypeSettingsRomanTableValue(kRows));
+  EXPECT_EQ(value, "\"a\\tあ\\nkk\\tっ\\tk\\n\"");
+  EXPECT_EQ(Take(FloatypeSettingsRomanTable(
+                absl::StrCat("custom_roman_table = ", value).c_str())),
+            "a\tあ\t\nkk\tっ\tk\n");
+  EXPECT_EQ(FloatypeSettingsRomanTableValue("\tい\t\n"), nullptr);
+}
+
 class BridgeEnglishWordsTest : public testing::TestWithTempUserProfile {
  protected:
   void SetUp() override {

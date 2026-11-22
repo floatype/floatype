@@ -139,6 +139,14 @@ public final class SettingsStore: ObservableObject {
       })
   }
 
+  /// Saves `key` with a TOML value made elsewhere (a table's string);
+  /// whether it was saved, else `error` says why.
+  @discardableResult
+  public func save(_ key: String, raw value: String) -> Bool {
+    set(key, value)
+    return error == nil
+  }
+
   /// The settings shown, as lines, for what reads them whole (外観's preview).
   public var lines: String {
     values.map { "\($0.key) = \($0.value)\n" }.joined()

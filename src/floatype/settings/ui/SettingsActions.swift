@@ -123,6 +123,21 @@ public struct CharacterFormRule: Hashable, Identifiable {
   }
 }
 
+/// One row of the romaji table: what is typed, the kana it gives, and the
+/// input that stays pending after it (kk → っ, k).
+public struct RomanRow: Hashable, Identifiable {
+  public var id = UUID()
+  public var input: String
+  public var output: String
+  public var next: String
+
+  public init(input: String, output: String, next: String) {
+    self.input = input
+    self.output = output
+    self.next = next
+  }
+}
+
 public struct SettingsActions {
   public var version: String
   /// The settings again, as lines, or nil.
@@ -167,6 +182,14 @@ public struct SettingsActions {
   public var characterForms: (String) -> [CharacterFormRule]
   /// character_form_rules's value for a table, or nil.
   public var withCharacterForms: ([CharacterFormRule]) -> String?
+  /// The romaji table with the settings lines given (Mozc's when none).
+  public var romanTable: (String) -> [RomanRow]
+  /// Rows from a table file's text, or Mozc's default table for nil.
+  public var romanRows: (String?) -> [RomanRow]
+  /// The table for rows, as a file holds it.
+  public var romanTableText: ([RomanRow]) -> String
+  /// custom_roman_table's value for rows, or nil for no usable row.
+  public var romanTableValue: ([RomanRow]) -> String?
 
   public init(
     version: String, load: @escaping () -> String?, reset: @escaping () -> String?,
@@ -187,7 +210,11 @@ public struct SettingsActions {
     editEnglishWords: @escaping ([String], Int) -> String? = { _, _ in nil },
     userFilesDirectory: @escaping () -> String = { "" },
     characterForms: @escaping (String) -> [CharacterFormRule] = { _ in [] },
-    withCharacterForms: @escaping ([CharacterFormRule]) -> String? = { _ in nil }
+    withCharacterForms: @escaping ([CharacterFormRule]) -> String? = { _ in nil },
+    romanTable: @escaping (String) -> [RomanRow] = { _ in [] },
+    romanRows: @escaping (String?) -> [RomanRow] = { _ in [] },
+    romanTableText: @escaping ([RomanRow]) -> String = { _ in "" },
+    romanTableValue: @escaping ([RomanRow]) -> String? = { _ in nil }
   ) {
     self.version = version
     self.load = load
@@ -212,6 +239,10 @@ public struct SettingsActions {
     self.userFilesDirectory = userFilesDirectory
     self.characterForms = characterForms
     self.withCharacterForms = withCharacterForms
+    self.romanTable = romanTable
+    self.romanRows = romanRows
+    self.romanTableText = romanTableText
+    self.romanTableValue = romanTableValue
   }
 
   /// Actions that do nothing, for drawing the window.

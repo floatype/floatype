@@ -12,6 +12,19 @@ public func take(_ text: UnsafeMutablePointer<CChar>?) -> String? {
   return String(cString: text)
 }
 
+/// Rows as the bridge writes them, "<input>\t<output>\t<next>\n" each.
+func romanRows(_ text: String?) -> [RomanRow] {
+  (text ?? "").split(separator: "\n").compactMap { line in
+    let parts = line.split(separator: "\t", omittingEmptySubsequences: false)
+    guard parts.count == 3 else { return nil }
+    return RomanRow(input: String(parts[0]), output: String(parts[1]), next: String(parts[2]))
+  }
+}
+
+func romanText(_ rows: [RomanRow]) -> String {
+  rows.map { "\($0.input)\t\($0.output)\t\($0.next)\n" }.joined()
+}
+
 public let bridgeActions = SettingsActions(
   version: take(FloatypeSettingsVersion()) ?? "",
   load: { take(FloatypeSettingsLoad()) },
@@ -96,4 +109,8 @@ public let bridgeActions = SettingsActions(
   withCharacterForms: { rules in
     take(FloatypeSettingsWithCharacterForms(
       rules.map { "\($0.group)\t\($0.typed)\t\($0.converted)\n" }.joined()))
-  })
+  },
+  romanTable: { romanRows(take(FloatypeSettingsRomanTable($0))) },
+  romanRows: { text in romanRows(take(FloatypeSettingsRomanRows(text))) },
+  romanTableText: { take(FloatypeSettingsRomanTableText(romanText($0))) ?? "" },
+  romanTableValue: { take(FloatypeSettingsRomanTableValue(romanText($0))) })

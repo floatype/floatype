@@ -4,6 +4,8 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <istream>
+#include <memory>
 #include <iterator>
 #include <set>
 #include <string>
@@ -18,6 +20,7 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
+#include "base/config_file_stream.h"
 #include "base/file_util.h"
 #include "base/system_util.h"
 #include "floatype/config/settings_file.h"
@@ -77,9 +80,98 @@ void ReadEnglish() {
   }
 }
 
+// A table's lines as the Qt editors take them in: blank lines and lines of
+// fewer than two fields left out, at most 10,000 rows, each as
+// "<input>\t<output>\t<next>\n" (next may be empty).
+std::string RomanRows(absl::string_view text) {
+  std::string out;
+  int rows = 0;
+  for (absl::string_view line : absl::StrSplit(text, '\n')) {
+    line = absl::StripSuffix(line, "\r");
+    const std::vector<absl::string_view> fields =
+        absl::StrSplit(line, '\t', absl::AllowEmpty());
+    if (line.empty() || fields.size() < 2) {
+      continue;
+    }
+    absl::StrAppend(&out, fields[0], "\t", fields[1], "\t",
+                    fields.size() >= 3 ? fields[2] : "", "\n");
+    if (++rows >= 10000) {
+      break;
+    }
+  }
+  return out;
+}
+
+const std::string& DefaultRomanRows() {
+  static const std::string* rows = [] {
+    std::unique_ptr<std::istream> in = mozc::ConfigFileStream::LegacyOpen(
+        "system://romanji-hiragana.tsv");
+    std::string text((std::istreambuf_iterator<char>(*in)),
+                     std::istreambuf_iterator<char>());
+    return new std::string(RomanRows(text));
+  }();
+  return *rows;
+}
+
+// The table Mozc takes from rows: rows with no input, or with neither output
+// nor next, left out; the next input only when there is one.
+std::string RomanTableText(absl::string_view rows) {
+  std::string out;
+  for (const absl::string_view row :
+       absl::StrSplit(rows, '\n', absl::SkipEmpty())) {
+    const std::vector<absl::string_view> fields =
+        absl::StrSplit(row, absl::MaxSplits('\t', 2));
+    const absl::string_view input = fields[0];
+    const absl::string_view output = fields.size() > 1 ? fields[1] : "";
+    const absl::string_view next = fields.size() > 2 ? fields[2] : "";
+    if (input.empty() || (output.empty() && next.empty())) {
+      continue;
+    }
+    absl::StrAppend(&out, input, "\t", output, next.empty() ? "" : "\t",
+                    next, "\n");
+  }
+  return out;
+}
+
 }  // namespace
 
 extern "C" {
+
+char* FloatypeSettingsRomanTable(const char* lines) {
+  const absl::StatusOr<mozc::config::Config> config =
+      mozc::floatype::ApplyConfigLines(mozc::config::Config(), lines);
+  return Copy(config.ok() && !config->custom_roman_table().empty()
+                  ? RomanRows(config->custom_roman_table())
+                  : DefaultRomanRows());
+}
+
+char* FloatypeSettingsRomanRows(const char* text) {
+  return Copy(text == nullptr ? DefaultRomanRows() : RomanRows(text));
+}
+
+char* FloatypeSettingsRomanTableText(const char* rows) {
+  return Copy(RomanTableText(rows));
+}
+
+char* FloatypeSettingsRomanTableValue(const char* rows) {
+  const std::string table = RomanTableText(rows);
+  if (table.empty()) {
+    return nullptr;
+  }
+  // The default table is kept as none, as the Qt editor does, so that a
+  // later default applies.
+  mozc::config::Config config;
+  config.set_custom_roman_table(
+      table == RomanTableText(DefaultRomanRows()) ? "" : table);
+  constexpr absl::string_view kKey = "custom_roman_table = ";
+  for (const absl::string_view line : absl::StrSplit(
+           mozc::floatype::ConfigLines(config), '\n', absl::SkipEmpty())) {
+    if (absl::StartsWith(line, kKey)) {
+      return Copy(line.substr(kKey.size()));
+    }
+  }
+  return nullptr;
+}
 
 void FloatypeSettingsStart(void) {
   // This app starts on its own, not through mozc_tool: the files it edits sit

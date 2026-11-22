@@ -50,6 +50,7 @@ mozc_cc_library(
     aspect_hints = [":bridge_module"],
     deps = [
         ":config_lines",
+        "//base:config_file_stream",
         "//base:file_util",
         "//base:system_util",
         "//base:version",
