@@ -12,10 +12,25 @@ public final class Updater: ObservableObject {
   @Published public private(set) var busy = false
   @Published public private(set) var newer: Release?
 
-  private let actions: SettingsActions
+  /// Runs curl with arguments and a timeout in seconds, and calls back on
+  /// the main thread with whether it succeeded and what it printed.
+  public typealias Curl = ([String], Int, @escaping (Bool, Data) -> Void) -> Void
 
-  public init(actions: SettingsActions) {
+  private let actions: SettingsActions
+  private let curl: Curl
+  private let openPackage: (URL) -> Void
+
+  /// `curl` and `openPackage` are swapped in tests; by default they are
+  /// /usr/bin/curl, and the Installer opening the package as this app quits.
+  public init(actions: SettingsActions, curl: Curl? = nil,
+              openPackage: ((URL) -> Void)? = nil) {
     self.actions = actions
+    self.curl = curl ?? Updater.runCurl
+    self.openPackage = openPackage ?? { package in
+      // The Installer replaces this window too.
+      NSWorkspace.shared.open(package)
+      NSApp.terminate(nil)
+    }
     status = "今の版は \(actions.version)。押したときだけ GitHub に問い合わせます"
   }
 
@@ -32,7 +47,7 @@ public final class Updater: ObservableObject {
   private func check() {
     show("確認しています…", busy: true)
     curl(["-H", "Accept: application/vnd.github+json", "-w", "\n%{http_code}",
-          actions.latestReleaseURL], seconds: 20) { ok, output in
+          actions.latestReleaseURL], 20) { ok, output in
       // The status is the last line; the answer comes before it.
       let text = String(decoding: output, as: UTF8.self)
       let end = text.lastIndex(of: "\n")
@@ -68,19 +83,23 @@ public final class Updater: ObservableObject {
       self.newer = nil
       self.show(text, busy: false)
     }
-    curl(["-f", "-o", checksumFile.path, checksum.absoluteString], seconds: 60) { ok, _ in
+    curl(["-f", "-o", checksumFile.path, checksum.absoluteString], 60) { ok, _ in
       guard ok else { return failed("ダウンロードできませんでした") }
-      self.curl(["-f", "-o", packageFile.path, package.absoluteString], seconds: 900) { ok, _ in
-        guard ok, let data = try? Data(contentsOf: packageFile),
-              let named = try? String(contentsOf: checksumFile, encoding: .utf8)
-        else { return failed("ダウンロードできませんでした") }
-        let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
-        guard self.actions.checksumMatches(named, digest) else {
-          return failed("ダウンロードした物の SHA-256 が合わないので、消しました")
+      self.curl(["-f", "-o", packageFile.path, package.absoluteString], 900) { ok, _ in
+        guard ok, let named = try? String(contentsOf: checksumFile, encoding: .utf8) else {
+          return failed("ダウンロードできませんでした")
         }
-        // The Installer replaces this window too.
-        NSWorkspace.shared.open(packageFile)
-        NSApp.terminate(nil)
+        // The package is large: hashed in pieces, off the main thread.
+        DispatchQueue.global().async {
+          let digest = Updater.sha256(of: packageFile)
+          DispatchQueue.main.async {
+            guard let digest else { return failed("ダウンロードできませんでした") }
+            guard self.actions.checksumMatches(named, digest) else {
+              return failed("ダウンロードした物の SHA-256 が合わないので、消しました")
+            }
+            self.openPackage(packageFile)
+          }
+        }
       }
     }
   }
@@ -90,9 +109,20 @@ public final class Updater: ObservableObject {
     self.busy = busy
   }
 
-  /// Runs curl off the main thread and calls `done` on it.
-  private func curl(_ arguments: [String], seconds: Int,
-                    done: @escaping (Bool, Data) -> Void) {
+  /// The file's SHA-256 in hex, or nil if it cannot be read.
+  static func sha256(of file: URL) -> String? {
+    guard let handle = try? FileHandle(forReadingFrom: file) else { return nil }
+    defer { try? handle.close() }
+    var hash = SHA256()
+    while let piece = try? handle.read(upToCount: 1 << 20), !piece.isEmpty {
+      hash.update(data: piece)
+    }
+    return hash.finalize().map { String(format: "%02x", $0) }.joined()
+  }
+
+  /// /usr/bin/curl, run off the main thread; only https, on redirects too.
+  private static func runCurl(_ arguments: [String], _ seconds: Int,
+                              _ done: @escaping (Bool, Data) -> Void) {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/usr/bin/curl")
     process.arguments = ["-sS", "-L", "--proto", "=https", "--proto-redir", "=https",
