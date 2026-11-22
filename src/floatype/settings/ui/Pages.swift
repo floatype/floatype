@@ -125,6 +125,7 @@ struct DictionaryPage: View {
 struct AssistPage: View {
   @ObservedObject var store: SettingsStore
   @State private var showLearned = false
+  @State private var showForms = false
 
   var body: some View {
     let auto = store.bool("use_auto_conversion").wrappedValue
@@ -148,6 +149,9 @@ struct AssistPage: View {
         }
         Row(title: "日本語入力では常に日本語キー配列を使う") {
           Switch(isOn: store.bool("use_japanese_layout"))
+        }
+        Row(title: "半角・全角", detail: "文字グループごとに、変換前と変換中の形") {
+          Button("編集…") { showForms = true }
         }
       }
       SettingsGroup(title: "zenz のメモリと学習") {
@@ -176,6 +180,7 @@ struct AssistPage: View {
       }
     }
     .sheet(isPresented: $showLearned) { LearningDataView(actions: store.actions) }
+    .sheet(isPresented: $showForms) { CharacterFormsView(store: store) }
   }
 }
 

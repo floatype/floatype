@@ -13,6 +13,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
+#include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
@@ -21,6 +22,9 @@
 #include "base/system_util.h"
 #include "floatype/config/settings_file.h"
 #include "floatype/english/user_words.h"
+#include "floatype/settings/config_lines.h"
+#include "protocol/config.pb.h"
+#include "config/config_handler.h"
 #include "floatype/settings/bridge.h"
 #include "floatype/zenz/zenz_memory.h"
 
@@ -151,6 +155,55 @@ char* FloatypeSettingsEditEnglishWords(const char* words, int how) {
     return Copy(absl::StrFormat("保存できませんでした（%s）", status.message()));
   }
   ReadEnglish();
+  return nullptr;
+}
+
+char* FloatypeSettingsCharacterForms(const char* lines) {
+  using ::mozc::config::Config;
+  const absl::StatusOr<Config> read =
+      mozc::floatype::ApplyConfigLines(Config(), lines);
+  // As the Qt table: an empty list shows the default one.
+  const Config& config = read.ok() && read->character_form_rules_size() > 0
+                             ? *read
+                             : mozc::config::ConfigHandler::DefaultConfig();
+  std::string out;
+  for (const Config::CharacterFormRule& rule : config.character_form_rules()) {
+    absl::StrAppend(
+        &out, rule.group(), "\t",
+        Config::CharacterForm_Name(rule.preedit_character_form()), "\t",
+        Config::CharacterForm_Name(rule.conversion_character_form()), "\n");
+  }
+  return Copy(out);
+}
+
+char* FloatypeSettingsWithCharacterForms(const char* rows) {
+  using ::mozc::config::Config;
+  Config config;
+  for (const absl::string_view row :
+       absl::StrSplit(rows, '\n', absl::SkipEmpty())) {
+    const std::vector<std::string> parts = absl::StrSplit(row, '\t');
+    Config::CharacterForm preedit, conversion;
+    if (parts.size() != 3 || parts[0].empty() ||
+        !Config::CharacterForm_Parse(parts[1], &preedit) ||
+        !Config::CharacterForm_Parse(parts[2], &conversion)) {
+      return nullptr;
+    }
+    Config::CharacterFormRule* rule = config.add_character_form_rules();
+    rule->set_group(parts[0]);
+    rule->set_preedit_character_form(preedit);
+    rule->set_conversion_character_form(conversion);
+  }
+  if (config.character_form_rules_size() == 0) {
+    return nullptr;
+  }
+  // The rules' line as the screen's other lines are written.
+  constexpr absl::string_view kKey = "character_form_rules = ";
+  for (const absl::string_view line : absl::StrSplit(
+           mozc::floatype::ConfigLines(config), '\n', absl::SkipEmpty())) {
+    if (absl::StartsWith(line, kKey)) {
+      return Copy(line.substr(kKey.size()));
+    }
+  }
   return nullptr;
 }
 

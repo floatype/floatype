@@ -107,6 +107,22 @@ public struct EnglishWord: Hashable, Identifiable {
   }
 }
 
+/// One rule of the 全角・半角 table: a group of characters ("ア", "0", "A",
+/// "(){}[]") and its forms by name while typing and once converted
+/// ("FULL_WIDTH", "HALF_WIDTH", "LAST_FORM").
+public struct CharacterFormRule: Hashable, Identifiable {
+  public var group: String
+  public var typed: String
+  public var converted: String
+  public var id: String { group }
+
+  public init(group: String, typed: String, converted: String) {
+    self.group = group
+    self.typed = typed
+    self.converted = converted
+  }
+}
+
 public struct SettingsActions {
   public var version: String
   /// The settings again, as lines, or nil.
@@ -147,6 +163,10 @@ public struct SettingsActions {
   public var editEnglishWords: ([String], Int) -> String?
   /// The folder english_words.txt is in.
   public var userFilesDirectory: () -> String
+  /// The 全角・半角 table with the settings lines given.
+  public var characterForms: (String) -> [CharacterFormRule]
+  /// character_form_rules's value for a table, or nil.
+  public var withCharacterForms: ([CharacterFormRule]) -> String?
 
   public init(
     version: String, load: @escaping () -> String?, reset: @escaping () -> String?,
@@ -165,7 +185,9 @@ public struct SettingsActions {
     profileDirectory: @escaping () -> String = { "" },
     englishWords: @escaping () -> [EnglishWord] = { [] },
     editEnglishWords: @escaping ([String], Int) -> String? = { _, _ in nil },
-    userFilesDirectory: @escaping () -> String = { "" }
+    userFilesDirectory: @escaping () -> String = { "" },
+    characterForms: @escaping (String) -> [CharacterFormRule] = { _ in [] },
+    withCharacterForms: @escaping ([CharacterFormRule]) -> String? = { _ in nil }
   ) {
     self.version = version
     self.load = load
@@ -188,6 +210,8 @@ public struct SettingsActions {
     self.englishWords = englishWords
     self.editEnglishWords = editEnglishWords
     self.userFilesDirectory = userFilesDirectory
+    self.characterForms = characterForms
+    self.withCharacterForms = withCharacterForms
   }
 
   /// Actions that do nothing, for drawing the window.

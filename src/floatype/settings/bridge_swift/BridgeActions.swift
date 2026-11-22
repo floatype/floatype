@@ -84,4 +84,16 @@ public let bridgeActions = SettingsActions(
     }
   },
   editEnglishWords: { take(FloatypeSettingsEditEnglishWords($0.joined(separator: "\n"), Int32($1))) },
-  userFilesDirectory: { take(FloatypeSettingsUserFilesDirectory()) ?? "" })
+  userFilesDirectory: { take(FloatypeSettingsUserFilesDirectory()) ?? "" },
+  characterForms: { lines in
+    (take(FloatypeSettingsCharacterForms(lines)) ?? "").split(separator: "\n").compactMap { row in
+      let parts = row.split(separator: "\t", omittingEmptySubsequences: false)
+      guard parts.count == 3 else { return nil }
+      return CharacterFormRule(group: String(parts[0]), typed: String(parts[1]),
+                               converted: String(parts[2]))
+    }
+  },
+  withCharacterForms: { rules in
+    take(FloatypeSettingsWithCharacterForms(
+      rules.map { "\($0.group)\t\($0.typed)\t\($0.converted)\n" }.joined()))
+  })

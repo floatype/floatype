@@ -3,6 +3,7 @@
 #include <string>
 
 #include "absl/strings/match.h"
+#include "absl/strings/str_cat.h"
 #include "base/file_util.h"
 #include "base/system_util.h"
 #include "floatype/config/settings_file.h"
@@ -37,6 +38,27 @@ TEST_F(BridgeZenzMemoryTest, ListsAndForgetsTheLearningData) {
 
   FloatypeSettingsZenzForgetAll();
   EXPECT_EQ(Take(FloatypeSettingsZenzMemory()), "");
+}
+
+TEST(BridgeCharacterFormsTest, ReadsAndWritesTheTable) {
+  const std::string rows = Take(FloatypeSettingsCharacterForms(""));
+  EXPECT_TRUE(absl::StartsWith(rows, "ア\tFULL_WIDTH\tFULL_WIDTH\n"))
+      << "the default table for none: " << rows;
+  EXPECT_TRUE(absl::StrContains(rows, "0\tHALF_WIDTH\tHALF_WIDTH\n"));
+
+  const std::string value = Take(FloatypeSettingsWithCharacterForms(
+      "ア\tFULL_WIDTH\tHALF_WIDTH\n0\tFULL_WIDTH\tLAST_FORM\n"));
+  EXPECT_EQ(value,
+            "[{group = \"ア\", preedit_character_form = \"FULL_WIDTH\", "
+            "conversion_character_form = \"HALF_WIDTH\"}, {group = \"0\", "
+            "preedit_character_form = \"FULL_WIDTH\", "
+            "conversion_character_form = \"LAST_FORM\"}]");
+  EXPECT_EQ(Take(FloatypeSettingsCharacterForms(
+                absl::StrCat("character_form_rules = ", value).c_str())),
+            "ア\tFULL_WIDTH\tHALF_WIDTH\n0\tFULL_WIDTH\tLAST_FORM\n");
+  EXPECT_EQ(FloatypeSettingsWithCharacterForms("ア\tWIDE\tHALF_WIDTH\n"),
+            nullptr);
+  EXPECT_EQ(FloatypeSettingsWithCharacterForms(""), nullptr);
 }
 
 class BridgeEnglishWordsTest : public testing::TestWithTempUserProfile {

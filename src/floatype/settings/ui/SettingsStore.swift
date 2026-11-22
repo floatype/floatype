@@ -128,6 +128,17 @@ public final class SettingsStore: ObservableObject {
       })
   }
 
+  /// The 全角・半角 table; setting it saves character_form_rules whole.
+  public func characterForms() -> Binding<[CharacterFormRule]> {
+    let key = "character_form_rules"
+    return Binding(
+      get: { self.actions.characterForms("\(key) = \(self.values[key] ?? "[]")\n") },
+      set: {
+        guard let rules = self.actions.withCharacterForms($0) else { return }
+        self.set(key, rules)
+      })
+  }
+
   /// The settings shown, as lines, for what reads them whole (外観's preview).
   public var lines: String {
     values.map { "\($0.key) = \($0.value)\n" }.joined()

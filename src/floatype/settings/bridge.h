@@ -132,6 +132,15 @@ char* FloatypeSettingsEditEnglishWords(const char* words, int how);
 // The folder english_words.txt is in (next to config.toml). To free.
 char* FloatypeSettingsUserFilesDirectory(void);
 
+// The 全角・半角 table with the settings `lines` (the default table when they
+// have none): one "<group>\t<typed>\t<converted>" line a rule, the forms
+// by name (FULL_WIDTH, HALF_WIDTH, LAST_FORM). To free.
+char* FloatypeSettingsCharacterForms(const char* lines);
+// The value of character_form_rules, `[{...}, ...]`, for rows as
+// FloatypeSettingsCharacterForms gives them; NULL for none or a row it cannot
+// read. To free.
+char* FloatypeSettingsWithCharacterForms(const char* rows);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif

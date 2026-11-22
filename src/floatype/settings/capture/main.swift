@@ -32,6 +32,7 @@ for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua
      EnglishWord(word: "page", kept: false, from: 1),
      EnglishWord(word: "time", kept: true, from: 0)]
   }
+  actions.characterForms = bridgeActions.characterForms
   let store = SettingsStore(lines: lines, save: { _ in nil }, actions: actions)
   let root: AnyView
   switch page {
@@ -39,6 +40,8 @@ for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua
     root = AnyView(LearningDataView(actions: actions).background(Color(nsColor: .windowBackgroundColor)))
   case "words":
     root = AnyView(EnglishWordsView(actions: actions).background(Color(nsColor: .windowBackgroundColor)))
+  case "forms":
+    root = AnyView(CharacterFormsView(store: store).background(Color(nsColor: .windowBackgroundColor)))
   default: root = AnyView(SettingsView(store: store, page: page))
   }
   let host = NSHostingView(rootView: root)
