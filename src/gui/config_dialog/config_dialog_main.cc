@@ -29,7 +29,9 @@
 
 // The main function of configure dialog for Mozc.
 
+#include "base/file_util.h"
 #include "base/init_mozc.h"
+#include "floatype/config/settings_file.h"
 
 #ifdef _WIN32
 #include "base/win32/winmain.h"
@@ -39,5 +41,10 @@ int RunConfigDialog(int argc, char *argv[]);
 
 int main(int argc, char *argv[]) {
   mozc::InitMozc(argv[0], &argc, &argv);
+  // floatype: the files a user edits from here (english_words.txt) sit next
+  // to config.toml, as for the tools that mozc_tool starts.
+  mozc::floatype::SetUserFilesDir(
+      mozc::FileUtil::Dirname(mozc::floatype::DefaultSettingsPath()),
+      /*report_errors=*/true);
   return RunConfigDialog(argc, argv);
 }
