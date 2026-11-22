@@ -16,8 +16,9 @@ namespace mozc::floatype {
 
 // Every singular field with the value in effect, the default where unset, a
 // line each: `live_conversion = true`, `indicator_style.position = "BELOW"`
-// (enums by name, strings quoted as in TOML). Repeated fields and
-// general_config (the settings file's bookkeeping) are left out.
+// (enums by name, strings quoted as in TOML). Repeated fields, general_config
+// (the settings file's bookkeeping) and unset fields with no default (a
+// candidate window's colors, which its theme gives then) are left out.
 std::string ConfigLines(const config::Config& config);
 
 // `loaded` with the fields `toml` sets (as ConfigLines writes them, or any

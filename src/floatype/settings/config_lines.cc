@@ -58,6 +58,13 @@ void AppendLines(const Message& message, absl::string_view prefix,
     if (field.is_repeated() || (prefix.empty() && field.name() == "general_config")) {
       continue;
     }
+    // Unset with no default (a candidate window's color, left to its theme):
+    // no line, so that the lines read back leave it unset.
+    if (field.cpp_type() != FieldDescriptor::CPPTYPE_MESSAGE &&
+        field.has_presence() && !field.has_default_value() &&
+        !reflection.HasField(message, &field)) {
+      continue;
+    }
     const std::string key = absl::StrCat(prefix, field.name());
     std::string value;
     switch (field.cpp_type()) {

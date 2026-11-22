@@ -32,6 +32,21 @@ TEST(ConfigLinesTest, ReadsBackWhatItWrites) {
   EXPECT_EQ(ConfigLines(*read), lines);
 }
 
+TEST(ConfigLinesTest, LeavesOutAColorLeftToTheTheme) {
+  config::Config config;
+  config.mutable_suggest_style()->set_text_color(0x123456);
+  const std::string lines = ConfigLines(config);
+  EXPECT_FALSE(absl::StrContains(lines, "candidate_style.text_color"));
+  EXPECT_TRUE(absl::StrContains(lines, "suggest_style.text_color = 1193046\n"));
+  EXPECT_TRUE(absl::StrContains(lines, "indicator_style.zenz_color = "))
+      << "a color with a default is written";
+  const absl::StatusOr<config::Config> read =
+      ApplyConfigLines(config::Config(), lines);
+  ASSERT_TRUE(read.ok()) << read.status();
+  EXPECT_FALSE(read->candidate_style().has_text_color());
+  EXPECT_EQ(read->suggest_style().text_color(), 0x123456);
+}
+
 TEST(ConfigLinesTest, ChangesOnlyTheFieldsGiven) {
   config::Config loaded;
   loaded.set_use_live_conversion(false);
