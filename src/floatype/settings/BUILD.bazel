@@ -1,0 +1,67 @@
+load("@build_bazel_rules_swift//swift:swift.bzl", "swift_interop_hint")
+load("//:build_defs.bzl", "mozc_cc_library", "mozc_cc_test")
+
+package(default_visibility = ["//visibility:private"])
+
+mozc_cc_library(
+    name = "config_lines",
+    srcs = ["config_lines.cc"],
+    hdrs = ["config_lines.h"],
+    deps = [
+        "//base/protobuf:descriptor",
+        "//base/protobuf:message",
+        "//floatype/config:text_config",
+        "//floatype/config:toml_config",
+        "//protocol:config_cc_proto",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+    ],
+)
+
+mozc_cc_test(
+    name = "config_lines_test",
+    srcs = ["config_lines_test.cc"],
+    deps = [
+        ":config_lines",
+        "//config:config_handler",
+        "//protocol:config_cc_proto",
+        "//testing:gunit_main",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+swift_interop_hint(
+    name = "bridge_module",
+    module_name = "FloatypeSettingsBridge",
+)
+
+mozc_cc_library(
+    name = "bridge",
+    srcs = ["bridge.cc"],
+    hdrs = ["bridge.h"],
+    aspect_hints = [":bridge_module"],
+    deps = [
+        ":config_lines",
+        "//client",
+        "//client:client_interface",
+        "//protocol:config_cc_proto",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+mozc_cc_test(
+    name = "bridge_test",
+    srcs = ["bridge_test.cc"],
+    deps = [
+        ":bridge",
+        "//client",
+        "//client:client_interface",
+        "//client:client_mock",
+        "//protocol:config_cc_proto",
+        "//testing:gunit_main",
+        "@com_google_absl//absl/strings",
+    ],
+)
