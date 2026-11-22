@@ -159,14 +159,14 @@ swift_binary(
 
 macos_application(
     name = "settings_app",
-    # The IME's bundle carries it (mac/BUILD.bazel).
-    visibility = ["//mac:__pkg__"],
     app_icons = ["//data/images/mac:product_icon.icns"],
     bundle_id = "org.floatype.settings",
     bundle_name = "Settings",
     infoplists = ["Info.plist"],
     minimum_os_version = MACOS_MIN_OS_VER,
     version = "//:version_macos",
+    # The IME's bundle carries it (mac/BUILD.bazel).
+    visibility = ["//mac:__pkg__"],
     deps = [":settings_app_lib"],
 )
 
