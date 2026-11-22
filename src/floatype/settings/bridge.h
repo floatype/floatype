@@ -21,6 +21,43 @@ char* FloatypeSettingsSave(const char* toml);
 
 void FloatypeSettingsFree(char* text);
 
+// Saves the default settings in place of the converter's, as 初期値に戻す
+// does; what it learned stays. NULL when saved, otherwise why not.
+char* FloatypeSettingsReset(void);
+
+// Clears what the converter learned, the history and the predictions, as
+// 学習履歴のクリア does. NULL when cleared, otherwise why not.
+char* FloatypeSettingsClearHistory(void);
+
+// Opens the converter's tool `mode` ("dictionary_tool"). NULL when opened,
+// otherwise why not.
+char* FloatypeSettingsLaunchTool(const char* mode);
+
+// Whether the converter starts at login, and setting it (macOS's login item
+// for the prelauncher, as the Qt screen's スタートアップ).
+int FloatypeSettingsStartsAtLogin(void);
+void FloatypeSettingsSetStartsAtLogin(int on);
+
+// This Floatype's version ("0.1.1+mozc.3.35.6354"), to free.
+char* FloatypeSettingsVersion(void);
+
+// Where to ask for the latest release (update_check.h's kLatestReleaseUrl);
+// not to free.
+const char* FloatypeSettingsLatestReleaseUrl(void);
+
+// What GitHub's latest release says (update_check.h): `status` is the HTTP
+// status, `tag` the release's tag, `assets` a line "name\turl" an asset.
+// Returns 0 for a newer version, 1 for up to date, 2 for no release yet, 3
+// when the answer cannot be used; with 0, `version`, `package_url` and
+// `checksum_url` are set to text to free.
+int FloatypeSettingsCheckRelease(int status, const char* tag,
+                                 const char* assets, char** version,
+                                 char** package_url, char** checksum_url);
+
+// Whether the .sha256 file's text names `hex_digest`.
+int FloatypeSettingsChecksumMatches(const char* checksum_file,
+                                    const char* hex_digest);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif

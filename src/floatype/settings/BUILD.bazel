@@ -1,7 +1,7 @@
 load("@bazel_skylib//rules:build_test.bzl", "build_test")
 load("@build_bazel_rules_apple//apple:macos.bzl", "macos_application")
 load("@build_bazel_rules_swift//swift:swift.bzl", "swift_binary", "swift_interop_hint", "swift_library", "swift_test")
-load("//:build_defs.bzl", "mozc_cc_library", "mozc_cc_test")
+load("//:build_defs.bzl", "mozc_cc_library", "mozc_cc_test", "mozc_select")
 load("//:config.bzl", "MACOS_MIN_OS_VER")
 
 package(default_visibility = ["//visibility:private"])
@@ -47,12 +47,17 @@ mozc_cc_library(
     aspect_hints = [":bridge_module"],
     deps = [
         ":config_lines",
+        "//base:version",
         "//client",
         "//client:client_interface",
+        "//config:config_handler",
+        "//floatype/update:update_check",
         "//protocol:config_cc_proto",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
-    ],
+    ] + mozc_select(
+        macos = ["//base/mac:mac_util"],
+    ),
 )
 
 mozc_cc_test(
@@ -63,6 +68,7 @@ mozc_cc_test(
         "//client",
         "//client:client_interface",
         "//client:client_mock",
+        "//config:config_handler",
         "//protocol:config_cc_proto",
         "//testing:gunit_main",
         "@com_google_absl//absl/strings",

@@ -7,6 +7,7 @@
 #include "client/client.h"
 #include "client/client_interface.h"
 #include "client/client_mock.h"
+#include "config/config_handler.h"
 #include "protocol/config.pb.h"
 #include "testing/gmock.h"
 #include "testing/gunit.h"
@@ -29,6 +30,11 @@ class FakeConverter : public client::ClientFactoryInterface {
       *c = settings;
       return true;
     });
+    ON_CALL(*client, ClearUserHistory()).WillByDefault([this] {
+      ++clears;
+      return reachable;
+    });
+    ON_CALL(*client, ClearUserPrediction()).WillByDefault(Return(true));
     ON_CALL(*client, SetConfig(_))
         .WillByDefault([this](const config::Config& c) {
           settings = c;
@@ -41,6 +47,7 @@ class FakeConverter : public client::ClientFactoryInterface {
   config::Config settings;
   bool reachable = true;
   int saves = 0;
+  int clears = 0;
 };
 
 class BridgeTest : public ::testing::Test {
@@ -81,6 +88,61 @@ TEST_F(BridgeTest, SaysWhyNothingWasSaved) {
   ASSERT_NE(error, nullptr);
   EXPECT_EQ(fake_.saves, 0);
   FloatypeSettingsFree(error);
+}
+
+TEST_F(BridgeTest, ResetsToTheDefaults) {
+  fake_.settings.set_zenz_learning(false);
+  EXPECT_EQ(FloatypeSettingsReset(), nullptr);
+  EXPECT_EQ(fake_.settings.SerializeAsString(),
+            config::ConfigHandler::DefaultConfig().SerializeAsString());
+}
+
+TEST_F(BridgeTest, ClearsTheHistory) {
+  EXPECT_EQ(FloatypeSettingsClearHistory(), nullptr);
+  EXPECT_EQ(fake_.clears, 1);
+  fake_.reachable = false;
+  char* error = FloatypeSettingsClearHistory();
+  ASSERT_NE(error, nullptr);
+  FloatypeSettingsFree(error);
+}
+
+TEST(BridgeUpdateTest, TellsANewerRelease) {
+  char* version = nullptr;
+  char* package = nullptr;
+  char* checksum = nullptr;
+  const std::string prefix =
+      "https://github.com/floatype/floatype/releases/download/v999.0.0/";
+  const std::string assets =
+      "floatype-999.0.0+mozc.3.35.6354.pkg\t" + prefix +
+      "floatype-999.0.0+mozc.3.35.6354.pkg\n"
+      "floatype-999.0.0+mozc.3.35.6354.pkg.sha256\t" + prefix +
+      "floatype-999.0.0+mozc.3.35.6354.pkg.sha256\n";
+  EXPECT_EQ(FloatypeSettingsCheckRelease(200, "v999.0.0", assets.c_str(),
+                                         &version, &package, &checksum),
+            0);
+  ASSERT_NE(version, nullptr);
+  EXPECT_STREQ(version, "999.0.0");
+  EXPECT_TRUE(absl::EndsWith(package, ".pkg"));
+  EXPECT_TRUE(absl::EndsWith(checksum, ".sha256"));
+  FloatypeSettingsFree(version);
+  FloatypeSettingsFree(package);
+  FloatypeSettingsFree(checksum);
+
+  EXPECT_EQ(FloatypeSettingsCheckRelease(404, "", "", &version, &package,
+                                         &checksum),
+            2);
+  EXPECT_EQ(version, nullptr);
+  EXPECT_EQ(FloatypeSettingsCheckRelease(500, "", "", &version, &package,
+                                         &checksum),
+            3);
+}
+
+TEST(BridgeUpdateTest, MatchesTheChecksumFile) {
+  const std::string hex(64, 'a');
+  EXPECT_TRUE(FloatypeSettingsChecksumMatches((hex + "  x.pkg\n").c_str(),
+                                              hex.c_str()));
+  EXPECT_FALSE(FloatypeSettingsChecksumMatches(
+      (std::string(64, 'b') + "  x.pkg\n").c_str(), hex.c_str()));
 }
 
 }  // namespace
