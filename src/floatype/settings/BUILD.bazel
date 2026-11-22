@@ -68,8 +68,8 @@ mozc_cc_test(
     name = "bridge_test",
     srcs = ["bridge_test.cc"],
     deps = [
-        ":config_lines",
         ":bridge",
+        ":config_lines",
         "//client",
         "//client:client_interface",
         "//client:client_mock",
