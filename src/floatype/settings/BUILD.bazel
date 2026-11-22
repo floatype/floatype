@@ -51,8 +51,12 @@ mozc_cc_library(
         "//client",
         "//client:client_interface",
         "//config:config_handler",
+        "//floatype/indicator:indicator_layout",
+        "//floatype/look:window_look",
         "//floatype/update:update_check",
+        "//protocol:commands_cc_proto",
         "//protocol:config_cc_proto",
+        "//protocol:renderer_cc_proto",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
     ] + mozc_select(
@@ -64,6 +68,7 @@ mozc_cc_test(
     name = "bridge_test",
     srcs = ["bridge_test.cc"],
     deps = [
+        ":config_lines",
         ":bridge",
         "//client",
         "//client:client_interface",

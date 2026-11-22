@@ -1,13 +1,18 @@
 #include "floatype/settings/bridge.h"
 
+#include <cstdlib>
+#include <cstring>
+#include <initializer_list>
 #include <memory>
 #include <string>
+#include <tuple>
 
 #include "absl/strings/match.h"
 #include "client/client.h"
 #include "client/client_interface.h"
 #include "client/client_mock.h"
 #include "config/config_handler.h"
+#include "floatype/settings/config_lines.h"
 #include "protocol/config.pb.h"
 #include "testing/gmock.h"
 #include "testing/gunit.h"
@@ -143,6 +148,44 @@ TEST(BridgeUpdateTest, MatchesTheChecksumFile) {
                                               hex.c_str()));
   EXPECT_FALSE(FloatypeSettingsChecksumMatches(
       (std::string(64, 'b') + "  x.pkg\n").c_str(), hex.c_str()));
+}
+
+TEST(BridgeLookTest, ResolvesTheWindowsLook) {
+  char* lines = nullptr;
+  {
+    const std::string text = ConfigLines(config::Config());
+    lines = strdup(text.c_str());
+  }
+  FloatypeWindowLook light{}, dark{};
+  ASSERT_EQ(FloatypeSettingsWindowLook(lines, 0, 0, &light), 1);
+  ASSERT_EQ(FloatypeSettingsWindowLook(lines, 0, 1, &dark), 1);
+  free(lines);
+  EXPECT_FALSE(light.dark);
+  EXPECT_TRUE(dark.dark) << "the automatic theme follows the system";
+  EXPECT_NE(light.background, dark.background);
+  EXPECT_GT(light.row_height, 0);
+  EXPECT_GT(light.candidate_font_size, 0);
+
+  FloatypeWindowLook custom{};
+  ASSERT_EQ(FloatypeSettingsWindowLook(
+                "candidate_style.theme = \"CUSTOM\"\n"
+                "candidate_style.background_color = 1193046\n",
+                0, 1, &custom),
+            1);
+  EXPECT_EQ(custom.background, 0x123456u);
+  EXPECT_EQ(FloatypeSettingsWindowLook("no_such_field = 1\n", 0, 0, &custom),
+            0);
+}
+
+TEST(BridgeLookTest, NamesTheIndicatorsStates) {
+  for (const auto& [state, label, shown] :
+       std::initializer_list<std::tuple<int, const char*, const char*>>{
+           {1, "FULL_LABEL", "入力中"}, {4, "SYMBOL", "Z"},
+           {2, "COLOR_ONLY", ""}}) {
+    char* text = FloatypeSettingsIndicatorLabel(state, label);
+    EXPECT_STREQ(text, shown);
+    FloatypeSettingsFree(text);
+  }
 }
 
 }  // namespace

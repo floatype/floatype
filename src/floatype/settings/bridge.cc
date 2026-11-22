@@ -1,5 +1,6 @@
 #include "floatype/settings/bridge.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
@@ -13,9 +14,13 @@
 #include "client/client.h"
 #include "client/client_interface.h"
 #include "config/config_handler.h"
+#include "floatype/indicator/indicator_layout.h"
+#include "floatype/look/window_look.h"
 #include "floatype/settings/config_lines.h"
 #include "floatype/update/update_check.h"
+#include "protocol/commands.pb.h"
 #include "protocol/config.pb.h"
+#include "protocol/renderer_style.pb.h"
 
 #ifdef __APPLE__
 #include "base/mac/mac_util.h"
@@ -170,3 +175,61 @@ int FloatypeSettingsChecksumMatches(const char* checksum_file,
 }
 
 }  // extern "C"
+
+int FloatypeSettingsWindowLook(const char* lines, int suggestion, int dark,
+                               FloatypeWindowLook* out) {
+  const absl::StatusOr<mozc::config::Config> config =
+      mozc::floatype::ApplyConfigLines(mozc::config::Config(), lines);
+  if (!config.ok()) {
+    return 0;
+  }
+  const mozc::floatype::WindowLook look = mozc::floatype::ResolveWindowLook(
+      suggestion ? config->suggest_style() : config->candidate_style(), dark);
+  const mozc::renderer::RendererStyle style =
+      mozc::floatype::RendererStyleFor(look);
+  *out = FloatypeWindowLook{
+      .dark = look.dark,
+      .background = look.background,
+      .text = look.text,
+      .secondary_text = look.secondary_text,
+      .focused_background = look.focused_background,
+      .focused_text = look.focused_text,
+      .focused_secondary_text = look.focused_secondary_text,
+      .focused_border = look.focused_border,
+      .focused_border_alpha = look.focused_border_alpha,
+      .border = look.border,
+      .border_alpha = look.border_alpha,
+      .window_padding = look.window_padding,
+      .row_height = look.row_height,
+      .row_padding = look.row_padding,
+      .row_corner_radius = look.row_corner_radius,
+      .number_width = look.number_width,
+      .footer_top_padding = look.footer_top_padding,
+      .footer_bottom_padding = look.footer_bottom_padding,
+      .corner_radius = look.corner_radius,
+      .opacity = look.opacity,
+      .shadow_radius = look.shadow_radius,
+      .shadow_offset_y = look.shadow_offset_y,
+      .shadow_opacity = look.shadow_opacity,
+      .shadow_color = look.shadow_color,
+      .candidate_font_size = style.candidate_style().font_size(),
+      .number_font_size = style.shortcut_style().font_size(),
+      .description_font_size = style.description_style().font_size(),
+      .footer_font_size = style.footer_style().font_size(),
+      .kind_mark_color = mozc::floatype::KindMarkColor(false, look.dark),
+  };
+  const std::string& minimum = style.column_minimum_width_string();
+  const size_t size =
+      std::min(minimum.size(), sizeof(out->column_minimum_width) - 1);
+  std::memcpy(out->column_minimum_width, minimum.data(), size);
+  out->column_minimum_width[size] = '\0';
+  return 1;
+}
+
+char* FloatypeSettingsIndicatorLabel(int state, const char* label) {
+  mozc::config::Config::IndicatorStyle::Label value =
+      mozc::config::Config::IndicatorStyle::FULL_LABEL;
+  mozc::config::Config::IndicatorStyle::Label_Parse(label, &value);
+  return Copy(mozc::floatype::IndicatorLabel(
+      static_cast<mozc::commands::Output::Indicator::State>(state), value));
+}

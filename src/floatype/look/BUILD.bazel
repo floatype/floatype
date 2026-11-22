@@ -7,6 +7,7 @@ mozc_cc_library(
     srcs = ["window_look.cc"],
     hdrs = ["window_look.h"],
     visibility = [
+        "//floatype/settings:__pkg__",
         "//gui/config_dialog:__pkg__",
         "//renderer:__subpackages__",
     ],

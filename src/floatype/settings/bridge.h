@@ -58,6 +58,41 @@ int FloatypeSettingsCheckRelease(int status, const char* tag,
 int FloatypeSettingsChecksumMatches(const char* checksum_file,
                                     const char* hex_digest);
 
+// A candidate window's look as the renderer draws it (window_look.h), for
+// 外観's preview. Colors are 0xRRGGBB; measures and font sizes in points.
+typedef struct {
+  int dark;
+  unsigned background, text, secondary_text;
+  unsigned focused_background, focused_text, focused_secondary_text;
+  unsigned focused_border;
+  double focused_border_alpha;
+  unsigned border;
+  double border_alpha;
+  double window_padding, row_height, row_padding, row_corner_radius;
+  double number_width, footer_top_padding, footer_bottom_padding;
+  double corner_radius, opacity;
+  double shadow_radius, shadow_offset_y, shadow_opacity;
+  unsigned shadow_color;
+  double candidate_font_size, number_font_size, description_font_size;
+  double footer_font_size;
+  // The footer's dot for conversion candidates (candidate_kind_mark).
+  unsigned kind_mark_color;
+  // A candidate column is at least this wide (column_minimum_width_string).
+  char column_minimum_width[64];
+} FloatypeWindowLook;
+
+// The look of the candidate window or, with `suggestion`, the prediction list,
+// with the settings `lines` (as FloatypeSettingsLoad gives them, changes
+// applied); `dark` is the system appearance, for the automatic theme. 1 when
+// `out` is set, 0 if `lines` cannot be read.
+int FloatypeSettingsWindowLook(const char* lines, int suggestion, int dark,
+                               FloatypeWindowLook* out);
+
+// What the indicator shows for `state` (1 入力中, 2 Mozc, 3 zenz pending, 4
+// Zenz, as commands.proto numbers them) with indicator_style.label `label`
+// ("FULL_LABEL", "SYMBOL", "COLOR_ONLY"); to free.
+char* FloatypeSettingsIndicatorLabel(int state, const char* label);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif
