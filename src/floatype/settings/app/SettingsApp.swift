@@ -4,11 +4,21 @@
 import FloatypeSettingsBridge
 import FloatypeSettingsBridgeActions
 import FloatypeSettingsUI
+import AppKit
 import Foundation
 import SwiftUI
 
+/// Quits with its window, as the Qt screen did: the IME opens the app again
+/// for 環境設定…, which would otherwise only bring a windowless app forward.
+final class AppDelegate: NSObject, NSApplicationDelegate {
+  func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+    true
+  }
+}
+
 @main
 struct SettingsApp: App {
+  @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
   @StateObject private var store = SettingsStore(
     lines: bridgeActions.load(),
     save: { take(FloatypeSettingsSave($0)) },
