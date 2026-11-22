@@ -193,9 +193,10 @@ def TweakForProductbuild(
     resources_dir = f'/Library/Input Methods/{name}.app/Contents/Resources/'
     # /Applications/Mozc/ConfigDialog.app is a symlink to
     # /Library/Input Method/Mozc.app/Contents/Resources/ConfigDialog.app
+    # floatype: the settings screen is Settings.app (issue #9).
     os.symlink(
-        resources_dir + 'ConfigDialog.app/',
-        f'root/Applications/{folder}/ConfigDialog.app',
+        resources_dir + 'Settings.app/',
+        f'root/Applications/{folder}/Settings.app',
     )
     os.symlink(
         resources_dir + 'DictionaryTool.app/',

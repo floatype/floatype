@@ -88,7 +88,9 @@ bool LaunchMozcToolInternal(absl::string_view tool_name, absl::string_view error
   } else if (tool_name == "character_palette") {
     appName = @"CharacterPalette.app";
   } else if (tool_name == "config_dialog") {
-    appName = @"ConfigDialog.app";
+    // floatype: the SwiftUI settings screen (issue #9). ConfigDialog.app stays
+    // in the bundle, as the Qt frameworks the other Qt tools load live in it.
+    appName = @"Settings.app";
   } else if (tool_name == "dictionary_tool") {
     appName = @"DictionaryTool.app";
   } else if (tool_name == "error_message_dialog") {
