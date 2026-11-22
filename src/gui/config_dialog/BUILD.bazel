@@ -258,7 +258,9 @@ mozc_cc_qt_library(
     srcs = ["config_dialog_main.cc"],
     deps = [
         ":config_dialog",
+        "//base:file_util",
         "//base:init_mozc",
+        "//floatype/config:settings_file",
         "//gui/base:gui_base",
     ],
 )
