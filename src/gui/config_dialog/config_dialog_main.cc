@@ -42,7 +42,8 @@ int RunConfigDialog(int argc, char *argv[]);
 int main(int argc, char *argv[]) {
   mozc::InitMozc(argv[0], &argc, &argv);
   // floatype: the files a user edits from here (english_words.txt) sit next
-  // to config.toml, as for the tools that mozc_tool starts.
+  // to config.toml. On macOS this .app starts here, not through mozc_tool,
+  // which tells the other platforms' tools the same.
   mozc::floatype::SetUserFilesDir(
       mozc::FileUtil::Dirname(mozc::floatype::DefaultSettingsPath()),
       /*report_errors=*/true);
