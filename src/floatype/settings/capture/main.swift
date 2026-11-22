@@ -27,11 +27,18 @@ for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua
      LearnedEntry(kind: 2, reading: "よい", text: "良い"),
      LearnedEntry(kind: 3, reading: "ほう", text: "方")]
   }
+  actions.englishWords = {
+    [EnglishWord(word: "quokka", kept: true, from: 2),
+     EnglishWord(word: "page", kept: false, from: 1),
+     EnglishWord(word: "time", kept: true, from: 0)]
+  }
   let store = SettingsStore(lines: lines, save: { _ in nil }, actions: actions)
   let root: AnyView
   switch page {
   case "learned":
     root = AnyView(LearningDataView(actions: actions).background(Color(nsColor: .windowBackgroundColor)))
+  case "words":
+    root = AnyView(EnglishWordsView(actions: actions).background(Color(nsColor: .windowBackgroundColor)))
   default: root = AnyView(SettingsView(store: store, page: page))
   }
   let host = NSHostingView(rootView: root)

@@ -92,6 +92,21 @@ public struct LearnedEntry: Hashable, Identifiable {
   }
 }
 
+/// One line of the English words list; `from` 0 the preset, 1 the preset
+/// changed in english_words.txt, 2 the file alone.
+public struct EnglishWord: Hashable, Identifiable {
+  public var word: String
+  public var kept: Bool
+  public var from: Int
+  public var id: String { word.lowercased() }
+
+  public init(word: String, kept: Bool, from: Int) {
+    self.word = word
+    self.kept = kept
+    self.from = from
+  }
+}
+
 public struct SettingsActions {
   public var version: String
   /// The settings again, as lines, or nil.
@@ -125,6 +140,13 @@ public struct SettingsActions {
   public var forgetAll: () -> Void
   /// The folder the learning data is in.
   public var profileDirectory: () -> String
+  /// english_words.txt's words and the preset ones, read again.
+  public var englishWords: () -> [EnglishWord]
+  /// Makes the words kept (0), taken out (1) or as the built-in lists say
+  /// (2); why nothing was written, or nil.
+  public var editEnglishWords: ([String], Int) -> String?
+  /// The folder english_words.txt is in.
+  public var userFilesDirectory: () -> String
 
   public init(
     version: String, load: @escaping () -> String?, reset: @escaping () -> String?,
@@ -140,7 +162,10 @@ public struct SettingsActions {
     learned: @escaping () -> [LearnedEntry] = { [] },
     forget: @escaping (LearnedEntry) -> Void = { _ in },
     forgetAll: @escaping () -> Void = {},
-    profileDirectory: @escaping () -> String = { "" }
+    profileDirectory: @escaping () -> String = { "" },
+    englishWords: @escaping () -> [EnglishWord] = { [] },
+    editEnglishWords: @escaping ([String], Int) -> String? = { _, _ in nil },
+    userFilesDirectory: @escaping () -> String = { "" }
   ) {
     self.version = version
     self.load = load
@@ -160,6 +185,9 @@ public struct SettingsActions {
     self.forget = forget
     self.forgetAll = forgetAll
     self.profileDirectory = profileDirectory
+    self.englishWords = englishWords
+    self.editEnglishWords = editEnglishWords
+    self.userFilesDirectory = userFilesDirectory
   }
 
   /// Actions that do nothing, for drawing the window.

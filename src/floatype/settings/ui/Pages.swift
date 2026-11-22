@@ -30,6 +30,7 @@ struct SubRow<Control: View>: View {
 
 struct InputAssistGroup: View {
   @ObservedObject var store: SettingsStore
+  @State private var showWords = false
 
   var body: some View {
     let direct = store.bool("use_direct_commit").wrappedValue
@@ -56,6 +57,9 @@ struct InputAssistGroup: View {
       SubRow(title: "かなの無い入力は、頭の記号も打ったとおりにする", detail: "/review、--help") {
         Switch(isOn: store.bool("mixed_english_leading_symbols"))
       }.disabled(!english)
+      SubRow(title: "英字のまま残す英単語", detail: "english_words.txt") {
+        Button("英単語を編集…") { showWords = true }
+      }
       Row(title: "英字や数字のすぐ後の / を、・ ではなく / のまま打つ",
           detail: "2026/11/20、test/spec") {
         Switch(isOn: store.bool("slash_after_ascii"))
@@ -64,6 +68,7 @@ struct InputAssistGroup: View {
         Switch(isOn: store.bool("display_ambiguous_romaji"))
       }
     }
+    .sheet(isPresented: $showWords) { EnglishWordsView(actions: store.actions) }
   }
 }
 

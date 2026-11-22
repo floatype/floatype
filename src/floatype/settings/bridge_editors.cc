@@ -5,11 +5,22 @@
 #include <cstdlib>
 #include <cstring>
 #include <iterator>
+#include <set>
 #include <string>
+#include <utility>
+#include <vector>
 
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/ascii.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
+#include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
+#include "base/file_util.h"
 #include "base/system_util.h"
+#include "floatype/config/settings_file.h"
+#include "floatype/english/user_words.h"
 #include "floatype/settings/bridge.h"
 #include "floatype/zenz/zenz_memory.h"
 
@@ -29,9 +40,126 @@ ZenzMemory& (*const kMemories[])() = {
     &ZenzMemory::TurnedDown, &ZenzMemory::RefusedOnce, &ZenzMemory::Accepted,
     &ZenzMemory::Stopped};
 
+// english_words.txt as read, so that an edit never writes over a file changed
+// or unreadable since.
+struct EnglishFile {
+  std::string path;
+  std::string text;
+  mozc::floatype::FileStamp stamp;
+  // There but not read: never written over, which would lose its lines.
+  bool unreadable = false;
+};
+
+EnglishFile& English() {
+  static EnglishFile* file = new EnglishFile();
+  return *file;
+}
+
+// The first lines of a file the window makes.
+constexpr absl::string_view kEnglishHeader =
+    "# floatype: かなの入力中でも英字のまま残す英単語。1 行に 1 語。\n"
+    "# -word と書いた語は、英字にしない。\n";
+
+void ReadEnglish() {
+  EnglishFile& file = English();
+  file = EnglishFile{.path = mozc::floatype::UserFilePath(
+                         mozc::floatype::kEnglishWordsFile)};
+  file.stamp = mozc::floatype::StampOf(file.path);
+  if (absl::StatusOr<std::string> text = mozc::FileUtil::GetContents(file.path);
+      text.ok()) {
+    file.text = *std::move(text);
+  } else {
+    file.unreadable = file.stamp.size >= 0;
+  }
+}
+
 }  // namespace
 
 extern "C" {
+
+void FloatypeSettingsStart(void) {
+  // This app starts on its own, not through mozc_tool: the files it edits sit
+  // next to config.toml, as the converter has them.
+  mozc::floatype::SetUserFilesDir(
+      mozc::FileUtil::Dirname(mozc::floatype::DefaultSettingsPath()),
+      /*report_errors=*/true);
+}
+
+char* FloatypeSettingsEnglishWords(void) {
+  ReadEnglish();
+  const std::vector<std::string> presets = absl::StrSplit(
+      mozc::floatype::PresetEnglishWords(), '\n', absl::SkipEmpty());
+  const std::set<std::string> preset(presets.begin(), presets.end());
+  std::set<std::string> shown;
+  std::string out;
+  for (const absl::string_view line : absl::StrSplit(English().text, '\n')) {
+    const mozc::floatype::UserEnglishWords one =
+        mozc::floatype::ParseUserEnglishWords(line);
+    const bool keeps = !one.words.empty();
+    const absl::string_view word =
+        absl::StripTrailingAsciiWhitespace(keeps ? one.words : one.removed);
+    if (!word.empty() && shown.insert(absl::AsciiStrToLower(word)).second) {
+      absl::StrAppend(&out, word, "\t", keeps ? 1 : 0, "\t",
+                      preset.contains(absl::AsciiStrToLower(word)) ? 1 : 2,
+                      "\n");
+    }
+  }
+  for (const std::string& word : presets) {
+    if (shown.insert(word).second) {
+      absl::StrAppend(&out, word, "\t1\t0\n");
+    }
+  }
+  return Copy(out);
+}
+
+char* FloatypeSettingsEditEnglishWords(const char* words, int how) {
+  if (how < 0 || how > 2) {
+    return Copy("扱いの指定が違います。");
+  }
+  const std::vector<std::string> list =
+      absl::StrSplit(words, '\n', absl::SkipEmpty());
+  for (const std::string& word : list) {
+    // The file's own rule, so that the window never writes a line left out.
+    if (mozc::floatype::ParseUserEnglishWords(word).words !=
+        absl::StrCat(word, "\n")) {
+      return Copy(absl::StrFormat(
+          "「%s」は使えません。英字だけの 3〜32 文字の語が使えます。", word));
+    }
+  }
+  EnglishFile& file = English();
+  if (file.path.empty()) {
+    ReadEnglish();
+  }
+  if (!(mozc::floatype::StampOf(file.path) == file.stamp)) {
+    ReadEnglish();
+    return Copy(
+        "開いたあとに english_words.txt が書き換えられたので、変えずに読み直し"
+        "ました。もう一度操作してください。");
+  }
+  if (file.unreadable) {
+    return Copy("english_words.txt を読めないので、変えませんでした。");
+  }
+  std::string text =
+      file.stamp.size < 0 ? std::string(kEnglishHeader) : file.text;
+  for (const std::string& word : list) {
+    text = mozc::floatype::EditUserEnglishWords(
+        text, word, static_cast<mozc::floatype::EnglishWordEdit>(how));
+  }
+  if (const absl::Status status =
+          mozc::floatype::WriteAtomically(file.path, text);
+      !status.ok()) {
+    return Copy(absl::StrFormat("保存できませんでした（%s）", status.message()));
+  }
+  ReadEnglish();
+  return nullptr;
+}
+
+char* FloatypeSettingsUserFilesDirectory(void) {
+  if (English().path.empty()) {
+    ReadEnglish();
+  }
+  return Copy(mozc::FileUtil::Dirname(English().path));
+}
 
 char* FloatypeSettingsZenzMemory(void) {
   std::string out;

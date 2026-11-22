@@ -75,4 +75,13 @@ public let bridgeActions = SettingsActions(
   },
   forget: { FloatypeSettingsZenzForget(Int32($0.kind), $0.reading, $0.text) },
   forgetAll: { FloatypeSettingsZenzForgetAll() },
-  profileDirectory: { take(FloatypeSettingsProfileDirectory()) ?? "" })
+  profileDirectory: { take(FloatypeSettingsProfileDirectory()) ?? "" },
+  englishWords: {
+    (take(FloatypeSettingsEnglishWords()) ?? "").split(separator: "\n").compactMap { line in
+      let parts = line.split(separator: "\t", omittingEmptySubsequences: false)
+      guard parts.count == 3, let from = Int(parts[2]) else { return nil }
+      return EnglishWord(word: String(parts[0]), kept: parts[1] == "1", from: from)
+    }
+  },
+  editEnglishWords: { take(FloatypeSettingsEditEnglishWords($0.joined(separator: "\n"), Int32($1))) },
+  userFilesDirectory: { take(FloatypeSettingsUserFilesDirectory()) ?? "" })

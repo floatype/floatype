@@ -14,6 +14,10 @@ struct SettingsApp: App {
     save: { take(FloatypeSettingsSave($0)) },
     actions: bridgeActions)
 
+  init() {
+    FloatypeSettingsStart()
+  }
+
   var body: some Scene {
     WindowGroup {
       SettingsView(store: store)

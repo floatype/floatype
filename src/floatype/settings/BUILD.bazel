@@ -50,11 +50,14 @@ mozc_cc_library(
     aspect_hints = [":bridge_module"],
     deps = [
         ":config_lines",
+        "//base:file_util",
         "//base:system_util",
         "//base:version",
         "//client",
         "//client:client_interface",
         "//config:config_handler",
+        "//floatype/config:settings_file",
+        "//floatype/english:user_words",
         "//floatype/indicator:indicator_layout",
         "//floatype/look:window_look",
         "//floatype/update:update_check",
@@ -74,9 +77,13 @@ mozc_cc_test(
     srcs = ["bridge_editors_test.cc"],
     deps = [
         ":bridge",
+        "//base:file_util",
+        "//base:system_util",
+        "//floatype/config:settings_file",
         "//floatype/zenz:zenz_memory",
         "//testing:gunit_main",
         "//testing:mozctest",
+        "@com_google_absl//absl/strings",
     ],
 )
 

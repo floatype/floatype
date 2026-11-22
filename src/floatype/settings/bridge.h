@@ -115,6 +115,23 @@ void FloatypeSettingsZenzForgetAll(void);
 // The folder the learning data is in. To free.
 char* FloatypeSettingsProfileDirectory(void);
 
+// Tells where the user's files are (next to config.toml); the app calls it
+// once as it starts, before the editor windows read them.
+void FloatypeSettingsStart(void);
+
+// The English words kept in letters (英単語を編集…), read from
+// english_words.txt again: one "<word>\t<kept>\t<from>" line each, kept 1
+// (英字にする) or 0 (英字にしない), from 0 the preset, 1 the preset changed in
+// the file, 2 the file alone. To free.
+char* FloatypeSettingsEnglishWords(void);
+// Makes the words (one a line) kept (`how` 0), taken out (1) or as the
+// built-in lists say (2, the line removed) in english_words.txt; NULL, or why
+// nothing was written: a word the file would leave out, or a file changed or
+// unreadable since FloatypeSettingsEnglishWords read it. To free.
+char* FloatypeSettingsEditEnglishWords(const char* words, int how);
+// The folder english_words.txt is in (next to config.toml). To free.
+char* FloatypeSettingsUserFilesDirectory(void);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif

@@ -28,7 +28,10 @@ mozc_cc_library(
         ":preset_words_data",
     ],
     hdrs = ["user_words.h"],
-    visibility = ["//gui/config_dialog:__pkg__"],
+    visibility = [
+        "//floatype/settings:__pkg__",
+        "//gui/config_dialog:__pkg__",
+    ],
     deps = [
         "@com_google_absl//absl/base:no_destructor",
         "@com_google_absl//absl/strings",
