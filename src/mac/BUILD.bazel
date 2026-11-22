@@ -92,6 +92,8 @@ mozc_macos_application(
         oss_macos = {
             "//gui/about_dialog:about_dialog_macos": "Resources",
             "//gui/config_dialog:config_dialog_macos": "Resources",
+            # floatype: the settings screen 環境設定… opens (issue #9).
+            "//floatype/settings:settings_app": "Resources",
             "//gui/dictionary_tool:dictionary_tool_macos": "Resources",
             "//gui/error_message_dialog:error_message_dialog_macos": "Resources",
             "//gui/tool:mozc_prelauncher_macos": "Resources",

@@ -165,6 +165,8 @@ macos_application(
     infoplists = ["Info.plist"],
     minimum_os_version = MACOS_MIN_OS_VER,
     version = "//:version_macos",
+    # The IME's bundle carries it (mac/BUILD.bazel).
+    visibility = ["//mac:__pkg__"],
     deps = [":settings_app_lib"],
 )
 
