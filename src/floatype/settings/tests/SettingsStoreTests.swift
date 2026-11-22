@@ -23,6 +23,28 @@ final class SettingsStoreTests: XCTestCase {
     XCTAssertFalse(store.bool("use_zenz").wrappedValue)
   }
 
+  func testSavesTheNumberFormAsTheWholeRules() {
+    var saved: [String] = []
+    var asked: [String] = []
+    let actions = SettingsActions(
+      version: "", load: { nil }, reset: { nil }, clearHistory: { nil },
+      openTool: { _ in nil }, startsAtLogin: { false }, setStartsAtLogin: { _ in },
+      latestReleaseURL: "", checkRelease: { _, _, _ in .failed },
+      checksumMatches: { _, _ in false },
+      numberForm: { asked.append($0); return $0.contains("FULL") ? 1 : 0 },
+      withNumberForm: { _, form in form == 1 ? "[{group = \"0\", x = \"FULL\"}]" : nil })
+    let store = SettingsStore(
+      lines: "character_form_rules = [{group = \"0\", x = \"HALF\"}]\n",
+      save: { saved.append($0); return nil }, actions: actions)
+    XCTAssertEqual(store.numberForm().wrappedValue, "0")
+    XCTAssertEqual(asked.last, "character_form_rules = [{group = \"0\", x = \"HALF\"}]\n")
+    store.numberForm().wrappedValue = "1"
+    XCTAssertEqual(saved, ["character_form_rules = [{group = \"0\", x = \"FULL\"}]\n"])
+    XCTAssertEqual(store.numberForm().wrappedValue, "1")
+    store.numberForm().wrappedValue = "3"
+    XCTAssertEqual(saved.count, 1, "nothing to set, nothing saved")
+  }
+
   func testSavesAColorOnceItStopsChanging() {
     var saved: [String] = []
     let store = SettingsStore(lines: "ruby_style.text_color = 0\n",

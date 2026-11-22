@@ -19,6 +19,7 @@ for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua
   var actions = SettingsActions.none()
   actions.windowLook = bridgeActions.windowLook
   actions.indicatorLabel = bridgeActions.indicatorLabel
+  actions.numberForm = bridgeActions.numberForm
   let store = SettingsStore(lines: lines, save: { _ in nil }, actions: actions)
   let host = NSHostingView(rootView: SettingsView(store: store, page: page))
   let window = NSWindow(

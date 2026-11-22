@@ -112,6 +112,22 @@ public final class SettingsStore: ObservableObject {
       })
   }
 
+  /// 一般's 数字の入力, "0" to "3" (see SettingsActions.numberForm); choosing
+  /// one saves character_form_rules whole, the other groups' rules as they
+  /// are. "3" sets nothing.
+  public func numberForm() -> Binding<String> {
+    let key = "character_form_rules"
+    let line = { "\(key) = \(self.values[key] ?? "[]")\n" }
+    return Binding(
+      get: { String(self.actions.numberForm(line())) },
+      set: {
+        guard let form = Int($0), let rules = self.actions.withNumberForm(line(), form) else {
+          return
+        }
+        self.set(key, rules)
+      })
+  }
+
   /// The settings shown, as lines, for what reads them whole (外観's preview).
   public var lines: String {
     values.map { "\($0.key) = \($0.value)\n" }.joined()

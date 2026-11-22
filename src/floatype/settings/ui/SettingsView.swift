@@ -273,6 +273,25 @@ struct GeneralPage: View {
                          ("NUMPAD_FULL_WIDTH", "全角"), ("NUMPAD_HALF_WIDTH", "半角"),
                          ("NUMPAD_DIRECT_INPUT", "直接入力")])
         }
+        Row(title: "数字の入力") {
+          let form = store.numberForm()
+          // The 4th only shows the table's own pair; choosing it sets nothing.
+          Choice(selection: form,
+                 items: [("0", "半角"), ("1", "全角"),
+                         ("2", "全角（変換は前回の形）")]
+                   + (form.wrappedValue == "3" ? [("3", "表で個別に設定")] : []))
+        }
+      }
+      SettingsGroup(title: "キー設定") {
+        Row(title: "キー設定の選択") {
+          let keymap = store.choice("session_keymap")
+          // カスタム only with a table to use: an empty one is refused.
+          let custom = keymap.wrappedValue == "CUSTOM"
+            || (store.values["custom_keymap_table"] ?? "\"\"") != "\"\""
+          Choice(selection: keymap,
+                 items: (custom ? [("CUSTOM", "カスタム")] : [])
+                   + [("ATOK", "ATOK"), ("MSIME", "MS-IME"), ("KOTOERI", "ことえり")])
+        }
       }
       SettingsGroup(title: "ライブ変換") {
         Row(title: "手が止まったら Space を押さずに変換する") {

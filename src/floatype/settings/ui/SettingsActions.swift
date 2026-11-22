@@ -98,6 +98,12 @@ public struct SettingsActions {
   /// What the indicator shows for a state (1 入力中, 2 Mozc, 3 zenz pending,
   /// 4 Zenz) with a label setting ("FULL_LABEL", ...).
   public var indicatorLabel: (Int, String) -> String
+  /// 一般's 数字の入力 (0 半角, 1 全角, 2 Mozc's default, 3 another pair)
+  /// with the settings lines given.
+  public var numberForm: (String) -> Int
+  /// character_form_rules's value with the digits' rule set to a 数字の入力
+  /// (0 to 2), or nil without that rule.
+  public var withNumberForm: (String, Int) -> String?
 
   public init(
     version: String, load: @escaping () -> String?, reset: @escaping () -> String?,
@@ -107,7 +113,9 @@ public struct SettingsActions {
     checkRelease: @escaping (Int, String, [(String, String)]) -> Release,
     checksumMatches: @escaping (String, String) -> Bool,
     windowLook: @escaping (String, Bool, Bool) -> WindowLook? = { _, _, _ in nil },
-    indicatorLabel: @escaping (Int, String) -> String = { _, _ in "" }
+    indicatorLabel: @escaping (Int, String) -> String = { _, _ in "" },
+    numberForm: @escaping (String) -> Int = { _ in 3 },
+    withNumberForm: @escaping (String, Int) -> String? = { _, _ in nil }
   ) {
     self.version = version
     self.load = load
@@ -121,6 +129,8 @@ public struct SettingsActions {
     self.checksumMatches = checksumMatches
     self.windowLook = windowLook
     self.indicatorLabel = indicatorLabel
+    self.numberForm = numberForm
+    self.withNumberForm = withNumberForm
   }
 
   /// Actions that do nothing, for drawing the window.

@@ -63,4 +63,6 @@ public let bridgeActions = SettingsActions(
       footerFontSize: look.footer_font_size, kindMarkColor: look.kind_mark_color,
       columnMinimumWidth: minimum)
   },
-  indicatorLabel: { take(FloatypeSettingsIndicatorLabel(Int32($0), $1)) ?? "" })
+  indicatorLabel: { take(FloatypeSettingsIndicatorLabel(Int32($0), $1)) ?? "" },
+  numberForm: { Int(FloatypeSettingsNumberForm($0)) },
+  withNumberForm: { take(FloatypeSettingsWithNumberForm($0, Int32($1))) })
