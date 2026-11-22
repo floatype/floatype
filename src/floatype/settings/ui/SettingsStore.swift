@@ -147,6 +147,22 @@ public final class SettingsStore: ObservableObject {
     return error == nil
   }
 
+  /// Saves several fields in one go (a table and the choice that uses it),
+  /// so that none takes effect without the other; whether it was saved.
+  @discardableResult
+  public func saveAll(_ changes: [(String, String)]) -> Bool {
+    if let failure = save(changes.map { "\($0.0) = \($0.1)\n" }.joined()) {
+      error = failure
+      return false
+    }
+    error = nil
+    for (key, value) in changes {
+      values[key] = value
+      saved[key] = value
+    }
+    return true
+  }
+
   /// The settings shown, as lines, for what reads them whole (外観's preview).
   public var lines: String {
     values.map { "\($0.key) = \($0.value)\n" }.joined()

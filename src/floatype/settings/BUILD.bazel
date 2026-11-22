@@ -45,6 +45,7 @@ mozc_cc_library(
     srcs = [
         "bridge.cc",
         "bridge_editors.cc",
+        "bridge_keymap.cc",
     ],
     hdrs = ["bridge.h"],
     aspect_hints = [":bridge_module"],
@@ -56,6 +57,7 @@ mozc_cc_library(
         "//base:version",
         "//client",
         "//client:client_interface",
+        "//composer:key_parser",
         "//config:config_handler",
         "//floatype/config:settings_file",
         "//floatype/english:user_words",
@@ -66,6 +68,10 @@ mozc_cc_library(
         "//protocol:commands_cc_proto",
         "//protocol:config_cc_proto",
         "//protocol:renderer_cc_proto",
+        "//session:keymap",
+        "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
     ] + mozc_select(

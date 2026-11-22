@@ -138,6 +138,35 @@ public struct RomanRow: Hashable, Identifiable {
   }
 }
 
+/// One row of the keymap: in `mode`, `key` does `command`. A row the Qt
+/// editor never showed (`shown` false: IME on and off, a command sequence) is
+/// not listed, and is saved back as it was.
+public struct KeymapRow: Hashable, Identifiable {
+  public var id = UUID()
+  public var mode: String
+  public var key: String
+  public var command: String
+  public var shown: Bool
+
+  public init(mode: String, key: String, command: String, shown: Bool = true) {
+    self.mode = mode
+    self.key = key
+    self.command = command
+    self.shown = shown
+  }
+}
+
+/// The keymap editor's modes and commands, (name, Japanese name) each.
+public struct KeymapNames {
+  public var modes: [(String, String)]
+  public var commands: [(String, String)]
+
+  public init(modes: [(String, String)], commands: [(String, String)]) {
+    self.modes = modes
+    self.commands = commands
+  }
+}
+
 public struct SettingsActions {
   public var version: String
   /// The settings again, as lines, or nil.
@@ -190,6 +219,20 @@ public struct SettingsActions {
   public var romanTableText: ([RomanRow]) -> String
   /// custom_roman_table's value for rows, or nil for no usable row.
   public var romanTableValue: ([RomanRow]) -> String?
+  /// The keymap with the settings lines given: the custom table, or the
+  /// preset's.
+  public var keymap: (String) -> [KeymapRow]
+  /// A preset's rows ("ATOK", "MSIME", "KOTOERI").
+  public var keymapPreset: (String) -> [KeymapRow]
+  /// Rows from a keymap file's text.
+  public var keymapRows: (String) -> [KeymapRow]
+  /// The table for rows, as a keymap file holds it.
+  public var keymapText: ([KeymapRow]) -> String
+  /// custom_keymap_table's value for rows, or nil without a row shown.
+  public var keymapValue: ([KeymapRow]) -> String?
+  public var keymapNames: () -> KeymapNames
+  /// Whether a key ("Ctrl Shift a") can be bound.
+  public var keymapKeyIsValid: (String) -> Bool
 
   public init(
     version: String, load: @escaping () -> String?, reset: @escaping () -> String?,
@@ -214,7 +257,14 @@ public struct SettingsActions {
     romanTable: @escaping (String) -> [RomanRow] = { _ in [] },
     romanRows: @escaping (String?) -> [RomanRow] = { _ in [] },
     romanTableText: @escaping ([RomanRow]) -> String = { _ in "" },
-    romanTableValue: @escaping ([RomanRow]) -> String? = { _ in nil }
+    romanTableValue: @escaping ([RomanRow]) -> String? = { _ in nil },
+    keymap: @escaping (String) -> [KeymapRow] = { _ in [] },
+    keymapPreset: @escaping (String) -> [KeymapRow] = { _ in [] },
+    keymapRows: @escaping (String) -> [KeymapRow] = { _ in [] },
+    keymapText: @escaping ([KeymapRow]) -> String = { _ in "" },
+    keymapValue: @escaping ([KeymapRow]) -> String? = { _ in nil },
+    keymapNames: @escaping () -> KeymapNames = { KeymapNames(modes: [], commands: []) },
+    keymapKeyIsValid: @escaping (String) -> Bool = { _ in true }
   ) {
     self.version = version
     self.load = load
@@ -243,6 +293,13 @@ public struct SettingsActions {
     self.romanRows = romanRows
     self.romanTableText = romanTableText
     self.romanTableValue = romanTableValue
+    self.keymap = keymap
+    self.keymapPreset = keymapPreset
+    self.keymapRows = keymapRows
+    self.keymapText = keymapText
+    self.keymapValue = keymapValue
+    self.keymapNames = keymapNames
+    self.keymapKeyIsValid = keymapKeyIsValid
   }
 
   /// Actions that do nothing, for drawing the window.

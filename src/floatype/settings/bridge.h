@@ -154,6 +154,26 @@ char* FloatypeSettingsRomanTableText(const char* rows);
 // table; NULL when no row has an input and an output or next. To free.
 char* FloatypeSettingsRomanTableValue(const char* rows);
 
+// The keymap editor's table, one "<mode>\t<key>\t<command>\t<shown>" row
+// a line: the rows it shows (shown 1) first, then those the Qt editor never
+// showed (0), which are to be saved back as they are. From the settings
+// `lines`: the custom table, or the preset's file for a preset. To free.
+char* FloatypeSettingsKeymap(const char* lines);
+// The rows of a preset ("ATOK", "MSIME", "KOTOERI"), or of a keymap file's
+// `text` (as imported). To free.
+char* FloatypeSettingsKeymapPreset(const char* keymap);
+char* FloatypeSettingsKeymapRows(const char* text);
+// The table for rows, as a keymap file holds it (exported). To free.
+char* FloatypeSettingsKeymapText(const char* rows);
+// The value of custom_keymap_table for rows; NULL without a row shown. To
+// free.
+char* FloatypeSettingsKeymapValue(const char* rows);
+// The modes and the commands that can be bound, with their Japanese names:
+// "mode\t<name>\t<shown>" and "command\t<name>\t<shown>" lines. To free.
+char* FloatypeSettingsKeymapNames(void);
+// 1 if `key` ("Ctrl Shift a", "Henkan") can be bound in the editor.
+int FloatypeSettingsKeymapKeyIsValid(const char* key);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif

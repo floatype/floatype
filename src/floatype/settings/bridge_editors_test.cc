@@ -1,9 +1,12 @@
 #include <sys/stat.h>
 
 #include <string>
+#include <vector>
 
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_split.h"
+#include "absl/strings/string_view.h"
 #include "base/file_util.h"
 #include "base/system_util.h"
 #include "floatype/config/settings_file.h"
@@ -81,6 +84,69 @@ TEST(BridgeRomanTableTest, ReadsEditsAndKeepsTheDefaultAsNone) {
                 absl::StrCat("custom_roman_table = ", value).c_str())),
             "a\tあ\t\nkk\tっ\tk\n");
   EXPECT_EQ(FloatypeSettingsRomanTableValue("\tい\t\n"), nullptr);
+}
+
+TEST(BridgeKeymapTest, NamesEveryModeAndCommandInJapanese) {
+  const std::string names = Take(FloatypeSettingsKeymapNames());
+  int commands = 0;
+  for (const absl::string_view line :
+       absl::StrSplit(names, '\n', absl::SkipEmpty())) {
+    const std::vector<absl::string_view> fields = absl::StrSplit(line, '\t');
+    ASSERT_EQ(fields.size(), 3);
+    EXPECT_NE(fields[1], fields[2]) << "no Japanese name: " << fields[1];
+    commands += fields[0] == "command";
+  }
+  EXPECT_GT(commands, 30);
+  EXPECT_FALSE(absl::StrContains(names, "\tIMEOn\t")) << "not on a Mac";
+}
+
+TEST(BridgeKeymapTest, KeepsTheRowsItDoesNotShow) {
+  const char kTable[] =
+      "status\tkey\tcommand\n"
+      "Composition\tCtrl a\tMoveCursorToBeginning\n"
+      "# a comment\n"
+      "Precomposition\tKanji\tIMEOn\n"
+      "Composition\tShift Space\tCommit|IMEOff\n"
+      "Conversion\tSpace\tSegmentFocusRight\n";
+  const std::string rows = Take(FloatypeSettingsKeymapRows(kTable));
+  EXPECT_EQ(rows,
+            "Composition\tCtrl a\tMoveCursorToBeginning\t1\n"
+            "Conversion\tSpace\tSegmentFocusRight\t1\n"
+            "Precomposition\tKanji\tIMEOn\t0\n"
+            "Composition\tShift Space\tCommit|IMEOff\t0\n");
+  EXPECT_EQ(Take(FloatypeSettingsKeymapText(rows.c_str())),
+            "status\tkey\tcommand\n"
+            "Composition\tCtrl a\tMoveCursorToBeginning\n"
+            "Conversion\tSpace\tSegmentFocusRight\n"
+            "Precomposition\tKanji\tIMEOn\n"
+            "Composition\tShift Space\tCommit|IMEOff\n");
+  const std::string value = Take(FloatypeSettingsKeymapValue(rows.c_str()));
+  EXPECT_EQ(Take(FloatypeSettingsKeymap(
+                absl::StrCat("session_keymap = \"CUSTOM\"\n"
+                             "custom_keymap_table = ",
+                             value, "\n")
+                    .c_str())),
+            rows)
+      << "read back as written";
+  EXPECT_EQ(FloatypeSettingsKeymapValue(
+                "Precomposition\tKanji\tIMEOn\t0\n"),
+            nullptr)
+      << "no row shown: an empty table to Mozc";
+}
+
+TEST(BridgeKeymapTest, OpensAPresetAsItsFile) {
+  const std::string msime = Take(FloatypeSettingsKeymapPreset("MSIME"));
+  EXPECT_TRUE(absl::StrContains(msime, "\t1\n"));
+  EXPECT_EQ(Take(FloatypeSettingsKeymap("session_keymap = \"MSIME\"\n")),
+            msime);
+  EXPECT_EQ(Take(FloatypeSettingsKeymapPreset("CUSTOM")), "");
+}
+
+TEST(BridgeKeymapTest, ChecksAKey) {
+  EXPECT_EQ(FloatypeSettingsKeymapKeyIsValid("Ctrl Shift a"), 1);
+  EXPECT_EQ(FloatypeSettingsKeymapKeyIsValid("Henkan"), 1);
+  EXPECT_EQ(FloatypeSettingsKeymapKeyIsValid("Kanji"), 0);
+  EXPECT_EQ(FloatypeSettingsKeymapKeyIsValid("NoSuchKey"), 0);
 }
 
 class BridgeEnglishWordsTest : public testing::TestWithTempUserProfile {

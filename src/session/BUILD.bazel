@@ -607,7 +607,10 @@ mozc_cc_library(
     name = "keymap",
     srcs = ["keymap.cc"],
     hdrs = ["keymap.h"],
-    visibility = ["//gui/config_dialog:__pkg__"],
+    visibility = [
+        "//floatype/settings:__pkg__",
+        "//gui/config_dialog:__pkg__",
+    ],
     deps = [
         "//base:config_file_stream",
         "//base:file_stream",

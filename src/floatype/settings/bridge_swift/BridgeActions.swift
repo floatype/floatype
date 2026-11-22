@@ -25,6 +25,20 @@ func romanText(_ rows: [RomanRow]) -> String {
   rows.map { "\($0.input)\t\($0.output)\t\($0.next)\n" }.joined()
 }
 
+/// Rows as the bridge writes them, "<mode>\t<key>\t<command>\t<shown>\n".
+func keymapRows(_ text: String?) -> [KeymapRow] {
+  (text ?? "").split(separator: "\n").compactMap { line in
+    let parts = line.split(separator: "\t", omittingEmptySubsequences: false)
+    guard parts.count == 4 else { return nil }
+    return KeymapRow(mode: String(parts[0]), key: String(parts[1]), command: String(parts[2]),
+                     shown: parts[3] == "1")
+  }
+}
+
+func keymapText(_ rows: [KeymapRow]) -> String {
+  rows.map { "\($0.mode)\t\($0.key)\t\($0.command)\t\($0.shown ? 1 : 0)\n" }.joined()
+}
+
 public let bridgeActions = SettingsActions(
   version: take(FloatypeSettingsVersion()) ?? "",
   load: { take(FloatypeSettingsLoad()) },
@@ -113,4 +127,20 @@ public let bridgeActions = SettingsActions(
   romanTable: { romanRows(take(FloatypeSettingsRomanTable($0))) },
   romanRows: { text in romanRows(take(FloatypeSettingsRomanRows(text))) },
   romanTableText: { take(FloatypeSettingsRomanTableText(romanText($0))) ?? "" },
-  romanTableValue: { take(FloatypeSettingsRomanTableValue(romanText($0))) })
+  romanTableValue: { take(FloatypeSettingsRomanTableValue(romanText($0))) },
+  keymap: { keymapRows(take(FloatypeSettingsKeymap($0))) },
+  keymapPreset: { keymapRows(take(FloatypeSettingsKeymapPreset($0))) },
+  keymapRows: { keymapRows(take(FloatypeSettingsKeymapRows($0))) },
+  keymapText: { take(FloatypeSettingsKeymapText(keymapText($0))) ?? "" },
+  keymapValue: { take(FloatypeSettingsKeymapValue(keymapText($0))) },
+  keymapNames: {
+    var names = KeymapNames(modes: [], commands: [])
+    for line in (take(FloatypeSettingsKeymapNames()) ?? "").split(separator: "\n") {
+      let parts = line.split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
+      guard parts.count == 3 else { continue }
+      if parts[0] == "mode" { names.modes.append((parts[1], parts[2])) }
+      else { names.commands.append((parts[1], parts[2])) }
+    }
+    return names
+  },
+  keymapKeyIsValid: { FloatypeSettingsKeymapKeyIsValid($0) != 0 })

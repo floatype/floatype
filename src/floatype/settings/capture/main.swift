@@ -34,6 +34,8 @@ for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua
   }
   actions.characterForms = bridgeActions.characterForms
   actions.romanTable = bridgeActions.romanTable
+  actions.keymap = bridgeActions.keymap
+  actions.keymapNames = bridgeActions.keymapNames
   let store = SettingsStore(lines: lines, save: { _ in nil }, actions: actions)
   let root: AnyView
   switch page {
@@ -45,6 +47,8 @@ for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua
     root = AnyView(CharacterFormsView(store: store).background(Color(nsColor: .windowBackgroundColor)))
   case "roman":
     root = AnyView(RomanTableView(store: store).background(Color(nsColor: .windowBackgroundColor)))
+  case "keymap":
+    root = AnyView(KeymapView(store: store).background(Color(nsColor: .windowBackgroundColor)))
   default: root = AnyView(SettingsView(store: store, page: page))
   }
   let host = NSHostingView(rootView: root)
