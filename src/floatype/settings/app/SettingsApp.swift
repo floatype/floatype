@@ -3,25 +3,48 @@
 
 import FloatypeSettingsBridge
 import FloatypeSettingsUI
+import Foundation
 import SwiftUI
 
-/// The converter's settings, or nil if it cannot be reached.
-func loadSettings() -> String? {
-  guard let lines = FloatypeSettingsLoad() else { return nil }
-  defer { FloatypeSettingsFree(lines) }
-  return String(cString: lines)
+/// Text the bridge made, freed once read; nil stays nil.
+func take(_ text: UnsafeMutablePointer<CChar>?) -> String? {
+  guard let text else { return nil }
+  defer { FloatypeSettingsFree(text) }
+  return String(cString: text)
 }
 
-func saveSettings(_ toml: String) -> String? {
-  guard let error = FloatypeSettingsSave(toml) else { return nil }
-  defer { FloatypeSettingsFree(error) }
-  return String(cString: error)
-}
+let bridgeActions = SettingsActions(
+  version: take(FloatypeSettingsVersion()) ?? "",
+  load: { take(FloatypeSettingsLoad()) },
+  reset: { take(FloatypeSettingsReset()) },
+  clearHistory: { take(FloatypeSettingsClearHistory()) },
+  openTool: { take(FloatypeSettingsLaunchTool($0)) },
+  startsAtLogin: { FloatypeSettingsStartsAtLogin() != 0 },
+  setStartsAtLogin: { FloatypeSettingsSetStartsAtLogin($0 ? 1 : 0) },
+  latestReleaseURL: String(cString: FloatypeSettingsLatestReleaseUrl()),
+  checkRelease: { status, tag, assets in
+    let lines = assets.map { "\($0.0)\t\($0.1)\n" }.joined()
+    var version: UnsafeMutablePointer<CChar>?
+    var package: UnsafeMutablePointer<CChar>?
+    var checksum: UnsafeMutablePointer<CChar>?
+    switch FloatypeSettingsCheckRelease(Int32(status), tag, lines, &version, &package, &checksum) {
+    case 0:
+      guard let version = take(version), let package = take(package).flatMap(URL.init),
+            let checksum = take(checksum).flatMap(URL.init) else { return .failed }
+      return .newer(version: version, package: package, checksum: checksum)
+    case 1: return .upToDate
+    case 2: return .noRelease
+    default: return .failed
+    }
+  },
+  checksumMatches: { FloatypeSettingsChecksumMatches($0, $1) != 0 })
 
 @main
 struct SettingsApp: App {
   @StateObject private var store = SettingsStore(
-    lines: loadSettings(), save: saveSettings)
+    lines: bridgeActions.load(),
+    save: { take(FloatypeSettingsSave($0)) },
+    actions: bridgeActions)
 
   var body: some Scene {
     WindowGroup {

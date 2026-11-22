@@ -12,20 +12,45 @@ public final class SettingsStore: ObservableObject {
   @Published public var error: String?
 
   private let save: (String) -> String?
+  public let actions: SettingsActions
 
   /// Whether the settings could be read; without them nothing is shown, so
   /// that nothing shown as off or 0 can be saved.
-  public let loaded: Bool
+  @Published public private(set) var loaded = false
 
   /// `lines` as the bridge loads them, nil if it could not; `save` takes TOML
   /// and returns why it failed, or nil.
-  public init(lines: String?, save: @escaping (String) -> String?) {
+  public init(lines: String?, save: @escaping (String) -> String?,
+              actions: SettingsActions = .none()) {
     self.save = save
-    loaded = lines != nil
-    for line in (lines ?? "").split(separator: "\n") {
-      guard let equals = line.range(of: " = ") else { continue }
-      values[String(line[..<equals.lowerBound])] = String(line[equals.upperBound...])
+    self.actions = actions
+    read(lines)
+  }
+
+  /// Puts the converter's settings back to the defaults, and shows them.
+  public func reset() {
+    if let failure = actions.reset() {
+      error = failure
+    } else {
+      error = nil
+      read(actions.load())
     }
+  }
+
+  /// Runs an action, showing why it failed.
+  public func run(_ action: () -> String?) {
+    error = action()
+  }
+
+  private func read(_ lines: String?) {
+    loaded = lines != nil
+    guard let lines else { return }
+    var read: [String: String] = [:]
+    for line in lines.split(separator: "\n") {
+      guard let equals = line.range(of: " = ") else { continue }
+      read[String(line[..<equals.lowerBound])] = String(line[equals.upperBound...])
+    }
+    values = read
   }
 
   public func bool(_ key: String) -> Binding<Bool> {

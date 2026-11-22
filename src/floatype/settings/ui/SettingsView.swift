@@ -3,6 +3,7 @@
 // gray line saying what it does and its control at the right edge. Built
 // from parts macOS 12 has.
 
+import AppKit
 import SwiftUI
 
 struct Page: Identifiable, Hashable {
@@ -56,6 +57,7 @@ public struct SettingsView: View {
               case "assist": AssistPage(store: store)
               case "suggest": SuggestPage(store: store)
               case "privacy": PrivacyPage(store: store)
+              case "misc": MiscPage(store: store)
               default: NotYetPage()
               }
             }
@@ -70,6 +72,7 @@ public struct SettingsView: View {
             .padding(.horizontal, 28)
             .padding(.bottom, 12)
         }
+        Footer(store: store)
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
       .background(Color(nsColor: .windowBackgroundColor))
@@ -295,6 +298,37 @@ struct GeneralPage: View {
         }.disabled(!zenz)
       }
       InputAssistGroup(store: store)
+    }
+  }
+}
+
+/// Under every page: where the settings live, and 初期値に戻す.
+struct Footer: View {
+  @ObservedObject var store: SettingsStore
+  @State private var confirmReset = false
+
+  var body: some View {
+    HStack {
+      Button("初期値に戻す…") { confirmReset = true }
+        .disabled(!store.loaded)
+      Spacer()
+      Text("保存先 ~/.config/floatype/config.toml")
+        .font(.system(size: 11))
+        .foregroundColor(.secondary)
+      Button("Finder で表示") {
+        let folder = FileManager.default.homeDirectoryForCurrentUser
+          .appendingPathComponent(".config/floatype")
+        NSWorkspace.shared.open(folder)
+      }
+    }
+    .padding(.horizontal, 28)
+    .padding(.vertical, 12)
+    .alert("初期値に戻す", isPresented: $confirmReset) {
+      Button("戻す", role: .destructive) { store.reset() }
+      Button("キャンセル", role: .cancel) {}
+    } message: {
+      Text("この機能を実行すると Floatype の設定が標準状態に戻ります。実行しますか？ "
+           + "以下の設定はリセットされません。\n - 学習履歴\n - 入力履歴")
     }
   }
 }

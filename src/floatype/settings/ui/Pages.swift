@@ -69,6 +69,7 @@ struct InputAssistGroup: View {
 
 struct DictionaryPage: View {
   @ObservedObject var store: SettingsStore
+  @State private var confirmClear = false
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
@@ -77,6 +78,14 @@ struct DictionaryPage: View {
           Choice(selection: store.choice("history_learning_level"),
                  items: [("DEFAULT_HISTORY", "有効"), ("READ_ONLY", "有効（新規学習はしない）"),
                          ("NO_HISTORY", "無効")])
+        }
+        Row(title: "学習履歴のクリア") {
+          Button("消す…") { confirmClear = true }
+        }
+      }
+      SettingsGroup(title: "ユーザー辞書") {
+        Row(title: "ユーザ辞書の編集", detail: "辞書ツールが開きます") {
+          Button("開く") { store.run { store.actions.openTool("dictionary_tool") } }
         }
       }
       SettingsGroup(title: "用例辞書") {
@@ -98,6 +107,12 @@ struct DictionaryPage: View {
           Row(title: item.1) { Switch(isOn: store.bool(item.0)) }
         }
       }
+    }
+    .alert("学習履歴のクリア", isPresented: $confirmClear) {
+      Button("消す", role: .destructive) { store.run { store.actions.clearHistory() } }
+      Button("キャンセル", role: .cancel) {}
+    } message: {
+      Text("すべての入力履歴が削除されます。実行しますか？")
     }
   }
 }
@@ -196,6 +211,38 @@ struct PrivacyPage: View {
       SettingsGroup(title: "プレゼンテーションモード") {
         Row(title: "一時的にすべてのサジェスト機能を無効にする") {
           Switch(isOn: store.bool("presentation_mode"))
+        }
+      }
+    }
+  }
+}
+
+struct MiscPage: View {
+  @ObservedObject var store: SettingsStore
+  @StateObject private var updater: Updater
+  @State private var startsAtLogin: Bool
+
+  init(store: SettingsStore) {
+    self.store = store
+    _updater = StateObject(wrappedValue: Updater(actions: store.actions))
+    _startsAtLogin = State(initialValue: store.actions.startsAtLogin())
+  }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      SettingsGroup(title: "更新") {
+        Row(title: "Floatype の更新", detail: updater.status) {
+          Button(updater.buttonTitle) { updater.press() }.disabled(updater.busy)
+        }
+      }
+      SettingsGroup(title: "スタートアップ") {
+        Row(title: "ログイン時に変換エンジンプログラムを起動する") {
+          Switch(isOn: Binding(
+            get: { startsAtLogin },
+            set: {
+              store.actions.setStartsAtLogin($0)
+              startsAtLogin = store.actions.startsAtLogin()
+            }))
         }
       }
     }

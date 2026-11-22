@@ -54,6 +54,23 @@ final class SettingsStoreTests: XCTestCase {
     XCTAssertEqual(store.text("candidate_style.font_family").wrappedValue, "a\"b\\c")
   }
 
+  func testResetReadsTheSettingsAgain() {
+    var resets = 0
+    var actions = SettingsActions.none()
+    actions.reset = { resets += 1; return nil }
+    actions.load = { "use_zenz = true\n" }
+    let store = SettingsStore(lines: "use_zenz = false\n", save: { _ in nil }, actions: actions)
+    store.reset()
+    XCTAssertEqual(resets, 1)
+    XCTAssertTrue(store.bool("use_zenz").wrappedValue)
+
+    actions.reset = { "だめ" }
+    let failing = SettingsStore(lines: "use_zenz = false\n", save: { _ in nil }, actions: actions)
+    failing.reset()
+    XCTAssertEqual(failing.error, "だめ")
+    XCTAssertFalse(failing.bool("use_zenz").wrappedValue)
+  }
+
   func testWithoutSettingsShowsNothing() {
     XCTAssertFalse(SettingsStore(lines: nil, save: { _ in nil }).loaded)
   }
