@@ -20,6 +20,7 @@
 #include "base/file/temp_dir.h"
 #include "base/file_util.h"
 #include "floatype/config/settings_file.h"
+#include "floatype/english/user_words.h"
 #include "testing/gmock.h"
 #include "testing/gunit.h"
 #include "testing/mozctest.h"
@@ -983,6 +984,47 @@ TEST_F(CurrentEnglishWordsTest, TakesOutTheWordsTheFileSays) {
   EXPECT_FALSE(words->Contains("keyboard")) << "SCOWL's";
   EXPECT_TRUE(words->ContainsUser("time")) << "the other preset words stay";
   EXPECT_TRUE(words->ContainsUser("site"));
+}
+
+TEST(EditUserEnglishWordsTest, KeepsCommentsAndChangesTheWordsLine) {
+  constexpr absl::string_view kText =
+      "# mine\n"
+      "\n"
+      "figma\n"
+      "-Page\n"
+      "go\n";
+  EXPECT_EQ(EditUserEnglishWords(kText, "page", EnglishWordEdit::kKeep),
+            "# mine\n\nfigma\npage\ngo\n")
+      << "in place, without case";
+  EXPECT_EQ(EditUserEnglishWords(kText, "figma", EnglishWordEdit::kTakeOut),
+            "# mine\n\n-figma\n-Page\ngo\n");
+  EXPECT_EQ(EditUserEnglishWords(kText, "page", EnglishWordEdit::kForget),
+            "# mine\n\nfigma\ngo\n");
+  EXPECT_EQ(EditUserEnglishWords(kText, "json", EnglishWordEdit::kKeep),
+            "# mine\n\nfigma\n-Page\ngo\njson\n")
+      << "at the end";
+  EXPECT_EQ(EditUserEnglishWords("time\n-time\n time \n", "time",
+                                 EnglishWordEdit::kTakeOut),
+            "-time\n")
+      << "one line a word";
+  EXPECT_EQ(EditUserEnglishWords("", "json", EnglishWordEdit::kKeep), "json\n");
+  EXPECT_EQ(EditUserEnglishWords("figma", "json", EnglishWordEdit::kKeep),
+            "figma\njson\n");
+  EXPECT_EQ(EditUserEnglishWords("figma\n", "figma", EnglishWordEdit::kForget),
+            "");
+  EXPECT_EQ(EditUserEnglishWords("# json\n", "json", EnglishWordEdit::kForget),
+            "# json\n")
+      << "a comment is no word";
+}
+
+TEST_F(CurrentEnglishWordsTest, ReadsAnEditedFile) {
+  Write(EditUserEnglishWords("# mine\n", "kanakanji", EnglishWordEdit::kKeep));
+  EXPECT_TRUE(CurrentEnglishWords()->ContainsUser("kanakanji"));
+  Write(EditUserEnglishWords("# mine\nkanakanji\n", "page",
+                             EnglishWordEdit::kTakeOut));
+  clock_.Advance(absl::Seconds(1));
+  EXPECT_FALSE(CurrentEnglishWords()->Contains("page"));
+  EXPECT_TRUE(CurrentEnglishWords()->ContainsUser("kanakanji"));
 }
 
 }  // namespace
