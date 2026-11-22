@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "absl/status/statusor.h"
+#include "absl/strings/match.h"
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "base/version.h"
@@ -233,4 +234,27 @@ char* FloatypeSettingsIndicatorLabel(int state, const char* label) {
   mozc::config::Config::IndicatorStyle::Label_Parse(label, &value);
   return Copy(mozc::floatype::IndicatorLabel(
       static_cast<mozc::commands::Output::Indicator::State>(state), value));
+}
+
+int FloatypeSettingsNumberForm(const char* lines) {
+  const absl::StatusOr<mozc::config::Config> config =
+      mozc::floatype::ApplyConfigLines(mozc::config::Config(), lines);
+  return mozc::floatype::NumberForm(config.value_or(mozc::config::Config()));
+}
+
+char* FloatypeSettingsWithNumberForm(const char* lines, int form) {
+  absl::StatusOr<mozc::config::Config> config =
+      mozc::floatype::ApplyConfigLines(mozc::config::Config(), lines);
+  if (!config.ok() || !mozc::floatype::SetNumberForm(form, *config)) {
+    return nullptr;
+  }
+  // The rules' line as the screen's other lines are written.
+  constexpr absl::string_view kKey = "character_form_rules = ";
+  for (const absl::string_view line : absl::StrSplit(
+           mozc::floatype::ConfigLines(*config), '\n', absl::SkipEmpty())) {
+    if (absl::StartsWith(line, kKey)) {
+      return Copy(line.substr(kKey.size()));
+    }
+  }
+  return nullptr;
 }

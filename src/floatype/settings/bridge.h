@@ -94,6 +94,16 @@ int FloatypeSettingsWindowLook(const char* lines, int suggestion, int dark,
 // ("FULL_LABEL", "SYMBOL", "COLOR_ONLY"); to free.
 char* FloatypeSettingsIndicatorLabel(int state, const char* label);
 
+// 一般's 数字の入力 with the settings `lines` (character_form_rules's line
+// is enough): 0 半角, 1 全角, 2 全角 while typing and the last form once
+// converted, 3 another pair or no digits' rule.
+int FloatypeSettingsNumberForm(const char* lines);
+
+// The value of character_form_rules, `[{...}, ...]`, with the digits' rule set
+// to `form` (0 to 2) and the other rules as they are; NULL without a digits'
+// rule. To free.
+char* FloatypeSettingsWithNumberForm(const char* lines, int form);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif

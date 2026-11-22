@@ -7,7 +7,9 @@
 #include <string>
 #include <tuple>
 
+#include "absl/status/statusor.h"
 #include "absl/strings/match.h"
+#include "absl/strings/str_cat.h"
 #include "client/client.h"
 #include "client/client_interface.h"
 #include "client/client_mock.h"
@@ -184,7 +186,31 @@ TEST(BridgeLookTest, ReadsTheLinesOfARealProfile) {
   const std::string lines = ConfigLines(config);
   FloatypeWindowLook look{};
   EXPECT_EQ(FloatypeSettingsWindowLook(lines.c_str(), 1, 0, &look), 1)
-      << "tables of several lines, quotes and backslashes";
+      << "tables of several lines, quotes and backslashes, and the "
+         "character form rules";
+}
+
+TEST(BridgeNumberFormTest, SetsTheDigitsRuleAlone) {
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  const std::string lines = ConfigLines(config);
+  EXPECT_EQ(FloatypeSettingsNumberForm(lines.c_str()), 0);
+  char* value = FloatypeSettingsWithNumberForm(lines.c_str(), 1);
+  ASSERT_NE(value, nullptr);
+  const std::string changed = absl::StrCat("character_form_rules = ", value);
+  FloatypeSettingsFree(value);
+  EXPECT_EQ(FloatypeSettingsNumberForm(changed.c_str()), 1);
+
+  // Saved as the screen saves it, only the digits' rule differs.
+  const absl::StatusOr<config::Config> saved =
+      ApplyConfigLines(config, absl::StrCat(changed, "\n"));
+  ASSERT_TRUE(saved.ok()) << saved.status();
+  ASSERT_TRUE(SetNumberForm(1, config));
+  EXPECT_EQ(saved->SerializeAsString(), config.SerializeAsString());
+
+  EXPECT_EQ(FloatypeSettingsWithNumberForm("character_form_rules = []", 0),
+            nullptr)
+      << "no digits' rule to set";
+  EXPECT_EQ(FloatypeSettingsNumberForm("character_form_rules = []"), 3);
 }
 
 TEST(BridgeLookTest, NamesTheIndicatorsStates) {

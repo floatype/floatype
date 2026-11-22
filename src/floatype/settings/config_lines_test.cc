@@ -61,6 +61,64 @@ TEST(ConfigLinesTest, ChangesOnlyTheFieldsGiven) {
   EXPECT_FALSE(changed->has_preedit_method()) << "unset before, stays unset";
 }
 
+TEST(ConfigLinesTest, WritesARepeatedFieldAsOneLine) {
+  config::Config config;
+  config::Config::CharacterFormRule* rule = config.add_character_form_rules();
+  rule->set_group("0");
+  rule->set_preedit_character_form(config::Config::HALF_WIDTH);
+  config.add_character_form_rules()->set_group("ア");
+  config.add_overlay_keymaps(config::Config::ATOK);
+  const std::string lines = ConfigLines(config);
+  EXPECT_TRUE(absl::StrContains(
+      lines,
+      "character_form_rules = [{group = \"0\", preedit_character_form = "
+      "\"HALF_WIDTH\", conversion_character_form = \"FULL_WIDTH\"}, "
+      "{group = \"ア\", preedit_character_form = \"FULL_WIDTH\", "
+      "conversion_character_form = \"FULL_WIDTH\"}]\n"))
+      << lines;
+  EXPECT_TRUE(absl::StrContains(lines, "overlay_keymaps = [\"ATOK\"]\n"));
+  const absl::StatusOr<config::Config> read =
+      ApplyConfigLines(config::Config(), lines);
+  ASSERT_TRUE(read.ok()) << read.status();
+  EXPECT_EQ(ConfigLines(*read), lines);
+}
+
+TEST(ConfigLinesTest, ReadsAndSetsTheNumberForm) {
+  config::Config config = config::ConfigHandler::DefaultConfig();
+  EXPECT_EQ(NumberForm(config), 0) << "Floatype's default, half width";
+  ASSERT_TRUE(SetNumberForm(2, config));
+  EXPECT_EQ(NumberForm(config), 2);
+  ASSERT_TRUE(SetNumberForm(1, config));
+  EXPECT_EQ(NumberForm(config), 1);
+
+  // The other groups' rules are as they were.
+  config::Config others = config::ConfigHandler::DefaultConfig();
+  ASSERT_EQ(config.character_form_rules_size(),
+            others.character_form_rules_size());
+  for (int i = 0; i < config.character_form_rules_size(); ++i) {
+    if (config.character_form_rules(i).group() != "0") {
+      EXPECT_EQ(config.character_form_rules(i).SerializeAsString(),
+                others.character_form_rules(i).SerializeAsString());
+    }
+  }
+
+  // A pair the choice does not offer, and no digits' rule.
+  for (config::Config::CharacterFormRule& rule :
+       *config.mutable_character_form_rules()) {
+    if (rule.group() == "0") {
+      rule.set_preedit_character_form(config::Config::HALF_WIDTH);
+      rule.set_conversion_character_form(config::Config::LAST_FORM);
+    }
+  }
+  EXPECT_EQ(NumberForm(config), 3);
+  config::Config none;
+  none.add_character_form_rules()->set_group("ア");
+  EXPECT_EQ(NumberForm(none), 3);
+  EXPECT_FALSE(SetNumberForm(0, none));
+  EXPECT_EQ(none.character_form_rules_size(), 1);
+  EXPECT_FALSE(SetNumberForm(3, config)) << "the 4th choice sets nothing";
+}
+
 TEST(ConfigLinesTest, RefusesWhatTheFileWould) {
   EXPECT_FALSE(ApplyConfigLines(config::Config(), "no_such_field = 1\n").ok());
   EXPECT_FALSE(
