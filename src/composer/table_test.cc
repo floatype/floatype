@@ -1063,6 +1063,18 @@ TEST_F(TableTest, TableManager) {
     EXPECT_EQ(table_manager.GetTable(request, config), table2);
     EXPECT_NE(table2->LookUp("a"), nullptr);
     EXPECT_NE(table2->LookUp("kk"), nullptr);
+
+    // floatype: taking the custom table out goes back to the default one,
+    // under every punctuation the custom table was cached with.
+    config.set_punctuation_method(Config::COMMA_PERIOD);
+    EXPECT_EQ(table_manager.GetTable(request, config)->LookUp("a")->result(),
+              "[A]");
+    config.clear_custom_roman_table();
+    EXPECT_EQ(table_manager.GetTable(request, config)->LookUp("a")->result(),
+              "あ");
+    config.set_punctuation_method(Config::TOUTEN_KUTEN);
+    EXPECT_EQ(table_manager.GetTable(request, config)->LookUp("a")->result(),
+              "あ");
   }
 }
 
