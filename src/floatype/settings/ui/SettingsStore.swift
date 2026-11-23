@@ -58,6 +58,8 @@ public final class SettingsStore: ObservableObject {
   /// setting too: then the file's value is taken, and the screen says so.
   public func reload(_ lines: String?) {
     guard let lines else { return }
+    // A window opened while the converter could not be reached shows them now.
+    loaded = true
     let read = SettingsStore.parse(lines)
     let clashed = pending.keys.filter { read[$0] != saved[$0] }.sorted()
     for key in clashed {

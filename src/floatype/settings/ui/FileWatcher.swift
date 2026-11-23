@@ -1,10 +1,13 @@
 // floatype: notices that a file the settings show (config.toml,
 // english_words.txt) was edited outside the window, so that an open window
-// shows it. Each file's modification time, size and inode are looked at a few
-// times a second, and a change is told once they hold still, so that a save in
-// progress is not read half written. It sees a save that replaces the file
-// and one that writes it in place, and follows a link.
+// shows it. FSEvents on the files' folders (and, for a link, the folder it
+// points into) says when to look; a slow timer looks too, for an event missed
+// and a link pointed elsewhere. A look compares each file's modification time,
+// size and inode, and a change is told once they hold still for a look 0.3
+// seconds later, so that a save in progress is not read half written. It sees
+// a save that replaces the file and one that writes it in place.
 
+import CoreServices
 import Foundation
 
 public final class FileWatcher {
@@ -21,7 +24,9 @@ public final class FileWatcher {
   private let paths: [String]
   private var seen: [String: Stamp?] = [:]
   private var moving: [String: Stamp?] = [:]
+  private var settling = false
   private var timer: Timer?
+  private var stream: FSEventStreamRef?
 
   public init(paths: [String]) {
     self.paths = paths
@@ -30,13 +35,58 @@ public final class FileWatcher {
     }
   }
 
-  deinit { timer?.invalidate() }
+  deinit {
+    timer?.invalidate()
+    if let stream {
+      FSEventStreamStop(stream)
+      FSEventStreamInvalidate(stream)
+      FSEventStreamRelease(stream)
+    }
+  }
 
-  /// Looks every `interval` seconds on the main run loop.
-  public func start(interval: TimeInterval = 0.3) {
+  /// Listens to FSEvents, and looks every `interval` seconds as well, on the
+  /// main queue.
+  public func start(interval: TimeInterval = 2) {
     timer?.invalidate()
     timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
-      self?.check()
+      self?.lookUntilStill()
+    }
+    timer?.tolerance = interval / 2
+    guard stream == nil else { return }
+    let folders = Set(paths.flatMap { path in
+      [path, (path as NSString).resolvingSymlinksInPath].map {
+        ($0 as NSString).deletingLastPathComponent
+      }
+    })
+    var context = FSEventStreamContext(
+      version: 0, info: Unmanaged.passUnretained(self).toOpaque(),
+      retain: nil, release: nil, copyDescription: nil)
+    // Which file changed is left to the look: it compares them all.
+    let callback: FSEventStreamCallback = { _, info, _, _, _, _ in
+      guard let info else { return }
+      Unmanaged<FileWatcher>.fromOpaque(info).takeUnretainedValue().lookUntilStill()
+    }
+    guard let made = FSEventStreamCreate(
+      nil, callback, &context, Array(folders) as CFArray,
+      FSEventStreamEventId(kFSEventStreamEventIdSinceNow), 0.1,
+      FSEventStreamCreateFlags(kFSEventStreamCreateFlagNoDefer))
+    else { return }
+    FSEventStreamSetDispatchQueue(made, DispatchQueue.main)
+    FSEventStreamStart(made)
+    stream = made
+  }
+
+  /// Looks, and while a file is still changing, looks again 0.3 seconds
+  /// later. Events and the timer both come here, so that two looks closer
+  /// than that never count a file as still.
+  public func lookUntilStill() {
+    guard !settling else { return }
+    check()
+    guard !moving.isEmpty else { return }
+    settling = true
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+      self?.settling = false
+      self?.lookUntilStill()
     }
   }
 

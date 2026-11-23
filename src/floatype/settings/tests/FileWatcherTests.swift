@@ -28,10 +28,20 @@ final class FileWatcherTests: XCTestCase {
     watcher.check()
     XCTAssertEqual(told.count, 1, "told once")
 
-    // Removed counts too, and so does coming back.
+    // As events and the timer look: once, then again 0.3 seconds later.
+    try "use_zenz = true\n".write(to: file, atomically: true, encoding: .utf8)
+    watcher.lookUntilStill()
+    XCTAssertEqual(told.count, 1, "not read at the first look")
+    let deadline = Date().addingTimeInterval(3)
+    while told.count < 2 && Date() < deadline {
+      RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+    }
+    XCTAssertEqual(told.count, 2)
+
+    // Removed counts too.
     try FileManager.default.removeItem(at: file)
     watcher.check()
     watcher.check()
-    XCTAssertEqual(told.count, 2)
+    XCTAssertEqual(told.count, 3)
   }
 }
