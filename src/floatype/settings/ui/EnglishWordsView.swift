@@ -84,6 +84,12 @@ public struct EnglishWordsView: View {
     }
     .padding(20)
     .frame(width: 660)
+    // english_words.txt edited by hand.
+    .onReceive(NotificationCenter.default.publisher(for: FileWatcher.changed)) { note in
+      guard (note.object as? String)?.hasSuffix("/english_words.txt") == true else { return }
+      words = actions.englishWords()
+      selection = selection.intersection(words.map(\.id))
+    }
   }
 
   private func add() {

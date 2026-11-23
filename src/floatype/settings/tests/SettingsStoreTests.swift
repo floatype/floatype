@@ -13,6 +13,33 @@ final class SettingsStoreTests: XCTestCase {
     XCTAssertEqual(store.number("zenz_delay_millisec").wrappedValue, 500)
   }
 
+  func testReloadKeepsWhatWaitsToBeSaved() {
+    let store = SettingsStore(
+      lines: "use_zenz = true\nindicator_style.height = 22\nzenz_delay_millisec = 500\n",
+      save: { _ in nil })
+    // Waits to be saved, as a size dragged.
+    store.numberSoon("indicator_style.height").wrappedValue = 30
+    store.reload("use_zenz = false\nindicator_style.height = 22\nzenz_delay_millisec = 700\n")
+    XCTAssertFalse(store.bool("use_zenz").wrappedValue)
+    XCTAssertEqual(store.number("zenz_delay_millisec").wrappedValue, 700)
+    XCTAssertEqual(store.number("indicator_style.height").wrappedValue, 30)
+    XCTAssertNil(store.error)
+    store.reload(nil)
+    XCTAssertEqual(store.number("zenz_delay_millisec").wrappedValue, 700, "nothing read, nothing changed")
+  }
+
+  func testReloadTakesTheFileWhereBothChangedASetting() {
+    var saved: [String] = []
+    let store = SettingsStore(
+      lines: "indicator_style.height = 22\n", save: { saved.append($0); return nil })
+    store.numberSoon("indicator_style.height").wrappedValue = 30
+    store.reload("indicator_style.height = 40\n")
+    XCTAssertEqual(store.number("indicator_style.height").wrappedValue, 40)
+    XCTAssertNotNil(store.error)
+    store.savePending()
+    XCTAssertEqual(saved, [], "the screen's value is not saved over the file's")
+  }
+
   func testSavesOneLineAChange() {
     var saved: [String] = []
     let store = SettingsStore(lines: "use_zenz = true\n", save: { saved.append($0); return nil })
