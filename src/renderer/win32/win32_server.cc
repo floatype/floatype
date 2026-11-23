@@ -39,6 +39,7 @@
 #include "absl/synchronization/mutex.h"
 #include "base/vlog.h"
 #include "protocol/renderer_command.pb.h"
+#include "renderer/win32/text_renderer.h"
 #include "renderer/win32/window_manager.h"
 
 namespace mozc {
@@ -60,8 +61,8 @@ bool IsTSFMessage(const commands::RendererCommand& command) {
 
 namespace win32 {
 
-Win32Server::Win32Server()
-    : event_(nullptr), window_manager_(new WindowManager) {
+Win32Server::Win32Server(TextRenderer* text_renderer)
+    : event_(nullptr), window_manager_(new WindowManager(text_renderer)) {
   // Manual reset event to notify we have a renderer command
   // to be handled in the UI thread.
   // The renderer command is serialized into "message_".
