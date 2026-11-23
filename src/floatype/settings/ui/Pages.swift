@@ -35,7 +35,7 @@ struct InputAssistGroup: View {
   var body: some View {
     let direct = store.bool("use_direct_commit").wrappedValue
     let english = store.bool("mixed_english").wrappedValue
-    SettingsGroup(title: "入力の補助") {
+    SettingsGroup(title: "入力の補助", floatype: true) {
       Row(title: "句読点・記号を打ったら、zenz を待ってその場で確定する") {
         Switch(isOn: store.bool("use_direct_commit"))
       }
@@ -154,7 +154,7 @@ struct AssistPage: View {
           Button("編集…") { showForms = true }
         }
       }
-      SettingsGroup(title: "zenz のメモリと学習") {
+      SettingsGroup(title: "zenz のメモリと学習", floatype: true) {
         Row(title: "打っていない間は止める",
             detail: "zenz のメモリ 約 30MB を返す。1 分で止まり、次の 1 文字目で起きる") {
           Switch(isOn: store.bool("zenz_stop_when_idle"))
@@ -200,7 +200,7 @@ struct SuggestPage: View {
           Switch(isOn: store.bool("use_realtime_conversion"))
         }
         Row(title: "足した辞書（人名、地名、SudachiDict、ニコニコ・pixiv）の語も出す",
-            detail: "オフなら、読みを最後まで打って変換したときだけ出る") {
+            detail: "オフなら、読みを最後まで打って変換したときだけ出る", floatype: true) {
           Switch(isOn: store.bool("suggest_added_words"))
         }
       }
@@ -248,7 +248,7 @@ struct MiscPage: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
-      SettingsGroup(title: "更新") {
+      SettingsGroup(title: "更新", floatype: true) {
         Row(title: "Floatype の更新", detail: updater.status) {
           Button(updater.buttonTitle) { updater.press() }.disabled(updater.busy)
         }
