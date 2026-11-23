@@ -80,7 +80,7 @@ Floatype の pkg には Apple の署名と公証がありません。そのた�
 
 ## 設定
 
-入力メニューの「環境設定…」で変えます。
+入力メニューの「環境設定…」で変えます。F の印が付いた項目が、Floatype で足したものです。
 
 設定は `~/.config/floatype/config.toml` に保存されます。このファイルを手で書き換えてもかまいません。設定画面は変えた行だけを書き換えるので、手で書いたコメントは残ります。書き方の例は [src/floatype/config/config.example.toml](src/floatype/config/config.example.toml) にあります。
 
