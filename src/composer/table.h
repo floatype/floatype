@@ -179,7 +179,7 @@ class TableManager {
   //  config::Config::PunctuationMethod
   //  config::Config::SymbolMethod
   absl::flat_hash_map<size_t, std::shared_ptr<const Table>> table_map_;
-  // Fingerprint for Config::custom_roman_table;
+  // Fingerprint for the Config::custom_roman_table the cached tables have.
   uint64_t custom_roman_table_fingerprint_;
 };
 
