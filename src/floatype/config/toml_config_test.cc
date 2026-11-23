@@ -190,6 +190,7 @@ TEST(UpdateTomlConfigTest, ReadsBackWhatItWrites) {
   config.set_mixed_english_space_commits(false);
   config.set_mixed_english_enter_commits(false);
   config.set_mixed_english_leading_symbols(false);
+  config.set_mixed_english_in_indicator(true);
   config.mutable_information_list_config()->set_use_local_usage_dictionary(
       false);
   config.mutable_indicator_style()->set_placement(

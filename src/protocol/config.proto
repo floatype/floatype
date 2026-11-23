@@ -499,8 +499,7 @@ message Config {
   }
   optional RubyStyle ruby_style = 1019;
   // floatype: an English word typed in a kana mode, told by romaji letters
-  // left over and a word list, converts to its letters, and the indicator
-  // shows あ or A for the word before the caret.
+  // left over and a word list, converts to its letters.
   optional bool mixed_english = 1017 [default = false];
   // floatype, with mixed_english: Space after an English word commits it and
   // types a half-width space, and while English goes on with spaces a word is
@@ -515,6 +514,9 @@ message Config {
   // before its first letter or digit stay as typed (/review, --help). Off,
   // they are what the symbol settings write (・review).
   optional bool mixed_english_leading_symbols = 1032 [default = true];
+  // floatype, with mixed_english: the indicator shows あ or A at its right end
+  // for the word before the caret. Off, it looks as without mixed_english.
+  optional bool mixed_english_in_indicator = 1033 [default = false];
   // floatype: romaji still open to a longer rule shows what it gives now (ん
   // for n, ます for ms with a custom ms rule) instead of the letters.
   optional bool display_ambiguous_romaji = 1018 [default = false];

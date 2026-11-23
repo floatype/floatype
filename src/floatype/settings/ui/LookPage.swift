@@ -467,14 +467,16 @@ private func paintIndicators(_ context: inout GraphicsContext, _ area: CGRect,
   let shape = name(values, p + "shape")
   let labelName = name(values, p + "label")
   // (state, english, color field)
+  // The last, with あ / A, only where mixed English input shows it.
   let pills: [(Int, Bool, String)] = [
     (1, false, "reading_color"), (2, false, "mozc_color"), (3, false, "zenz_pending_color"),
-    (4, false, "zenz_color"), (1, true, "reading_color"),
-  ]
+    (4, false, "zenz_color"),
+  ] + (values["mixed_english"] == "true" && values["mixed_english_in_indicator"] == "true"
+       ? [(1, true, "reading_color")] : [])
   let font = previewFont(number(values, p + "font_size"), weight: .medium)
   let height = number(values, p + "height")
   let step = height + 12
-  var y = area.midY - (step * 5 - 12) / 2
+  var y = area.midY - (step * Double(pills.count) - 12) / 2
   let text = color32(values, p + "text_color")
   for (state, english, field) in pills {
     let shown = label(state, labelName)
