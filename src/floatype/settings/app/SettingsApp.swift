@@ -23,6 +23,7 @@ struct SettingsApp: App {
     lines: bridgeActions.load(),
     save: { take(FloatypeSettingsSave($0)) },
     actions: bridgeActions)
+  @State private var watcher: FileWatcher?
 
   init() {
     FloatypeSettingsStart()
@@ -35,6 +36,22 @@ struct SettingsApp: App {
         // A color or size still waiting to be saved.
         .onReceive(NotificationCenter.default.publisher(
           for: NSApplication.willTerminateNotification)) { _ in store.savePending() }
+        // config.toml or english_words.txt edited by hand shows here too.
+        .onAppear {
+          let folder = bridgeActions.userFilesDirectory()
+          guard watcher == nil, !folder.isEmpty else { return }
+          watcher = FileWatcher(paths: ["\(folder)/config.toml", "\(folder)/english_words.txt"])
+          watcher?.start()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: FileWatcher.changed)) { note in
+          guard (note.object as? String)?.hasSuffix("/config.toml") == true else { return }
+          // The converter reads the file again on the next command, but looks
+          // at most once a second: a second read catches an edit it skipped.
+          store.reload(bridgeActions.load())
+          DispatchQueue.main.asyncAfter(deadline: .now() + 1.1) {
+            store.reload(bridgeActions.load())
+          }
+        }
     }
     .windowStyle(.hiddenTitleBar)
   }

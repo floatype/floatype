@@ -48,13 +48,40 @@ public final class SettingsStore: ObservableObject {
     pending = [:]
     loaded = lines != nil
     guard let lines else { return }
+    let read = SettingsStore.parse(lines)
+    values = read
+    saved = read
+  }
+
+  /// Shows the settings read again after config.toml was edited outside the
+  /// window. What waits to be saved stays, unless the file changed that
+  /// setting too: then the file's value is taken, and the screen says so.
+  public func reload(_ lines: String?) {
+    guard let lines else { return }
+    // A window opened while the converter could not be reached shows them now.
+    loaded = true
+    let read = SettingsStore.parse(lines)
+    let clashed = pending.keys.filter { read[$0] != saved[$0] }.sorted()
+    for key in clashed {
+      pending[key] = nil
+    }
+    if pending.isEmpty {
+      flush?.cancel()
+    }
+    saved = read
+    values = read.merging(pending) { $1 }
+    if !clashed.isEmpty {
+      error = "config.toml でも同じ項目が変わったので、ファイルの値にしました（\(clashed.joined(separator: "、"))）"
+    }
+  }
+
+  private static func parse(_ lines: String) -> [String: String] {
     var read: [String: String] = [:]
     for line in lines.split(separator: "\n") {
       guard let equals = line.range(of: " = ") else { continue }
       read[String(line[..<equals.lowerBound])] = String(line[equals.upperBound...])
     }
-    values = read
-    saved = read
+    return read
   }
 
   public func bool(_ key: String) -> Binding<Bool> {
