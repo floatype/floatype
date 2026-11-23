@@ -1814,6 +1814,7 @@ TEST_F(FloatypeZenzTest, MixedEnglishKeepsAnEnglishWordInLetters) {
   floatype::EnableSessionFeatures(true);
   config::Config config = config::ConfigHandler::DefaultConfig();
   config.set_mixed_english(true);
+  config.set_mixed_english_in_indicator(true);
   config.set_use_live_conversion(false);
   // Its Henkan key converts; Space after an English word types a space.
   config.set_session_keymap(config::Config::MSIME);
@@ -1841,12 +1842,27 @@ TEST_F(FloatypeZenzTest, MixedEnglishKeepsAnEnglishWordInLetters) {
   const commands::Output japanese = SendKeys({"k", "i", "k", "a", "i"});
   EXPECT_FALSE(japanese.indicator().english());
   EXPECT_EQ(Preedit(SendKeys({"Space"})), "機会");
+  SendKeys({"Escape"});
+  SendKeys({"Escape"});
+
+  // By default the indicator looks as without mixed English input, and the
+  // word stays in letters all the same.
+  config.clear_mixed_english_in_indicator();
+  commands::Input plain;
+  plain.set_type(commands::Input::SET_CONFIG);
+  *plain.mutable_config() = config;
+  Eval(std::move(plain));
+  const commands::Output unmarked =
+      SendKeys({"k", "e", "y", "b", "o", "a", "r", "d"});
+  EXPECT_FALSE(unmarked.indicator().has_english());
+  EXPECT_EQ(Preedit(SendKeys({"Henkan"})), "keyboard");
 }
 
 TEST_F(FloatypeZenzTest, MixedEnglishKeepsAWordWhenTypingOn) {
   floatype::EnableSessionFeatures(true);
   config::Config config = config::ConfigHandler::DefaultConfig();
   config.set_mixed_english(true);
+  config.set_mixed_english_in_indicator(true);
   commands::Input input;
   input.set_type(commands::Input::SET_CONFIG);
   *input.mutable_config() = config;
@@ -2030,6 +2046,7 @@ TEST_F(FloatypeZenzTest, MixedEnglishKeepsAWordInsideASentence) {
   floatype::EnableSessionFeatures(true);
   config::Config config = config::ConfigHandler::DefaultConfig();
   config.set_mixed_english(true);
+  config.set_mixed_english_in_indicator(true);
   config.set_use_live_conversion(false);
   commands::Input input;
   input.set_type(commands::Input::SET_CONFIG);
@@ -2137,6 +2154,7 @@ TEST_F(FloatypeZenzTest, MixedEnglishKeepsAWordTypedWhollyIntoKana) {
   floatype::EnableSessionFeatures(true);
   config::Config config = config::ConfigHandler::DefaultConfig();
   config.set_mixed_english(true);
+  config.set_mixed_english_in_indicator(true);
   config.set_use_live_conversion(false);
   // Its Henkan key converts; Space after an English word types a space.
   config.set_session_keymap(config::Config::MSIME);

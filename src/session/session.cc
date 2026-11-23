@@ -3935,7 +3935,7 @@ void Session::SetIndicator(commands::Command* command) const {
   }
   output->mutable_indicator()->set_state(state);
   *output->mutable_indicator()->mutable_style() = config.indicator_style();
-  if (config.mixed_english()) {
+  if (config.mixed_english() && config.mixed_english_in_indicator()) {
     const composer::Composer& composer = context_->composer();
     // The word before the caret; in a conversion, the end of what is shown.
     std::string shown;

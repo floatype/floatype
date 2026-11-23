@@ -44,8 +44,7 @@ struct InputAssistGroup: View {
           ($0, store.contains("direct_commit_characters", Character($0)))
         })
       }.disabled(!direct)
-      Row(title: "かなの入力中に打った英単語を英字のままにする",
-          detail: "インジケータに あ / A を出す") {
+      Row(title: "かなの入力中に打った英単語を英字のままにする") {
         Switch(isOn: store.bool("mixed_english"))
       }
       SubRow(title: "英単語のあとの Space は、変換せずに確定して半角の空白を入れる") {
@@ -56,6 +55,9 @@ struct InputAssistGroup: View {
       }.disabled(!english)
       SubRow(title: "かなの無い入力は、頭の記号も打ったとおりにする", detail: "/review、--help") {
         Switch(isOn: store.bool("mixed_english_leading_symbols"))
+      }.disabled(!english)
+      SubRow(title: "インジケータの右端に、いまの語が日本語か英字かを出す", detail: "あ / A") {
+        Switch(isOn: store.bool("mixed_english_in_indicator"))
       }.disabled(!english)
       SubRow(title: "英字のまま残す英単語", detail: "english_words.txt") {
         Button("英単語を編集…") { showWords = true }
