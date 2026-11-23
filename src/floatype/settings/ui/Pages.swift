@@ -248,8 +248,15 @@ struct MiscPage: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
-      SettingsGroup(title: "更新", floatype: true) {
-        Row(title: "Floatype の更新", detail: updater.status) {
+      SettingsGroup(title: "Floatype について") {
+        Row(title: "バージョン", detail: store.actions.mozcVersion.map { "Mozc \($0)" }) {
+          Text(store.actions.floatypeVersion)
+            .foregroundColor(.secondary)
+            .textSelection(.enabled)
+        }
+      }
+      SettingsGroup(title: "アップデート", floatype: true) {
+        Row(title: "Floatype のアップデート", detail: updater.status) {
           Button(updater.buttonTitle) { updater.press() }.disabled(updater.busy)
         }
       }

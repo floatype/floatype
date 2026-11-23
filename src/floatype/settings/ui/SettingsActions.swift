@@ -168,6 +168,7 @@ public struct KeymapNames {
 }
 
 public struct SettingsActions {
+  /// The whole version, as 0.1.4+mozc.3.35.6354; the update check compares it.
   public var version: String
   /// The settings again, as lines, or nil.
   public var load: () -> String?
@@ -309,5 +310,17 @@ public struct SettingsActions {
       openTool: { _ in nil }, startsAtLogin: { false }, setStartsAtLogin: { _ in },
       latestReleaseURL: "", checkRelease: { _, _, _ in .failed },
       checksumMatches: { _, _ in false })
+  }
+}
+
+extension SettingsActions {
+  /// Floatype's part of `version`, as 0.1.4.
+  public var floatypeVersion: String {
+    version.range(of: "+mozc.").map { String(version[..<$0.lowerBound]) } ?? version
+  }
+
+  /// The Mozc version Floatype is built on, as 3.35.6354, or nil if not named.
+  public var mozcVersion: String? {
+    version.range(of: "+mozc.").map { String(version[$0.upperBound...]) }
   }
 }

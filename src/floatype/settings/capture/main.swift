@@ -17,6 +17,7 @@ let page = arguments.count > 4 ? arguments[4] : "general"
 _ = NSApplication.shared
 for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
   var actions = SettingsActions.none()
+  actions.version = bridgeActions.version
   actions.windowLook = bridgeActions.windowLook
   actions.indicatorLabel = bridgeActions.indicatorLabel
   actions.numberForm = bridgeActions.numberForm

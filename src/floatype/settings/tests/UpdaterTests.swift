@@ -54,6 +54,16 @@ final class UpdaterTests: XCTestCase {
     }
   }
 
+  func testSplitsTheVersion() {
+    let both = SettingsActions.none(version: "0.1.5+mozc.3.35.6354")
+    XCTAssertEqual(both.floatypeVersion, "0.1.5")
+    XCTAssertEqual(both.mozcVersion, "3.35.6354")
+    let alone = SettingsActions.none(version: "0.1.5")
+    XCTAssertEqual(alone.floatypeVersion, "0.1.5")
+    XCTAssertNil(alone.mozcVersion)
+    XCTAssertEqual(updater().status, Updater.idle)
+  }
+
   func testNoReleaseYet() {
     let updater = updater()
     updater.press()

@@ -31,8 +31,11 @@ public final class Updater: ObservableObject {
       NSWorkspace.shared.open(package)
       NSApp.terminate(nil)
     }
-    status = "今の版は \(actions.version)。押したときだけ GitHub に問い合わせます"
+    status = Updater.idle
   }
+
+  /// What the row says before the button is pressed.
+  public static let idle = "押したときだけ GitHub に問い合わせます"
 
   public var buttonTitle: String { newer == nil ? "更新を確認" : "ダウンロードして入れる" }
 
@@ -62,7 +65,7 @@ public final class Updater: ObservableObject {
       switch answer {
       case .newer(let version, _, _):
         self.newer = answer
-        self.show("新しい版 \(version) があります（今は \(self.actions.version)）", busy: false)
+        self.show("新しいバージョン \(version) があります", busy: false)
       case .upToDate: self.show("最新です", busy: false)
       case .noRelease: self.show("まだリリースがありません", busy: false)
       case .failed: self.show("確認できませんでした", busy: false)
