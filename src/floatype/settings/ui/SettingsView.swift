@@ -43,11 +43,14 @@ public struct SettingsView: View {
         .frame(width: 200)
       Divider()
       VStack(alignment: .leading, spacing: 0) {
-        Text(page.title)
-          .font(.system(size: 26, weight: .bold))
-          .padding(.horizontal, 28)
-          .padding(.top, 30)
-          .padding(.bottom, 12)
+        HStack(spacing: 8) {
+          Text(page.title)
+            .font(.system(size: 26, weight: .bold))
+          if page.id == "look" { FloatypeMark() }
+        }
+        .padding(.horizontal, 28)
+        .padding(.top, 30)
+        .padding(.bottom, 12)
         ScrollView {
           Group {
             if !store.loaded {
@@ -127,14 +130,19 @@ struct Sidebar: View {
 /// Settings under a small title, in a rounded box.
 struct SettingsGroup<Content: View>: View {
   let title: String
+  /// Whether Floatype added the group to Mozc's settings.
+  var floatype = false
   @ViewBuilder let content: Content
 
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
-      Text(title)
-        .font(.system(size: 12, weight: .semibold))
-        .foregroundColor(.secondary)
-        .padding(.leading, 4)
+      HStack(spacing: 6) {
+        Text(title)
+          .font(.system(size: 12, weight: .semibold))
+          .foregroundColor(.secondary)
+        if floatype { FloatypeMark() }
+      }
+      .padding(.leading, 4)
       VStack(spacing: 0) { content }
       .background(
         RoundedRectangle(cornerRadius: 10)
@@ -151,14 +159,19 @@ struct SettingsGroup<Content: View>: View {
 struct Row<Control: View>: View {
   let title: String
   var detail: String? = nil
+  /// Whether Floatype added the setting to Mozc's.
+  var floatype = false
   @ViewBuilder let control: Control
   @Environment(\.isEnabled) private var isEnabled
 
   var body: some View {
     HStack(alignment: .center, spacing: 16) {
       VStack(alignment: .leading, spacing: 2) {
-        Text(title)
-          .foregroundColor(isEnabled ? .primary : .secondary)
+        HStack(spacing: 6) {
+          Text(title)
+            .foregroundColor(isEnabled ? .primary : .secondary)
+          if floatype { FloatypeMark() }
+        }
         if let detail {
           Text(detail)
             .font(.system(size: 11))
@@ -278,7 +291,7 @@ struct GeneralPage: View {
                          ("NUMPAD_FULL_WIDTH", "全角"), ("NUMPAD_HALF_WIDTH", "半角"),
                          ("NUMPAD_DIRECT_INPUT", "直接入力")])
         }
-        Row(title: "数字の入力") {
+        Row(title: "数字の入力", floatype: true) {
           let form = store.numberForm()
           // The 4th only shows the table's own pair; choosing it sets nothing.
           Choice(selection: form,
@@ -299,7 +312,7 @@ struct GeneralPage: View {
           Button("編集…") { showKeymap = true }
         }
       }
-      SettingsGroup(title: "ライブ変換") {
+      SettingsGroup(title: "ライブ変換", floatype: true) {
         Row(title: "手が止まったら Space を押さずに変換する") {
           Switch(isOn: store.bool("use_live_conversion"))
         }
@@ -312,7 +325,7 @@ struct GeneralPage: View {
                        range: 1...10, step: 1, unit: "文字")
         }.disabled(!live)
       }
-      SettingsGroup(title: "zenz の補正") {
+      SettingsGroup(title: "zenz の補正", floatype: true) {
         Row(title: "zenz で変換を補正する") {
           Switch(isOn: store.bool("use_zenz"))
         }
@@ -338,7 +351,22 @@ struct GeneralPage: View {
   }
 }
 
-/// Under every page: where the settings live, and 初期値に戻す.
+/// The mark on what Floatype added to Mozc's settings, as the Qt screen had
+/// it: a small white F on black.
+struct FloatypeMark: View {
+  var body: some View {
+    Text("F")
+      .font(.system(size: 11, weight: .bold))
+      .foregroundColor(.white)
+      .frame(width: 16, height: 16)
+      .background(RoundedRectangle(cornerRadius: 4).fill(Color.black))
+      .help("Floatype の項目")
+      .accessibilityLabel("Floatype の項目")
+  }
+}
+
+/// Under every page: where the settings live, what the mark means, and
+/// 初期値に戻す.
 struct Footer: View {
   @ObservedObject var store: SettingsStore
   @State private var confirmReset = false
@@ -348,6 +376,11 @@ struct Footer: View {
       Button("初期値に戻す…") { confirmReset = true }
         .disabled(!store.loaded)
       Spacer()
+      FloatypeMark()
+      Text("Floatype で足した項目")
+        .font(.system(size: 11))
+        .foregroundColor(.secondary)
+        .padding(.trailing, 8)
       Text("保存先 ~/.config/floatype/config.toml")
         .font(.system(size: 11))
         .foregroundColor(.secondary)
