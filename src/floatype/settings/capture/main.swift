@@ -15,6 +15,10 @@ let size = NSSize(width: 860, height: arguments.count > 3 ? Double(arguments[3])
 let page = arguments.count > 4 ? arguments[4] : "general"
 
 _ = NSApplication.shared
+// Not a bundle, so the icon the app has is read from the source, run in src/.
+if let icon = NSImage(contentsOfFile: "data/images/mac/product_icon.icns") {
+  NSApp.applicationIconImage = icon
+}
 for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
   var actions = SettingsActions.none()
   actions.version = bridgeActions.version

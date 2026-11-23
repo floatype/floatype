@@ -248,13 +248,23 @@ struct MiscPage: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
-      SettingsGroup(title: "Floatype について") {
-        Row(title: "バージョン", detail: store.actions.mozcVersion.map { "Mozc \($0)" }) {
-          Text(store.actions.floatypeVersion)
-            .foregroundColor(.secondary)
-            .textSelection(.enabled)
+      // As an About window: the icon, the name and the versions, centered.
+      VStack(spacing: 4) {
+        Image(nsImage: NSApp.applicationIconImage)
+          .resizable()
+          .frame(width: 72, height: 72)
+          .padding(.bottom, 4)
+        Text("Floatype").font(.system(size: 15, weight: .semibold))
+        Group {
+          Text("バージョン \(store.actions.floatypeVersion)")
+          if let mozc = store.actions.mozcVersion { Text("Mozc \(mozc)") }
         }
+        .font(.system(size: 11))
+        .foregroundColor(.secondary)
+        .textSelection(.enabled)
       }
+      .frame(maxWidth: .infinity)
+      .padding(.bottom, 20)
       SettingsGroup(title: "アップデート", floatype: true) {
         Row(title: "Floatype のアップデート", detail: updater.status) {
           Button(updater.buttonTitle) { updater.press() }.disabled(updater.busy)
