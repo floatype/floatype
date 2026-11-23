@@ -39,6 +39,7 @@
 #include "absl/synchronization/mutex.h"
 #include "renderer/renderer_interface.h"
 #include "renderer/renderer_server.h"
+#include "renderer/win32/text_renderer.h"
 #include "renderer/win32/window_manager.h"
 
 namespace mozc {
@@ -54,7 +55,8 @@ namespace win32 {
 // Actual window management is delegated to WindowManager class.
 class Win32Server : public RendererServer, public RendererInterface {
  public:
-  Win32Server();
+  // Does not take ownership of |text_renderer|, which must outlive this object.
+  explicit Win32Server(TextRenderer* text_renderer);
 
   Win32Server(const Win32Server&) = delete;
   Win32Server& operator=(const Win32Server&) = delete;
