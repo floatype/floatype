@@ -568,26 +568,19 @@ std::shared_ptr<const Table> TableManager::GetTable(
                    config.punctuation_method(), config.symbol_method(),
                    config.display_ambiguous_romaji());
 
-  // When custom_roman_table is set, force to create new table.
-  bool update_custom_roman_table = false;
-  if ((config.preedit_method() == config::Config::ROMAN) &&
-      config.has_custom_roman_table() && !config.custom_roman_table().empty()) {
-    const uint64_t custom_roman_table_fingerprint =
-        CityFingerprint(config.custom_roman_table());
-    if (custom_roman_table_fingerprint != custom_roman_table_fingerprint_) {
-      update_custom_roman_table = true;
-      custom_roman_table_fingerprint_ = custom_roman_table_fingerprint;
-    }
+  // floatype: every cached table was made with the custom table it last saw,
+  // so a changed one, taken out included, drops them all. Dropping only the
+  // one under `hash` left the others stale until the converter restarted.
+  const uint64_t custom_roman_table_fingerprint =
+      CityFingerprint(config.custom_roman_table());
+  if (custom_roman_table_fingerprint != custom_roman_table_fingerprint_) {
+    table_map_.clear();
+    custom_roman_table_fingerprint_ = custom_roman_table_fingerprint;
   }
 
   if (const auto iterator = table_map_.find(hash);
       iterator != table_map_.end()) {
-    if (update_custom_roman_table) {
-      // Delete the previous table to update the table.
-      table_map_.erase(iterator);
-    } else {
-      return iterator->second;
-    }
+    return iterator->second;
   }
 
   auto table = std::make_shared<Table>();
