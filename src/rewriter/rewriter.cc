@@ -56,6 +56,7 @@
 #include "rewriter/ivs_variants_rewriter.h"
 #include "rewriter/language_aware_rewriter.h"
 #include "rewriter/number_rewriter.h"
+#include "rewriter/pinned_word_rewriter.h"
 #include "rewriter/remove_redundant_candidate_rewriter.h"
 #include "rewriter/single_kanji_rewriter.h"
 #include "rewriter/small_letter_rewriter.h"
@@ -162,6 +163,8 @@ Rewriter::Rewriter(const engine::Modules& modules) {
   AddRewriter(make_unique_from_tuples<EnvironmentalFilterRewriter>(
       data_manager.GetEmojiRewriterData()));
   AddRewriter(std::make_unique<RemoveRedundantCandidateRewriter>());
+  // floatype: after everything that reorders (#28).
+  AddRewriter(std::make_unique<PinnedWordRewriter>());
   AddRewriter(make_unique_from_tuples<A11yDescriptionRewriter>(
       data_manager.GetA11yDescriptionRewriterData()));
 }

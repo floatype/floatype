@@ -1,17 +1,18 @@
 // floatype: zenz's learning data (学習データを見る…), as the Qt screen's
-// window listed it: what the user turned down, committed and stopped, to look
-// through and forget.
+// window listed it: what the user turned down, committed and stopped, and the
+// words the user pinned (#28), to look through and forget.
 
 import AppKit
 import SwiftUI
 
-private let kinds = ["退けた語", "1 回退けた語", "すぐ出す補正", "止めた補正"]
+private let kinds = ["退けた語", "1 回退けた語", "すぐ出す補正", "止めた補正", "固定した語"]
 
 private let note = """
   退けた語：別の候補に選び直した語。zenz はこの語を出しません。自分で選んで確定すると消えます。
   1 回退けた語：補正を Space で戻して、そのまま確定した語。もう 1 回で「退けた語」になります。
   すぐ出す補正：そのまま確定した補正。次に同じ読みで、zenz を待たずに出します。
   止めた補正：control+delete で止めた補正。同じ読みでは出しません。
+  固定した語：候補を選んで control+shift+P で固定した語。その読みではいつも先頭に出て、zenz も書き換えません。「すべて消す」では消えません。
   消した内容は、1 秒ほどあとの変換から効きます。Mozc が覚えた候補の順は、ここには出ません。
   """
 
@@ -74,7 +75,7 @@ public struct LearningDataView: View {
       }
       Button("キャンセル", role: .cancel) {}
     } message: {
-      Text("zenz が覚えた内容をすべて消します。元には戻せません。")
+      Text("zenz が覚えた内容をすべて消します。固定した語は残ります。元には戻せません。")
     }
   }
 

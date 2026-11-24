@@ -245,6 +245,7 @@ class EngineConverter : public EngineConverterInterface {
   bool StartsWord(absl::string_view reading) const override;
   int ConversionCost(absl::string_view reading) const override;
   std::vector<ReplacedCandidate> ReplacedCandidates() const override;
+  converter::Candidate* mutable_focused_candidate() override;
   // floatype: what StartsWord() calls; the engine gives its dictionary's.
   using WordStartLookup = std::function<bool(absl::string_view reading)>;
   void set_word_start_lookup(WordStartLookup lookup) {

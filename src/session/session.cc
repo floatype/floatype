@@ -62,6 +62,7 @@
 #include "engine/engine_interface.h"
 #include "floatype/english/english_words.h"
 #include "floatype/zenz/zenz_memory.h"
+#include "rewriter/pinned_word_rewriter.h"
 #include "protocol/commands.pb.h"
 #include "protocol/config.pb.h"
 #include "session/ime_context.h"
@@ -1551,6 +1552,9 @@ bool Session::RunConversionCommand(
     case keymap::ConversionState::ZENZ_CORRECT:
       return CorrectWithZenzNow(command);
 
+    case keymap::ConversionState::PIN_SELECTED_CANDIDATE:
+      return PinSelectedCandidate(command);
+
     case keymap::ConversionState::NONE:
       return DoNothing(command);
   }
@@ -2956,6 +2960,30 @@ bool Session::DeleteCandidateFromHistory(commands::Command* command) {
   return ConvertCancel(command);
 }
 
+bool Session::PinSelectedCandidate(commands::Command* command) {
+  converter::Candidate* candidate =
+      context_->mutable_converter()->mutable_focused_candidate();
+  if (candidate == nullptr || candidate->content_key.empty() ||
+      candidate->content_value.empty()) {
+    return DoNothing(command);
+  }
+  floatype::ZenzMemory& pinned = floatype::ZenzMemory::Pinned();
+  const std::string key = candidate->content_key;
+  const bool pin = pinned.Latest(key) != candidate->content_value;
+  // One word for a reading: pinning another unpins the one before.
+  for (std::string word = pinned.Latest(key); !word.empty();
+       word = pinned.Latest(key)) {
+    pinned.Remove(key, word);
+  }
+  if (pin) {
+    pinned.Add(key, candidate->content_value);
+  }
+  PinnedWordRewriter::Mark(*candidate, pin);
+  command->mutable_output()->set_consumed(true);
+  Output(command);
+  return true;
+}
+
 bool Session::Convert(commands::Command* command) {
   // The Space key has kept them already (TypeSpaceAfterEnglish()).
   if (!std::exchange(english_kept_, false)) {
@@ -3756,8 +3784,22 @@ bool Session::ApplyAcceptedCorrection() {
   std::optional<floatype::Mapping> mapping = floatype::MapWithResegmentation(
       segments, text, ZenzResegmenter(), ZenzWords(),
       !context_->GetConfig().zenz_teaches_mozc());
-  return mapping.has_value() && !floatype::UsesTurnedDown(segments, *mapping) &&
-         ShowZenzText(reading, text, *std::move(mapping));
+  if (!mapping.has_value() || floatype::UsesTurnedDown(segments, *mapping)) {
+    return false;
+  }
+  // A word the user pinned stays (#28).
+  const std::vector<int> indices = mapping->candidate_indices;
+  if (!floatype::KeepPinned(segments, *mapping)) {
+    return false;
+  }
+  const std::string shown = mapping->candidate_indices == indices
+                                ? text
+                                : floatype::MappedText(segments, *mapping);
+  // Ctrl+Delete stores the text shown, which a pin may have changed.
+  if (floatype::ZenzMemory::Stopped().Contains(reading, shown)) {
+    return false;
+  }
+  return ShowZenzText(reading, shown, *std::move(mapping));
 }
 
 floatype::WordLookup Session::ZenzWords() const {

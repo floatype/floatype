@@ -1315,6 +1315,35 @@ mozc_cc_test(
     ],
 )
 
+# floatype: the words the user pinned (#28).
+mozc_cc_library(
+    name = "pinned_word_rewriter",
+    srcs = ["pinned_word_rewriter.cc"],
+    hdrs = ["pinned_word_rewriter.h"],
+    visibility = ["//session:__pkg__"],
+    deps = [
+        ":rewriter_interface",
+        "//converter:segments",
+        "//floatype/zenz:zenz_memory",
+        "//request:conversion_request",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+mozc_cc_test(
+    name = "pinned_word_rewriter_test",
+    size = "small",
+    srcs = ["pinned_word_rewriter_test.cc"],
+    deps = [
+        ":pinned_word_rewriter",
+        "//converter:segments",
+        "//floatype/zenz:zenz_memory",
+        "//request:conversion_request",
+        "//testing:gunit_main",
+        "//testing:mozctest",
+    ],
+)
+
 mozc_cc_library(
     name = "remove_redundant_candidate_rewriter",
     srcs = ["remove_redundant_candidate_rewriter.cc"],
@@ -1546,6 +1575,7 @@ mozc_cc_library(
         ":language_aware_rewriter",
         ":merger_rewriter",
         ":number_rewriter",
+        ":pinned_word_rewriter",
         ":remove_redundant_candidate_rewriter",
         ":single_kanji_rewriter",
         ":small_letter_rewriter",

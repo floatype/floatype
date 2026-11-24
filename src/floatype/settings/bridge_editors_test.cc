@@ -39,7 +39,11 @@ TEST_F(BridgeZenzMemoryTest, ListsAndForgetsTheLearningData) {
   EXPECT_TRUE(ZenzMemory::Accepted().Contains("よい", "良い"));
   FloatypeSettingsZenzForget(9, "よい", "良い");  // No such kind.
 
+  ZenzMemory::Pinned().Add("さいとう", "齋藤");
   FloatypeSettingsZenzForgetAll();
+  EXPECT_EQ(Take(FloatypeSettingsZenzMemory()), "4\tさいとう\t齋藤\n")
+      << "a pinned word stays";
+  FloatypeSettingsZenzForget(4, "さいとう", "齋藤");
   EXPECT_EQ(Take(FloatypeSettingsZenzMemory()), "");
 }
 

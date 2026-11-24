@@ -42,6 +42,7 @@
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "composer/composer.h"
+#include "converter/candidate.h"
 #include "protocol/commands.pb.h"
 #include "protocol/config.pb.h"
 #include "transliteration/transliteration.h"
@@ -304,6 +305,10 @@ class EngineConverterInterface {
   virtual std::vector<ReplacedCandidate> ReplacedCandidates() const {
     return {};
   }
+  // floatype: the candidate the shown candidate list focuses in a conversion,
+  // to change in place (its description), or nullptr: also for a
+  // transliteration, and while no list is shown.
+  virtual converter::Candidate* mutable_focused_candidate() { return nullptr; }
 
   // Operation for the candidate list.
   virtual void SetCandidateListVisible(bool visible) = 0;

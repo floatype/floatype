@@ -158,6 +158,7 @@ mozc_cc_library(
     visibility = [
         "//floatype/settings:__pkg__",
         "//gui/config_dialog:__pkg__",
+        "//rewriter:__pkg__",
         "//session:__pkg__",
     ],
     deps = [

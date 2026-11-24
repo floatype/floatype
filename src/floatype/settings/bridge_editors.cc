@@ -43,9 +43,11 @@ char* Copy(absl::string_view text) {
 }
 
 // In the order they are listed, as FloatypeSettingsZenzMemory numbers them.
+// The last, the words the user pinned (#28), is the user's own choice:
+// forgetting everything keeps it, as clearing the history does.
 ZenzMemory& (*const kMemories[])() = {
     &ZenzMemory::TurnedDown, &ZenzMemory::RefusedOnce, &ZenzMemory::Accepted,
-    &ZenzMemory::Stopped};
+    &ZenzMemory::Stopped, &ZenzMemory::Pinned};
 
 // english_words.txt as read, so that an edit never writes over a file changed
 // or unreadable since.
@@ -327,7 +329,9 @@ void FloatypeSettingsZenzForget(int kind, const char* reading,
 
 void FloatypeSettingsZenzForgetAll(void) {
   for (ZenzMemory& (*memory)() : kMemories) {
-    memory().Clear();
+    if (memory != &ZenzMemory::Pinned) {
+      memory().Clear();
+    }
   }
 }
 

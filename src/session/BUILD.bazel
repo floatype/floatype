@@ -71,6 +71,7 @@ mozc_cc_library(
         "//floatype/zenz:zenz_memory",
         "//protocol:commands_cc_proto",
         "//protocol:config_cc_proto",
+        "//rewriter:pinned_word_rewriter",
         "//transliteration",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/log:check",

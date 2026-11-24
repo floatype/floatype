@@ -1103,6 +1103,21 @@ bool EngineConverter::DeleteCandidateFromHistory(std::optional<int> id) {
       segments_, segments_.history_segments_size() + segment_index_, *id);
 }
 
+converter::Candidate* EngineConverter::mutable_focused_candidate() {
+  // Only a candidate the user is choosing in the shown list: not the first
+  // one of a live conversion, nor a row that holds a list of its own.
+  if (!CheckState(CONVERSION) || !candidate_list_visible_ ||
+      !candidate_list_.focused() ||
+      segment_index_ >= segments_.conversion_segments_size()) {
+    return nullptr;
+  }
+  Segment* segment = segments_.mutable_conversion_segment(segment_index_);
+  // A transliteration (a negative id) is no word to pin.
+  const int id = candidate_list_.focused_id();
+  return id >= 0 && segment->is_valid_index(id) ? segment->mutable_candidate(id)
+                                                : nullptr;
+}
+
 void EngineConverter::SegmentFocusInternal(size_t index) {
   DCHECK(CheckState(PREDICTION | CONVERSION));
   candidate_list_visible_ = false;

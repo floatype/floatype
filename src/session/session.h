@@ -100,6 +100,8 @@ class Session {
   // viewpoint of session, meaning that the session state gets back to
   // composition.
   bool DeleteCandidateFromHistory(mozc::commands::Command* command);
+  // floatype: pins the focused candidate for its reading, or unpins it (#28).
+  bool PinSelectedCandidate(mozc::commands::Command* command);
 
   // Resets the composer and clear conversion segments.
   // History segments will not be cleared.
