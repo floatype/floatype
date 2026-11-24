@@ -355,6 +355,20 @@ TEST(FloatypeLookTest, TheFooterDotTellsPredictionFromConversion) {
   }
 }
 
+TEST(FloatypeLookTest, TheFooterDotTakesTheStylesColor) {
+  commands::CandidateWindow candidates = Candidates();
+  candidates.set_category(commands::CONVERSION);
+  Style style;
+  style.set_kind_mark_color(0xe5484d);
+  CandidateView *view = ViewFor(style);
+  [view setKindMark:YES];
+  [view setCandidateWindow:&candidates];
+  Draw(view, "candidates_kind_mark_color");
+  const mozc::Rect footer = [view tableLayout]->GetFooterRect();
+  ExpectNear(ColorAt(view, footer.Left() + 9 + 3.5, footer.Top() + footer.Height() / 2.0),
+             0xe5484d, "the dot in the chosen color");
+}
+
 TEST(FloatypeLookTest, RoundedCornersAreSeeThrough) {
   Style style;
   CandidateView *view = ViewFor(style);

@@ -457,14 +457,18 @@ message Config {
     optional Shadow shadow = 10 [default = SOFT];
     // Empty is the system font, as is a family not installed.
     optional string font_family = 11 [default = ""];
+    // floatype: the footer's dot (candidate_kind_mark), 0xRRGGBB. Unset, blue
+    // for the prediction list and grey for conversion candidates.
+    optional uint32 kind_mark_color = 12;
   }
   // The conversion window (conversion, transliteration, usage).
   optional CandidateStyle candidate_style = 1014;
   // The prediction and suggestion window.
   optional CandidateStyle suggest_style = 1024;
   // floatype: a dot at the left of the footer tells the prediction list
-  // (blue) from conversion candidates (grey).
-  optional bool candidate_kind_mark = 1025 [default = true];
+  // (blue) from conversion candidates (grey); each window's style may give its
+  // color (kind_mark_color). Off by default since 0.1.9, as the user asked.
+  optional bool candidate_kind_mark = 1025 [default = false];
   // floatype: in a kana mode, / right after a letter or a digit (an English
   // word, 2026) is typed as /, not as the middle dot the symbol setting gives
   // (before/after, 2026/11/20). z/ still types the dot.

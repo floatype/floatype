@@ -135,8 +135,14 @@ struct WindowForm: View {
         }
         if !suggestion {
           Row(title: "予測候補の一覧と変換候補を、帯の左の丸の色で見分ける",
-              detail: "予測候補の一覧は青、変換候補は灰色の丸") {
+              detail: "予測候補の一覧は青、変換候補は灰色の丸。色は下で変えられる") {
             Switch(isOn: store.bool("candidate_kind_mark"))
+          }
+        }
+        // The dot's color in this window, where the dot is drawn.
+        if store.bool("candidate_kind_mark").wrappedValue, let look {
+          Row(title: suggestion ? "予測候補の一覧の丸の色" : "変換候補の丸の色") {
+            ColorWell(color: store.color("\(prefix).kind_mark_color", shown: look.kindMarkColor))
           }
         }
       }

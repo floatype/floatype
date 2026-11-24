@@ -449,8 +449,8 @@ NSFont *FontOf(const NSAttributedString *text) {
   drawText(kColumnCandidate, style_.candidate_style());
   drawText(kColumnDescription, style_.description_style());
 
-  // floatype: a pinned candidate's pin, just right of the word and a little
-  // below its middle, where a pin in paper would sit.
+  // floatype: a pinned candidate's pin, just right of the word, centered on
+  // the text (the user found it low a little below).
   if (IsPinned(candidate_window_.candidate(row))) {
     const NSAttributedString *value = [candidate objectAtIndex:kColumnCandidate];
     // The value ends with two spaces before the description.
@@ -464,7 +464,7 @@ NSFont *FontOf(const NSAttributedString *text) {
     const NSRect rect = NSMakeRect(
         cell.origin.x + style_.candidate_style().left_padding() + trimmed.size.width +
             [self pinGap],
-        NSMidY(cell) - size.height / 2 + 1.5 * look_.size_percent / 100.0, size.width,
+        NSMidY(cell) - size.height / 2, size.width,
         size.height);
     [pin drawInRect:rect
            fromRect:NSZeroRect
@@ -521,7 +521,7 @@ NSFont *FontOf(const NSAttributedString *text) {
     const CGFloat diameter = [self kindMarkDiameter];
     const CGFloat middle = NSMinY(footerRect) + look_.footer_top_padding + text.size.height / 2;
     const uint32_t color = mozc::floatype::KindMarkColor(
-        candidate_window_.category() == mozc::commands::PREDICTION, look_.dark);
+        lookStyle_, candidate_window_.category() == mozc::commands::PREDICTION, look_.dark);
     [[NSColor colorWithSRGBRed:((color >> 16) & 0xff) / 255.0
                          green:((color >> 8) & 0xff) / 255.0
                           blue:(color & 0xff) / 255.0

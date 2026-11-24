@@ -217,7 +217,9 @@ void PaintCandidateWindow(QPainter& painter, const QRectF& area,
     const double middle =
         footer.top() + look.footer_top_padding + footer_metrics.height() / 2;
     p.setPen(Qt::NoPen);
-    p.setBrush(Rgb(floatype::KindMarkColor(false, look.dark)));
+    // The Qt screen keeps the default color; the SwiftUI one shows a chosen one.
+    p.setBrush(Rgb(floatype::KindMarkColor(config::Config::CandidateStyle(), false,
+                                           look.dark)));
     p.drawEllipse(QRectF(footer.left() + look.row_padding,
                          middle - diameter / 2, diameter, diameter));
   }

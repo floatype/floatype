@@ -218,7 +218,9 @@ int FloatypeSettingsWindowLook(const char* lines, int suggestion, int dark,
       .number_font_size = style.shortcut_style().font_size(),
       .description_font_size = style.description_style().font_size(),
       .footer_font_size = style.footer_style().font_size(),
-      .kind_mark_color = mozc::floatype::KindMarkColor(false, look.dark),
+      .kind_mark_color = mozc::floatype::KindMarkColor(
+          suggestion ? config->suggest_style() : config->candidate_style(),
+          suggestion, look.dark),
   };
   const std::string& minimum = style.column_minimum_width_string();
   const size_t size =

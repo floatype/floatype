@@ -233,7 +233,11 @@ void ScaleFonts(RendererStyle& style, uint32_t percent) {
   }
 }
 
-uint32_t KindMarkColor(bool prediction, bool dark) {
+uint32_t KindMarkColor(const config::Config::CandidateStyle& style,
+                       bool prediction, bool dark) {
+  if (style.has_kind_mark_color()) {
+    return style.kind_mark_color() & 0xffffff;
+  }
   if (prediction) {
     return 0x6f8fbf;
   }

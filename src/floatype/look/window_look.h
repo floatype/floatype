@@ -61,9 +61,10 @@ WindowLook ResolveWindowLook(const config::Config::CandidateStyle& style,
 // installed), for the parts Mozc's table layout and drawing read.
 renderer::RendererStyle RendererStyleFor(const WindowLook& look);
 
-// The footer's dot: blue for the prediction list, grey for conversion
-// candidates, 0xRRGGBB.
-uint32_t KindMarkColor(bool prediction, bool dark);
+// The footer's dot, 0xRRGGBB: `style`'s kind_mark_color where set, else blue
+// for the prediction list and grey for conversion candidates.
+uint32_t KindMarkColor(const config::Config::CandidateStyle& style,
+                       bool prediction, bool dark);
 
 // Scales every font size in `style` (candidates, shortcuts, descriptions,
 // footer, information list) by `percent`; 100 leaves it as it is.
