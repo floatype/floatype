@@ -177,6 +177,18 @@ TEST_F(SettingsFileTest, TheSettingsScreenChangesOnlyItsLine) {
   EXPECT_EQ(Stored().suggestions_size(), 8);
 }
 
+TEST_F(SettingsFileTest, ResettingTheSettingsEmptiesTheFile) {
+  // As resetting settings one by one left it.
+  WriteFile(
+      "\nmixed_english = true\n\n[indicator_style]\n\n[candidate_style]\n");
+  Start(/*writable=*/true);
+  ASSERT_TRUE(Current()->mixed_english());
+
+  ConfigHandler::SetConfig(ConfigHandler::DefaultConfig());
+  EXPECT_EQ(ReadFile(path_), "");
+  EXPECT_FALSE(Current()->mixed_english());
+}
+
 TEST_F(SettingsFileTest, ASymbolicLinkStaysOne) {
   // A dotfiles manager links config.toml to its own copy.
   const std::string target = FileUtil::JoinPath(profile_, "dotfiles.toml");

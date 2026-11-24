@@ -410,6 +410,86 @@ TEST(UpdateTomlConfigTest, TakesUnsetRuleFieldsForTheirDefaults) {
   EXPECT_EQ(*text, kFile);
 }
 
+// A file as resetting settings one by one left it, blank lines and empty
+// tables included.
+constexpr absl::string_view kLeftBehind =
+    "\n"
+    "mixed_english = true\n"
+    "\n"
+    "[indicator_style]\n"
+    "\n"
+    "[candidate_style]\n";
+
+TEST(UpdateTomlConfigTest, ResettingLeavesAnEmptyFile) {
+  const Config defaults;
+  const absl::StatusOr<std::string> text =
+      UpdateTomlConfig(kLeftBehind, defaults, defaults);
+  ASSERT_TRUE(text.ok()) << text.status();
+  EXPECT_EQ(*text, "");
+}
+
+TEST(UpdateTomlConfigTest, AChangeTidiesBlankLinesAndEmptyTables) {
+  const Config defaults;
+  Config config = Read(kLeftBehind, defaults);
+  config.set_use_zenz(false);
+  const absl::StatusOr<std::string> text =
+      UpdateTomlConfig(kLeftBehind, config, defaults);
+  ASSERT_TRUE(text.ok()) << text.status();
+  EXPECT_EQ(*text, "mixed_english = true\nuse_zenz = false\n");
+  // Tidy already, so the same settings change nothing.
+  EXPECT_EQ(UpdateTomlConfig(*text, config, defaults).value_or(""), *text);
+
+  // A key added above empty tables, where the insertion and the tidying meet.
+  constexpr absl::string_view kOnlyTables =
+      "\n[indicator_style]\n\n[candidate_style]\n";
+  const absl::StatusOr<std::string> added =
+      UpdateTomlConfig(kOnlyTables, config, defaults);
+  ASSERT_TRUE(added.ok()) << added.status();
+  EXPECT_EQ(*added, "use_zenz = false\nmixed_english = true\n");
+}
+
+TEST(UpdateTomlConfigTest, TidyingKeepsCommentsAndMultilineValues) {
+  const Config defaults;
+  constexpr absl::string_view kFile =
+      "use_zenz = false\n"
+      "\n"
+      "\n"
+      "custom_roman_table = '''\n"
+      "a\tあ\n"
+      "\n"
+      "\n"
+      "i\tい\n"
+      "'''\n"
+      "\n"
+      "# the indicator, to set later\n"
+      "[indicator_style]\n"
+      "\n"
+      "[ruby_style]\n"
+      "# nothing yet\n"
+      "\n"
+      "[candidate_style] # mine\n";
+  Config config = Read(kFile, defaults);
+  config.set_use_zenz(true);  // The default.
+  const absl::StatusOr<std::string> text =
+      UpdateTomlConfig(kFile, config, defaults);
+  ASSERT_TRUE(text.ok()) << text.status();
+  EXPECT_EQ(*text,
+            "custom_roman_table = '''\n"
+            "a\tあ\n"
+            "\n"
+            "\n"
+            "i\tい\n"
+            "'''\n"
+            "\n"
+            "# the indicator, to set later\n"
+            "[indicator_style]\n"
+            "\n"
+            "[ruby_style]\n"
+            "# nothing yet\n"
+            "\n"
+            "[candidate_style] # mine\n");
+}
+
 TEST(UpdateTomlConfigTest, RefusesAFileThatDoesNotRead) {
   EXPECT_FALSE(UpdateTomlConfig("use_zenz = \n", Config(), Config()).ok());
   EXPECT_FALSE(UpdateTomlConfig("use_zenzz = true\n", Config(), Config()).ok());

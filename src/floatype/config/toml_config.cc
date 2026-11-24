@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <limits>
 #include <string>
 #include <utility>
@@ -19,6 +20,7 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
+#include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "base/protobuf/descriptor.h"
 #include "base/protobuf/message.h"
@@ -658,6 +660,88 @@ class Editor {
   std::vector<Edit> edits_;
 };
 
+// floatype: tidies what the edits leave behind in `text`, which reads as
+// `root`. A [header] table with no keys goes, unless a comment sits on its
+// line, right above it, or below it; blank lines run to one, with none at the
+// start or the end. Lines inside a multi-line value ('''...''') stay.
+std::string Tidy(absl::string_view text, const toml::table& root) {
+  std::vector<absl::string_view> lines = absl::StrSplit(text, '\n');
+  const bool newline_at_end = absl::EndsWith(text, "\n");
+  if (newline_at_end) {
+    lines.pop_back();
+  }
+  const int count = static_cast<int>(lines.size());
+  const Editor editor(text);
+  auto blank = [&](int line) {
+    return line >= 1 && line <= count &&
+           lines[line - 1].find_first_not_of(" \t\r") ==
+               absl::string_view::npos;
+  };
+  auto comment = [&](int line) {
+    return line >= 1 && line <= count && editor.IsCommentLine(line);
+  };
+  std::vector<bool> inside(count + 1, false);
+  std::vector<bool> dropped(count + 1, false);
+  std::function<void(const toml::node&)> walk = [&](const toml::node& node) {
+    const Kind kind = editor.KindOf(node);
+    switch (kind) {
+      case Kind::kHeader:
+      case Kind::kDotted: {
+        const toml::table& table = *node.as_table();
+        for (auto&& [key, child] : table) {
+          walk(child);
+        }
+        const int header = BeginLine(node);
+        if (kind == Kind::kHeader && table.empty() && header <= count) {
+          int below = header + 1;
+          while (blank(below)) {
+            ++below;
+          }
+          dropped[header] =
+              lines[header - 1].find('#') == absl::string_view::npos &&
+              !comment(header - 1) && !comment(below);
+        }
+        break;
+      }
+      case Kind::kTableArray:
+        for (const toml::node& element : *node.as_array()) {
+          for (auto&& [key, child] : *element.as_table()) {
+            walk(child);
+          }
+        }
+        break;
+      case Kind::kValue:
+        for (int line = BeginLine(node) + 1;
+             line <= std::min(EndLine(node), count); ++line) {
+          inside[line] = true;
+        }
+        break;
+    }
+  };
+  for (auto&& [key, node] : root) {
+    walk(node);
+  }
+
+  std::vector<absl::string_view> kept;
+  bool last_blank = true;  // Drops blank lines at the start.
+  for (int line = 1; line <= count; ++line) {
+    const bool is_blank = !inside[line] && blank(line);
+    if (dropped[line] || (is_blank && last_blank)) {
+      continue;
+    }
+    kept.push_back(lines[line - 1]);
+    last_blank = is_blank;
+  }
+  if (last_blank && !kept.empty()) {
+    kept.pop_back();
+  }
+  std::string tidied = absl::StrJoin(kept, "\n");
+  if (newline_at_end && !tidied.empty()) {
+    tidied += '\n';
+  }
+  return tidied;
+}
+
 // Edits `table`, the root or a table under its own [path] header, which sets
 // the fields in `file`, so that read over `defaults` it gives `config`.
 // shortcut: a table that only [path.sub] headers make is taken for its own
@@ -785,6 +869,15 @@ absl::StatusOr<std::string> UpdateTomlConfig(absl::string_view text,
   if (!Gives(check->config, defaults, config)) {
     return absl::InternalError(
         "config.toml: the updated file does not give the settings");
+  }
+  if (*updated == text) {
+    return updated;
+  }
+  // The tidying never fails a save: a slip in it keeps the edits as they are.
+  std::string tidied = Tidy(*updated, check->table);
+  if (const absl::StatusOr<Document> again = Parse(tidied);
+      again.ok() && Gives(again->config, defaults, config)) {
+    return tidied;
   }
   return updated;
 }
