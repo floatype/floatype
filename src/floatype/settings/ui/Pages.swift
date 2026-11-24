@@ -209,6 +209,10 @@ struct SuggestPage: View {
             detail: "オフなら、読みを最後まで打って変換したときだけ出る", floatype: true) {
           Switch(isOn: store.bool("suggest_added_words"))
         }
+        Row(title: "固定した語を、予測候補でも先頭に出す",
+            detail: "読みを打ち終えたときだけ。オフなら、先頭に出るのは変換したとき", floatype: true) {
+          Switch(isOn: store.bool("pinned_words_in_predictions"))
+        }
       }
       SettingsGroup(title: "その他の設定") {
         Row(title: "サジェストの最大候補数") {

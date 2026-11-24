@@ -1104,9 +1104,10 @@ bool EngineConverter::DeleteCandidateFromHistory(std::optional<int> id) {
 }
 
 converter::Candidate* EngineConverter::mutable_focused_candidate() {
-  // Only a candidate the user is choosing in the shown list: not the first
-  // one of a live conversion, nor a row that holds a list of its own.
-  if (!CheckState(CONVERSION) || !candidate_list_visible_ ||
+  // Only a candidate the user is choosing in the shown list, of conversions
+  // or predictions: not the first one of a live conversion, nor a row that
+  // holds a list of its own.
+  if (!CheckState(CONVERSION | PREDICTION) || !candidate_list_visible_ ||
       !candidate_list_.focused() ||
       segment_index_ >= segments_.conversion_segments_size()) {
     return nullptr;

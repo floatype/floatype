@@ -1,5 +1,7 @@
 // floatype: puts first the word the user pinned for a reading (#28), in any
-// segment whose candidates hold it, and marks it in the candidate window.
+// segment whose candidates hold it, and marks it in the candidate window. In
+// predictions (pinned_words_in_predictions), only the word itself, and only
+// once its whole reading is typed.
 // It runs after the rewriters that reorder, so that neither the learned
 // history nor anything else moves it down again.
 
@@ -15,9 +17,8 @@ namespace mozc {
 
 class PinnedWordRewriter : public RewriterInterface {
  public:
-  int capability(const ConversionRequest& request) const override {
-    return RewriterInterface::CONVERSION;
-  }
+  // Conversions, and with pinned_words_in_predictions predictions too.
+  int capability(const ConversionRequest& request) const override;
 
   // shortcut: only a candidate the converter already made is moved up; a
   // pinned word for a reading cut into other segments does not come. Add the
