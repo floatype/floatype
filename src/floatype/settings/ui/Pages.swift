@@ -86,6 +86,10 @@ struct DictionaryPage: View {
                  items: [("DEFAULT_HISTORY", "有効"), ("READ_ONLY", "有効（新規学習はしない）"),
                          ("NO_HISTORY", "無効")])
         }
+        Row(title: "選び直した語を、どの言い回しでも先に出す",
+            detail: "「とよい」で よい を選ぶと、「良い天気」も「よい天気」になる", floatype: true) {
+          Switch(isOn: store.bool("learn_chosen_words_everywhere"))
+        }
         Row(title: "学習履歴のクリア") {
           Button("消す…") { confirmClear = true }
         }

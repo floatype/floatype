@@ -111,6 +111,9 @@ ABSL_FLAG(bool, zenz_teaches_mozc, false,
           "the setting zenz_teaches_mozc: committing a correction of zenz's "
           "teaches Mozc's conversion ranking its words, and zenz may change "
           "what the user's history ranked first");
+ABSL_FLAG(bool, learn_chosen_words_everywhere, false,
+          "the setting learn_chosen_words_everywhere: a candidate chosen over "
+          "the first one is learned for every phrase");
 ABSL_FLAG(int, zenz_remembered_min_chars, 1,
           "the setting zenz_remembered_min_chars: a correction committed "
           "before shows at once only for a reading of this many characters "
@@ -457,6 +460,8 @@ class Replayer {
         absl::GetFlag(FLAGS_zenz_remembered_min_chars));
     input.mutable_config()->set_zenz_context_from_commits(
         absl::GetFlag(FLAGS_zenz_context_from_commits));
+    input.mutable_config()->set_learn_chosen_words_everywhere(
+        absl::GetFlag(FLAGS_learn_chosen_words_everywhere));
     if (absl::GetFlag(FLAGS_no_learning)) {
       input.mutable_config()->set_history_learning_level(
           config::Config::READ_ONLY);
