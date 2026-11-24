@@ -9,18 +9,29 @@
 #include "converter/candidate.h"
 #include "converter/segments.h"
 #include "floatype/zenz/zenz_memory.h"
+#include "protocol/config.pb.h"
 #include "request/conversion_request.h"
+#include "rewriter/rewriter_interface.h"
 
 namespace mozc {
 namespace {
 
-constexpr absl::string_view kMark = "固定";
+// A pin, as the user asked for an icon over the word 固定.
+constexpr absl::string_view kMark = "📌";
 
 }  // namespace
+
+int PinnedWordRewriter::capability(const ConversionRequest& request) const {
+  return request.config().pinned_words_in_predictions()
+             ? RewriterInterface::ALL
+             : RewriterInterface::CONVERSION;
+}
 
 bool PinnedWordRewriter::Rewrite(const ConversionRequest& request,
                                  Segments* segments) const {
   const floatype::ZenzMemory& pinned = floatype::ZenzMemory::Pinned();
+  const bool predicting =
+      request.request_type() != ConversionRequest::CONVERSION;
   bool modified = false;
   for (size_t i = 0; i < segments->conversion_segments_size(); ++i) {
     Segment* segment = segments->mutable_conversion_segment(i);
@@ -33,6 +44,12 @@ bool PinnedWordRewriter::Rewrite(const ConversionRequest& request,
       // Latest() is empty for a reading without a pin.
       if (candidate.content_key.empty() || candidate.content_value.empty() ||
           pinned.Latest(candidate.content_key) != candidate.content_value) {
+        continue;
+      }
+      // A prediction moves only for the word itself, typed in full: not
+      // 齋藤さん, nor 齋藤 while さい is all that is typed.
+      if (predicting && (candidate.value != candidate.content_value ||
+                         candidate.content_key != segment->key())) {
         continue;
       }
       if (j != 0) {

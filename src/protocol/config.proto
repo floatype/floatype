@@ -545,6 +545,10 @@ message Config {
   // another group (よい for 良い) is learned only next to the words around it
   // (#28, #10).
   optional bool learn_chosen_words_everywhere = 1034 [default = false];
+  // floatype: a pinned word (#28) comes first among the predictions too, when
+  // the reading typed is the pinned word's whole reading. Off, predictions
+  // keep their order, which follows the phrases committed before.
+  optional bool pinned_words_in_predictions = 1035 [default = false];
 
   //////////////////////////////////////////////////////////////
   //

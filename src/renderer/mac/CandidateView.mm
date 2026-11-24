@@ -39,6 +39,7 @@
 #include <vector>
 
 #include "absl/log/log.h"
+#include "absl/strings/match.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
 #include "client/client_interface.h"
@@ -61,6 +62,49 @@ using mozc::renderer::kNumberOfColumns;
 using mozc::renderer::TableLayout;
 using mozc::renderer::mac::MacViewUtil;
 
+namespace {
+
+// floatype: the converter marks a pinned candidate (#28) with this at the
+// start of its description; the window draws a red pin right of the word
+// instead.
+constexpr absl::string_view kPinMark = "📌";
+
+bool IsPinned(const mozc::commands::CandidateWindow::Candidate &candidate) {
+  return absl::StartsWith(candidate.annotation().description(), kPinMark);
+}
+
+std::string DescriptionWithoutPin(const mozc::commands::CandidateWindow::Candidate &candidate) {
+  std::string description = candidate.annotation().description();
+  if (IsPinned(candidate)) {
+    description.erase(0, kPinMark.size());
+    if (absl::StartsWith(description, " ")) {
+      description.erase(0, 1);
+    }
+  }
+  return description;
+}
+
+// The pin for a candidate drawn in `font`: SF Symbols' pin.fill, in red.
+NSImage *PinImage(NSFont *font) {
+  NSImageSymbolConfiguration *config = [[NSImageSymbolConfiguration
+      configurationWithPointSize:font.pointSize * 0.62
+                          weight:NSFontWeightMedium]
+      configurationByApplyingConfiguration:
+          [NSImageSymbolConfiguration configurationWithPaletteColors:@[
+            // #E5484D, a soft red.
+            [NSColor colorWithSRGBRed:0xe5 / 255.0 green:0x48 / 255.0 blue:0x4d / 255.0 alpha:1]
+          ]]];
+  return [[NSImage imageWithSystemSymbolName:@"pin.fill" accessibilityDescription:@"固定"]
+      imageWithSymbolConfiguration:config];
+}
+
+NSFont *FontOf(const NSAttributedString *text) {
+  return text.length > 0 ? [text attribute:NSFontAttributeName atIndex:0 effectiveRange:nil]
+                         : nil;
+}
+
+}  // namespace
+
 // Those constants and most rendering logic is as same as Windows
 // native candidate window.
 // TODO(mukai): integrate and share the code among Win and Mac.
@@ -71,6 +115,8 @@ using mozc::renderer::mac::MacViewUtil;
 - (BOOL)systemDark;
 - (BOOL)updateLook;
 - (NSAttributedString *)footerText;
+// floatype: the space between a pinned word and its pin.
+- (CGFloat)pinGap;
 
 // Draw the |row|-th row.
 - (void)drawRow:(int)row;
@@ -266,7 +312,7 @@ using mozc::renderer::mac::MacViewUtil;
     const NSAttributedString *candidateValue =
         MacViewUtil::ToNSAttributedString(value, style_.candidate_style());
     const NSAttributedString *description = MacViewUtil::ToNSAttributedString(
-        candidate.annotation().description(), style_.description_style());
+        DescriptionWithoutPin(candidate), style_.description_style());
     if ([shortcut length] > 0) {
       const NSSize shortcutSize =
           MacViewUtil::applyTheme([shortcut size], style_.shortcut_style());
@@ -276,8 +322,12 @@ using mozc::renderer::mac::MacViewUtil;
           mozc::Size(std::lround(look_.row_padding + look_.number_width), 0));
     }
     if ([candidateValue length] > 0) {
-      const NSSize valueSize =
+      NSSize valueSize =
           MacViewUtil::applyTheme([candidateValue size], style_.candidate_style());
+      // floatype: room for the pin right of the word.
+      if (IsPinned(candidate)) {
+        valueSize.width += PinImage(FontOf(candidateValue)).size.width + [self pinGap];
+      }
       tableLayout_.EnsureCellSize(kColumnCandidate, MacViewUtil::ToSize(valueSize));
     }
     if ([description length] > 0) {
@@ -399,6 +449,31 @@ using mozc::renderer::mac::MacViewUtil;
   drawText(kColumnCandidate, style_.candidate_style());
   drawText(kColumnDescription, style_.description_style());
 
+  // floatype: a pinned candidate's pin, just right of the word and a little
+  // below its middle, where a pin in paper would sit.
+  if (IsPinned(candidate_window_.candidate(row))) {
+    const NSAttributedString *value = [candidate objectAtIndex:kColumnCandidate];
+    // The value ends with two spaces before the description.
+    const NSString *word =
+        [value.string stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
+    const NSAttributedString *trimmed =
+        [value attributedSubstringFromRange:NSMakeRange(0, word.length)];
+    NSImage *pin = PinImage(FontOf(value));
+    const NSRect cell = MacViewUtil::ToNSRect(tableLayout_.GetCellRect(row, kColumnCandidate));
+    const NSSize size = pin.size;
+    const NSRect rect = NSMakeRect(
+        cell.origin.x + style_.candidate_style().left_padding() + trimmed.size.width +
+            [self pinGap],
+        NSMidY(cell) - size.height / 2 + 1.5 * look_.size_percent / 100.0, size.width,
+        size.height);
+    [pin drawInRect:rect
+           fromRect:NSZeroRect
+          operation:NSCompositingOperationSourceOver
+           fraction:1
+     respectFlipped:YES
+              hints:nil];
+  }
+
   // floatype: a row with usage examples gets a small orange dot at its
   // right end, rather than Mozc's bar, which looked like the scrollbar.
   if (candidate_window_.candidate(row).has_information_id()) {
@@ -410,6 +485,10 @@ using mozc::renderer::mac::MacViewUtil;
     [[NSColor colorWithSRGBRed:0xe8 / 255.0 green:0x91 / 255.0 blue:0x4a / 255.0 alpha:1] set];
     [[NSBezierPath bezierPathWithOvalInRect:dot] fill];
   }
+}
+
+- (CGFloat)pinGap {
+  return 3 * look_.size_percent / 100.0;
 }
 
 // floatype: the footer's label, sub label and index ("1 / 3") as one line.

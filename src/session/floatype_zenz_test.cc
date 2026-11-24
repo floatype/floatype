@@ -12,6 +12,7 @@
 #include <thread>
 #include <vector>
 
+#include "absl/strings/match.h"
 #include "absl/strings/string_view.h"
 #include "base/config_file_stream.h"
 #include "base/file_util.h"
@@ -1342,7 +1343,7 @@ TEST_F(FloatypeZenzTest, CtrlDeleteStopsACorrectionForGood) {
 }
 
 // #28: Ctrl+Shift+P pins the focused candidate for its reading. It comes
-// first wherever the reading comes, marked 固定, and zenz leaves it.
+// first wherever the reading comes, marked with a pin, and zenz leaves it.
 TEST_F(FloatypeZenzTest, APinnedWordComesFirstWithItsMark) {
   StartSession(/*zenz=*/false);
   ASSERT_EQ(Preedit(SendKeys({"k", "i", "k", "a", "i", "Space", "Space"})),
@@ -1358,7 +1359,7 @@ TEST_F(FloatypeZenzTest, APinnedWordComesFirstWithItsMark) {
   EXPECT_EQ(converted.candidate_window().candidate(0).value(), "機械");
   EXPECT_EQ(
       converted.candidate_window().candidate(0).annotation().description(),
-      "固定");
+      "📌");
   SendKeys({"Escape"});
   SendKeys({"Escape"});
 
@@ -1370,6 +1371,19 @@ TEST_F(FloatypeZenzTest, APinnedWordComesFirstWithItsMark) {
   SendKeys({"Escape"});
   SendKeys({"Escape"});
   EXPECT_EQ(Preedit(ConvertKikai()), "機会");
+}
+
+TEST_F(FloatypeZenzTest, ThePredictionListPinsToo) {
+  StartSession(/*zenz=*/false);
+  const commands::Output predicted =
+      SendKeys({"k", "i", "k", "a", "i", "Down"});
+  ASSERT_GT(predicted.candidate_window().candidate_size(), 0);
+  const std::string shown = Preedit(predicted);
+  SendKeys({"Ctrl Shift p"});
+  const auto pinned = floatype::ZenzMemory::Pinned().Entries();
+  ASSERT_EQ(pinned.size(), 1);
+  EXPECT_TRUE(absl::StartsWith(shown, pinned[0].second))
+      << shown << " pinned as " << pinned[0].second;
 }
 
 TEST_F(FloatypeZenzTest, ZenzLeavesAPinnedWord) {
