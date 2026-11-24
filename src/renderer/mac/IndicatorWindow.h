@@ -25,7 +25,9 @@ class IndicatorWindow {
   // hides it when there is none.
   // `base_screen_height` is the height of the screen at the origin, which the
   // preedit rectangle counts down from.
-  void Update(const commands::RendererCommand &command, double base_screen_height);
+  // `obstacle` is the suggestion window, in Cocoa coordinates, when it shows.
+  void Update(const commands::RendererCommand &command, double base_screen_height,
+              const NSRect *obstacle = nullptr);
   void Hide();
   // The drawn indicator and reading, for tests to look at.
   NSView *ViewForTesting() const;
@@ -34,7 +36,7 @@ class IndicatorWindow {
  private:
   // Shows the indicator; returns whether it did, and where in `frame`.
   bool UpdateIndicator(const commands::RendererCommand &command, double base_screen_height,
-                       NSRect *frame);
+                       const NSRect *obstacle, NSRect *frame);
   // Shows the reading above a live conversion, above `indicator` if given.
   void UpdateRuby(const commands::RendererCommand &command, double base_screen_height,
                   const NSRect *indicator);

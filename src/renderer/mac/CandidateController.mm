@@ -144,19 +144,23 @@ bool CandidateController::ExecCommand(const RendererCommand &command) {
   }
   command_.CopyFrom(command);
   // floatype: a candidate list being chosen from hides the indicator, as in
-  // Mozkey; suggestions shown while typing keep it.
-  if (command_.visible() &&
-      floatype::ChoosingCandidates(command_.output().candidate_window())) {
-    indicator_window_->Hide();
-  } else {
-    indicator_window_->Update(command_, GetBaseScreenHeight());
-  }
+  // Mozkey; suggestions shown while typing keep it, clear of their window,
+  // which is placed first.
+  const auto update_indicator = [this](const NSRect *suggestions) {
+    if (command_.visible() &&
+        floatype::ChoosingCandidates(command_.output().candidate_window())) {
+      indicator_window_->Hide();
+    } else {
+      indicator_window_->Update(command_, GetBaseScreenHeight(), suggestions);
+    }
+  };
 
   // floatype: the client also sends commands to show the indicator alone.
   if (!command_.visible() || command_.output().candidate_window().candidate_size() == 0) {
     candidate_window_->Hide();
     cascading_window_->Hide();
     infolist_window_->Hide();
+    update_indicator(nullptr);
     return true;
   }
 
@@ -183,8 +187,16 @@ bool CandidateController::ExecCommand(const RendererCommand &command) {
     infolist_visible = true;
   }
 
-  AlignWindows();
+  mozc::Rect candidate_frame;
+  const bool aligned = AlignWindows(&candidate_frame);
   candidate_window_->Show();
+  if (aligned) {
+    const NSRect suggestions = NSMakeRect(candidate_frame.Left(), -candidate_frame.Bottom(),
+                                          candidate_frame.Width(), candidate_frame.Height());
+    update_indicator(&suggestions);
+  } else {
+    update_indicator(nullptr);
+  }
   if (cascading_visible) {
     cascading_window_->Show();
   } else {
@@ -213,10 +225,10 @@ bool CandidateController::ExecCommand(const RendererCommand &command) {
   return true;
 }
 
-void CandidateController::AlignWindows() {
+bool CandidateController::AlignWindows(mozc::Rect *candidate_frame) {
   // If candidate window is not visible, we do nothing for aligning.
   if (!command_.has_preedit_rectangle()) {
-    return;
+    return false;
   }
 
   const mozc::Size preedit_size(
@@ -260,6 +272,7 @@ void CandidateController::AlignWindows() {
       target_point, preedit_rect, candidate_window_->GetWindowSize(), candidate_zero_point,
       display_rect, is_vertical);
   candidate_window_->MoveWindow(OriginPointInCocoaCoord(candidate_rect));
+  *candidate_frame = candidate_rect;
 
   // Align infolist window
   const mozc::Rect infolist_rect = WindowUtil::GetWindowRectForInfolistWindow(
@@ -271,7 +284,7 @@ void CandidateController::AlignWindows() {
   if (!command_.output().has_candidate_window() ||
       !(command_.output().candidate_window().candidate_size() > 0) ||
       !command_.output().candidate_window().has_sub_candidate_window()) {
-    return;
+    return true;
   }
 
   // Fix cascading window position
@@ -288,6 +301,7 @@ void CandidateController::AlignWindows() {
   const mozc::Rect cascading_rect = WindowUtil::GetWindowRectForCascadingWindow(
       focused_rect, cascading_window_->GetWindowSize(), mozc::Point(0, 0), display_rect);
   cascading_window_->MoveWindow(OriginPointInCocoaCoord(cascading_rect));
+  return true;
 }
 
 }  // namespace mac

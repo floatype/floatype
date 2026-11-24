@@ -4,6 +4,7 @@
 #ifndef MOZC_FLOATYPE_INDICATOR_INDICATOR_LAYOUT_H_
 #define MOZC_FLOATYPE_INDICATOR_INDICATOR_LAYOUT_H_
 
+#include <optional>
 #include <string>
 
 #include "protocol/commands.pb.h"
@@ -40,6 +41,19 @@ IndicatorRect LayoutIndicator(const config::Config::IndicatorStyle& style,
                               double label_width, double line_left,
                               double line_bottom, double line_height,
                               double screen_top);
+
+// LayoutIndicator on a real screen: the frame inside `screen`, the visible
+// area, and clear of `obstacle` (the suggestion window) where given. The
+// placement is a preference, as a reader at the screen's edge still needs to
+// see the state: above goes below when it does not fit, below goes above, and
+// the side goes above, then below (right of the line would cover the
+// composition). Above and below stay inside the screen sideways. Where the
+// suggestion window is in the way, the frame goes beside it. Nothing where
+// nothing fits, rather than a frame over the text.
+std::optional<IndicatorRect> PlaceIndicator(
+    const config::Config::IndicatorStyle& style, double label_width,
+    double line_left, double line_bottom, double line_height,
+    const IndicatorRect& screen, const IndicatorRect* obstacle);
 
 // The frame for vertical writing, where the composition runs down a column
 // from `column_left` to `column_right` with its top at `column_top`: right of

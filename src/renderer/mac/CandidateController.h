@@ -30,6 +30,7 @@
 #ifndef MOZC_RENDERER_MAC_CANDIDATE_CONTROLLER_H_
 #define MOZC_RENDERER_MAC_CANDIDATE_CONTROLLER_H_
 
+#include "base/coordinates.h"
 #include "protocol/renderer_command.pb.h"
 #include "renderer/renderer_interface.h"
 
@@ -61,7 +62,9 @@ class CandidateController : public RendererInterface {
 
  private:
   // Relocate windows to prevent overlaps.
-  void AlignWindows();
+  // Returns where the candidate window went, in Mozc coordinates, when it was
+  // placed (floatype: the indicator keeps clear of it).
+  bool AlignWindows(mozc::Rect *candidate_frame);
 
   // We don't use std::unique_ptr<> for those two pointers because we don't
   // want to include CandidateWindow.h when the user of this class
