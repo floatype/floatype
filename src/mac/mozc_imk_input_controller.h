@@ -115,6 +115,9 @@
   /** floatype: whether the indicator's place, the composition's start, is known. */
   bool indicatorPlaced_;
 
+  /** floatype: the composition's length when its last line was last asked for, or 0. */
+  NSUInteger boundsLength_;
+
   /** |menu_| is the NSMenu to be shown in the pulldown menu-list of the IME. */
   IBOutlet NSMenu *menu_;
 }

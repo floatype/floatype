@@ -96,6 +96,8 @@
 @property(readwrite, weak) NSString *bundleIdentifier;
 @property(readwrite, assign) NSRect expectedCursor;
 @property(readwrite) NSDictionary *expectedAttributes;
+// floatype: answers for some character indices, instead of expectedAttributes.
+@property(readwrite) NSDictionary<NSNumber *, NSDictionary *> *attributesByIndex;
 @property(readwrite, assign) NSRange expectedRange;
 @property(readonly) std::string selectedMode;
 @property(readonly) NSString *insertedText;
@@ -106,6 +108,7 @@
 @synthesize bundleIdentifier;
 @synthesize expectedCursor;
 @synthesize expectedAttributes;
+@synthesize attributesByIndex;
 @synthesize expectedRange;
 @synthesize selectedMode = selectedMode_;
 @synthesize insertedText = insertedText_;
@@ -132,6 +135,9 @@
 - (NSDictionary *)attributesForCharacterIndex:(int)index lineHeightRectangle:(NSRect *)rect {
   counters_["attributesForCharacterIndex:lineHeightRectangle:"]++;
   *rect = expectedCursor;
+  if (NSDictionary *byIndex = attributesByIndex[@(index)]) {
+    return byIndex;
+  }
   return expectedAttributes;
 }
 
@@ -535,6 +541,93 @@ TEST_F(MozcImkInputControllerTest, ACommitMovesTheIndicatorToTheNextComposition)
   [controller_ updateCandidates:&output];
   [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.1]];
   EXPECT_EQ([mock_client_ getCounter:"attributesForCharacterIndex:lineHeightRectangle:"], 2);
+}
+
+// floatype: a composition of `text`, one segment.
+commands::Preedit PreeditOf(const char *text) {
+  commands::Preedit preedit;
+  preedit.set_cursor(0);
+  commands::Preedit::Segment *segment = preedit.add_segment();
+  segment->set_annotation(commands::Preedit::Segment::UNDERLINE);
+  segment->set_value(text);
+  return preedit;
+}
+
+NSDictionary *BaselineAt(double x, double y) {
+  return @{@"IMKBaseline" : [NSValue valueWithPoint:NSMakePoint(x, y)]};
+}
+
+TEST_F(MozcImkInputControllerTest, AsksForTheLastLineOnlyWhenTheCompositionChanges) {
+  mock_client_.expectedAttributes = BaselineAt(50, 718);
+  const commands::Output output = IndicatorOutput(-1);
+  auto update = [&](const char *text) {
+    const commands::Preedit preedit = PreeditOf(text);
+    [controller_ updateComposedString:&preedit];
+    [controller_ updateCandidates:&output];
+    [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.1]];
+    return [mock_client_ getCounter:"attributesForCharacterIndex:lineHeightRectangle:"];
+  };
+  // The first character, then the last.
+  EXPECT_EQ(update("abcde"), 2);
+  EXPECT_TRUE(controller_.rendererCommand.has_composition_bounds());
+  EXPECT_EQ(update("abcde"), 2) << "the same composition is not asked again";
+  EXPECT_EQ(update("abcdef"), 3);
+  // One character has no other line.
+  EXPECT_EQ(update("a"), 3);
+  EXPECT_FALSE(controller_.rendererCommand.has_composition_bounds());
+}
+
+TEST_F(MozcImkInputControllerTest, AWrappedCompositionEndsOnItsLastLine) {
+  mock_client_.expectedAttributes = BaselineAt(50, 718);
+  // The last character of a 5-character composition on the next line.
+  mock_client_.attributesByIndex = @{@4 : BaselineAt(10, 740)};
+  const commands::Preedit preedit = PreeditOf("abcde");
+  [controller_ updateComposedString:&preedit];
+  const commands::Output output = IndicatorOutput(-1);
+  [controller_ updateCandidates:&output];
+  [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.1]];
+  ASSERT_TRUE(controller_.rendererCommand.has_composition_bounds());
+  EXPECT_EQ(controller_.rendererCommand.composition_bounds().bottom(), 740);
+  EXPECT_EQ(controller_.rendererCommand.composition_bounds().left(),
+            controller_.rendererCommand.composition_rectangle().left());
+}
+
+TEST_F(MozcImkInputControllerTest, ALastLineAboveTheFirstGivesNothing) {
+  mock_client_.expectedAttributes = BaselineAt(50, 718);
+  mock_client_.attributesByIndex = @{@4 : BaselineAt(10, 700)};
+  const commands::Preedit preedit = PreeditOf("abcde");
+  [controller_ updateComposedString:&preedit];
+  const commands::Output output = IndicatorOutput(-1);
+  [controller_ updateCandidates:&output];
+  [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.1]];
+  EXPECT_TRUE(controller_.rendererCommand.has_composition_rectangle());
+  EXPECT_FALSE(controller_.rendererCommand.has_composition_bounds());
+}
+
+TEST_F(MozcImkInputControllerTest, TheLastCharacterIsCountedAsTheAppCountsIt) {
+  mock_client_.expectedAttributes = BaselineAt(50, 718);
+  // "a" and an emoji, two UTF-16 units: the last character starts at 1.
+  mock_client_.attributesByIndex = @{@1 : BaselineAt(10, 740), @2 : BaselineAt(10, 760)};
+  const commands::Preedit preedit = PreeditOf("a\xF0\x9F\x98\x80");
+  [controller_ updateComposedString:&preedit];
+  const commands::Output output = IndicatorOutput(-1);
+  [controller_ updateCandidates:&output];
+  [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.1]];
+  ASSERT_TRUE(controller_.rendererCommand.has_composition_bounds());
+  EXPECT_EQ(controller_.rendererCommand.composition_bounds().bottom(), 740);
+}
+
+TEST_F(MozcImkInputControllerTest, NoLastLineWithoutTheIndicator) {
+  mock_client_.expectedAttributes = BaselineAt(50, 718);
+  const commands::Preedit preedit = PreeditOf("abcde");
+  [controller_ updateComposedString:&preedit];
+  commands::Output output = IndicatorOutput(0);
+  output.clear_indicator();
+  [controller_ updateCandidates:&output];
+  [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.1]];
+  // Only the candidates' segment.
+  EXPECT_EQ([mock_client_ getCounter:"attributesForCharacterIndex:lineHeightRectangle:"], 1);
+  EXPECT_FALSE(controller_.rendererCommand.has_composition_bounds());
 }
 
 TEST_F(MozcImkInputControllerTest, OpenLink) {

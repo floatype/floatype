@@ -737,6 +737,8 @@ bool CanSurroundingText(absl::string_view bundle_id) {
 - (void)clearCandidates {
   candidatesShown_ = false;
   indicatorPlaced_ = false;
+  boundsLength_ = 0;
+  rendererCommand_.clear_composition_bounds();
   rendererCommand_.set_type(RendererCommand::UPDATE);
   rendererCommand_.set_visible(false);
   rendererCommand_.clear_output();
@@ -789,6 +791,38 @@ bool CanSurroundingText(absl::string_view bundle_id) {
   }
 }
 
+// floatype: where a composition wraps onto more lines, the bottom of its last
+// line, so that the indicator keeps off all of it. Each ask is a synchronous
+// call into the app, so it is asked only when the composition's length
+// changes. An answer that does not fit (a last line above the first, an
+// empty rectangle) gives nothing, and the indicator goes by the first line.
+- (void)updateCompositionBounds {
+  const NSUInteger length = [composedString_ length];
+  if (length < 2 || !rendererCommand_.has_composition_rectangle()) {
+    rendererCommand_.clear_composition_bounds();
+    boundsLength_ = 0;
+    return;
+  }
+  if (length == boundsLength_) {
+    return;
+  }
+  boundsLength_ = length;
+  // The start of the last character, counted as setMarkedText counts (UTF-16).
+  const NSUInteger last =
+      [[composedString_ string] rangeOfComposedCharacterSequenceAtIndex:length - 1].location;
+  const RendererCommand::Rectangle &first = rendererCommand_.composition_rectangle();
+  RendererCommand::Rectangle end;
+  if (last == 0 || ![self fillRectangle:&end atIndex:static_cast<int32_t>(last)] ||
+      (end.left() == 0 && end.top() == 0 && end.bottom() == 0) ||
+      end.bottom() < first.bottom() || end.top() < first.top()) {
+    rendererCommand_.clear_composition_bounds();
+    return;
+  }
+  RendererCommand::Rectangle *bounds = rendererCommand_.mutable_composition_bounds();
+  *bounds = first;
+  bounds->set_bottom(end.bottom());
+}
+
 - (void)delayedUpdateCandidates {
   if (!mozcRenderer_) {
     return;
@@ -803,6 +837,8 @@ bool CanSurroundingText(absl::string_view bundle_id) {
     rendererCommand_.set_visible(false);
     candidatesShown_ = false;
     indicatorPlaced_ = false;
+    boundsLength_ = 0;
+    rendererCommand_.clear_composition_bounds();
     mozcRenderer_->ExecCommand(rendererCommand_);
     return;
   }
@@ -815,6 +851,10 @@ bool CanSurroundingText(absl::string_view bundle_id) {
       rendererCommand_.clear_composition_rectangle();
     }
     indicatorPlaced_ = true;
+    boundsLength_ = 0;  // A new composition: its last line is asked for anew.
+  }
+  if (hasIndicator) {
+    [self updateCompositionBounds];
   }
 
   // The candidate window position is not recalculated if the

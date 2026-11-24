@@ -147,14 +147,15 @@ std::optional<IndicatorRect> PlaceIndicator(const Style& style,
                                             double line_left,
                                             double line_bottom,
                                             double line_height,
+                                            double composition_bottom,
                                             const IndicatorRect& screen,
                                             const IndicatorRect* obstacle) {
   const IndicatorRect size = Size(style, label_width);
   const double x = line_left + style.offset_x();
   const double above =
       line_bottom + line_height + style.gap() + style.offset_y();
-  const double below =
-      line_bottom - style.gap() - size.height + style.offset_y();
+  const double below = std::min(line_bottom, composition_bottom) -
+                       style.gap() - size.height + style.offset_y();
   struct Spot {
     double x;
     double y;

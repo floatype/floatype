@@ -257,8 +257,12 @@ bool IndicatorWindow::UpdateIndicator(const commands::RendererCommand &command,
         obstacle == nullptr ? floatype::IndicatorRect()
                             : floatype::IndicatorRect{NSMinX(*obstacle), NSMinY(*obstacle),
                                                       NSWidth(*obstacle), NSHeight(*obstacle)};
+    // A composition wrapped onto more lines ends lower than its first line.
+    const double composition_bottom = command.has_composition_bounds()
+                                          ? base_screen_height - command.composition_bounds().bottom()
+                                          : origin.y;
     const std::optional<floatype::IndicatorRect> placed = floatype::PlaceIndicator(
-        style, label_width, origin.x, origin.y, line_height, screen_area,
+        style, label_width, origin.x, origin.y, line_height, composition_bottom, screen_area,
         obstacle == nullptr ? nullptr : &obstacle_area);
     if (!placed.has_value()) {
       [window_ orderOut:nil];
