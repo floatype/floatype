@@ -65,8 +65,11 @@ def main():
   parser.add_argument("--between", action="store_true")
   parser.add_argument("--user_files_dir", default="")
   parser.add_argument("--zenz", default="true")
+  parser.add_argument("--learn_chosen_words_everywhere", action="store_true")
   args = parser.parse_args()
   flags = [f"--zenz={args.zenz}"]
+  if args.learn_chosen_words_everywhere:
+    flags.append("--learn_chosen_words_everywhere")
   if not args.context:
     flags += ["--unknown_context", "--zenz_context_from_commits=false"]
   if args.user_files_dir:

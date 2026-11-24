@@ -514,8 +514,12 @@ bool UserSegmentHistoryRewriter::Replaceable(
     const converter::Candidate& target_candidate) const {
   const bool same_functional_value = (best_candidate.functional_value() ==
                                       target_candidate.functional_value());
-  const bool same_pos_group = (pos_group_->GetPosGroup(best_candidate.lid) ==
-                               pos_group_->GetPosGroup(target_candidate.lid));
+  // floatype: learn_chosen_words_everywhere lets a choice of another group
+  // than the first candidate's be learned for every phrase too (#28).
+  const bool same_pos_group =
+      request.config().learn_chosen_words_everywhere() ||
+      (pos_group_->GetPosGroup(best_candidate.lid) ==
+       pos_group_->GetPosGroup(target_candidate.lid));
   return (same_functional_value &&
           (same_pos_group || IsT13NCandidate(best_candidate) ||
            IsT13NCandidate(target_candidate)));

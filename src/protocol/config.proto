@@ -539,6 +539,12 @@ message Config {
   // what was committed and hurts where the two have nothing to do with each
   // other.
   optional bool zenz_context_from_commits = 1029 [default = true];
+  // floatype: a candidate the user chose over the first one is learned for
+  // every phrase, as Mozc learns a choice of the first one's part-of-speech
+  // group (a word registered as an adjective, for one). Off, a choice of
+  // another group (よい for 良い) is learned only next to the words around it
+  // (#28, #10).
+  optional bool learn_chosen_words_everywhere = 1034 [default = false];
 
   //////////////////////////////////////////////////////////////
   //

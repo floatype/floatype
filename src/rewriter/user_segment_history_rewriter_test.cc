@@ -998,6 +998,37 @@ TEST_F(UserSegmentHistoryRewriterTest, NotReplaceableForDifferentId) {
   }
 }
 
+// floatype: with learn_chosen_words_everywhere, the choice of another id is
+// learned for other phrases too (#28).
+TEST_F(UserSegmentHistoryRewriterTest, ReplaceableForDifferentIdWithTheSetting) {
+  config_->set_learn_chosen_words_everywhere(true);
+  Segments segments;
+  std::unique_ptr<UserSegmentHistoryRewriter> rewriter(
+      CreateUserSegmentHistoryRewriter());
+
+  rewriter->Clear();
+  const ConversionRequest convreq = CreateConversionRequest();
+  InitSegments(&segments, 2);
+  AppendCandidateSuffix(segments.mutable_segment(0), 0, ":all", 1, 1);
+  AppendCandidateSuffix(segments.mutable_segment(0), 2, ":all", 200, 300);
+  segments.mutable_segment(0)->move_candidate(2, 0);
+  segments.mutable_segment(0)->mutable_candidate(0)->attributes |=
+      converter::Attribute::RERANKED;
+  segments.mutable_segment(0)->set_segment_type(Segment::FIXED_VALUE);
+
+  rewriter->Finish(convreq, segments);
+
+  InitSegments(&segments, 2);
+  AppendCandidateSuffix(segments.mutable_segment(0), 0, ":all", 1, 1);
+  AppendCandidateSuffix(segments.mutable_segment(0), 2, ":all", 200, 300);
+  segments.mutable_segment(1)->mutable_candidate(0)->value =
+      "not_same_as_before";
+
+  rewriter->Rewrite(convreq, &segments);
+
+  EXPECT_EQ(segments.segment(0).candidate(0).value, "candidate2:all");
+}
+
 TEST_F(UserSegmentHistoryRewriterTest, ReplaceableForSameId) {
   Segments segments;
   std::unique_ptr<UserSegmentHistoryRewriter> rewriter(
