@@ -308,6 +308,34 @@ TEST(FloatypeLookTest, UsageExamplesAreAnOrangeDot) {
              "a gap before the description");
 }
 
+// #28: a pinned candidate gets a red pin right of the word, and the mark the
+// converter sends is not drawn as text.
+TEST(FloatypeLookTest, APinnedCandidateGetsARedPin) {
+  commands::CandidateWindow candidates = Candidates();
+  candidates.mutable_candidate(0)->mutable_annotation()->set_description("📌");
+  candidates.mutable_candidate(1)->mutable_annotation()->set_description("📌 ひらがな");
+  CandidateView *view = ViewFor(Style());
+  [view setCandidateWindow:&candidates];
+  Draw(view, "candidates_pinned");
+  const auto redness = [](uint32_t color) {
+    return static_cast<int>(color >> 16 & 0xff) - static_cast<int>(color >> 8 & 0xff);
+  };
+  for (int row = 0; row < 3; ++row) {
+    const mozc::Rect cell = [view tableLayout]->GetCellRect(row, mozc::renderer::kColumnCandidate);
+    int reddest = -255;
+    for (double x = cell.Left(); x < cell.Right(); x += 0.5) {
+      for (double y = cell.Top(); y < cell.Bottom(); y += 0.5) {
+        reddest = std::max(reddest, redness(ColorAt(view, x, y)));
+      }
+    }
+    if (row < 2) {
+      EXPECT_GT(reddest, 100) << "a red pin in row " << row;
+    } else {
+      EXPECT_LT(reddest, 40) << "no pin in row " << row;
+    }
+  }
+}
+
 TEST(FloatypeLookTest, TheFooterDotTellsPredictionFromConversion) {
   for (const auto [category, kind_mark, expected] :
        {std::tuple{commands::PREDICTION, true, 0x6f8fbfu},
