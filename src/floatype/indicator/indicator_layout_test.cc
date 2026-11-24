@@ -75,17 +75,17 @@ void ExpectSame(const std::optional<IndicatorRect>& placed,
 
 TEST(PlaceIndicatorTest, KeepsWhereItFitsAsBefore) {
   const Style above;
-  ExpectSame(PlaceIndicator(above, 30, 100, 500, 20, kScreen, nullptr),
+  ExpectSame(PlaceIndicator(above, 30, 100, 500, 20, 500, kScreen, nullptr),
              LayoutIndicator(above, 30, 100, 500, 20, 1000));
-  ExpectSame(PlaceIndicator(above, 30, 100, 980, 20, kScreen, nullptr),
+  ExpectSame(PlaceIndicator(above, 30, 100, 980, 20, 980, kScreen, nullptr),
              LayoutIndicator(above, 30, 100, 980, 20, 1000));
   Style below;
   below.set_placement(Style::BELOW);
-  ExpectSame(PlaceIndicator(below, 30, 100, 500, 20, kScreen, nullptr),
+  ExpectSame(PlaceIndicator(below, 30, 100, 500, 20, 500, kScreen, nullptr),
              LayoutIndicator(below, 30, 100, 500, 20, 1000));
   Style side;
   side.set_placement(Style::SIDE);
-  ExpectSame(PlaceIndicator(side, 30, 100, 500, 20, kScreen, nullptr),
+  ExpectSame(PlaceIndicator(side, 30, 100, 500, 20, 500, kScreen, nullptr),
              LayoutIndicator(side, 30, 100, 500, 20, 1000));
 }
 
@@ -93,7 +93,7 @@ TEST(PlaceIndicatorTest, BelowGoesAboveAtTheBottomOfTheScreen) {
   Style below;
   below.set_placement(Style::BELOW);
   const std::optional<IndicatorRect> rect =
-      PlaceIndicator(below, 30, 100, 10, 20, kScreen, nullptr);
+      PlaceIndicator(below, 30, 100, 10, 20, 10, kScreen, nullptr);
   ASSERT_TRUE(rect.has_value());
   EXPECT_EQ(rect->y, 10 + 20 + 5);
 }
@@ -102,7 +102,7 @@ TEST(PlaceIndicatorTest, TheSideGoesAboveAtTheLeftOfTheScreen) {
   Style side;
   side.set_placement(Style::SIDE);
   const std::optional<IndicatorRect> rect =
-      PlaceIndicator(side, 30, 20, 500, 20, kScreen, nullptr);
+      PlaceIndicator(side, 30, 20, 500, 20, 500, kScreen, nullptr);
   ASSERT_TRUE(rect.has_value());
   EXPECT_EQ(rect->x, 20);
   EXPECT_EQ(rect->y, 500 + 20 + 5);
@@ -111,7 +111,7 @@ TEST(PlaceIndicatorTest, TheSideGoesAboveAtTheLeftOfTheScreen) {
 TEST(PlaceIndicatorTest, StaysInsideTheScreenSideways) {
   const Style style;
   const std::optional<IndicatorRect> rect =
-      PlaceIndicator(style, 30, 1420, 500, 20, kScreen, nullptr);
+      PlaceIndicator(style, 30, 1420, 500, 20, 500, kScreen, nullptr);
   ASSERT_TRUE(rect.has_value());
   EXPECT_EQ(rect->x, 1440 - 56);
 }
@@ -122,19 +122,32 @@ TEST(PlaceIndicatorTest, GoesBesideTheSuggestionWindowInTheWay) {
   // suggestion window is.
   const IndicatorRect suggestions = {100, 800, 300, 175};
   const std::optional<IndicatorRect> rect =
-      PlaceIndicator(style, 30, 100, 980, 20, kScreen, &suggestions);
+      PlaceIndicator(style, 30, 100, 980, 20, 980, kScreen, &suggestions);
   ASSERT_TRUE(rect.has_value());
   EXPECT_EQ(rect->x, 100 + 300 + 5);
   EXPECT_EQ(rect->y, 980 - 5 - 22);
   // Above the line, where it fits, the suggestions below do not matter.
-  ExpectSame(PlaceIndicator(style, 30, 100, 500, 20, kScreen, &suggestions),
+  ExpectSame(PlaceIndicator(style, 30, 100, 500, 20, 500, kScreen, &suggestions),
+             LayoutIndicator(style, 30, 100, 500, 20, 1000));
+}
+
+TEST(PlaceIndicatorTest, GoesBelowTheLastLineOfAWrappedComposition) {
+  const Style style;
+  // At the top of the screen, the composition wraps from the line at 980 to
+  // one at 950: below goes under the second line, not onto it.
+  const std::optional<IndicatorRect> rect =
+      PlaceIndicator(style, 30, 100, 980, 20, 950, kScreen, nullptr);
+  ASSERT_TRUE(rect.has_value());
+  EXPECT_EQ(rect->y, 950 - 5 - 22);
+  // Above is still above the first line.
+  ExpectSame(PlaceIndicator(style, 30, 100, 500, 20, 470, kScreen, nullptr),
              LayoutIndicator(style, 30, 100, 500, 20, 1000));
 }
 
 TEST(PlaceIndicatorTest, NothingWhereNothingFits) {
   const Style style;
   // A screen just the line's height: neither above nor below fits.
-  EXPECT_FALSE(PlaceIndicator(style, 30, 100, 0, 20, {0, 0, 1440, 20}, nullptr)
+  EXPECT_FALSE(PlaceIndicator(style, 30, 100, 0, 20, 0, {0, 0, 1440, 20}, nullptr)
                    .has_value());
 }
 

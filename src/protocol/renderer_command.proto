@@ -74,6 +74,12 @@ message RendererCommand {
   // preedit_rectangle, the focused segment.
   optional Rectangle composition_rectangle = 1001;
 
+  // floatype: composition_rectangle with its bottom moved to the bottom of the
+  // composition's last line, where the composition wraps onto more lines, so
+  // that the indicator keeps off all of it. Unset where the app did not tell,
+  // or told something that does not fit (a last line above the first).
+  optional Rectangle composition_bounds = 1002;
+
   // An equivalent to IMECHARPOSITION in IMM32. (For Windows only)
   // TODO(yukawa): make a common candidate form format for all platforms.
   message CharacterPosition {
