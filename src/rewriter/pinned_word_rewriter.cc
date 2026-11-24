@@ -24,6 +24,10 @@ bool PinnedWordRewriter::Rewrite(const ConversionRequest& request,
   bool modified = false;
   for (size_t i = 0; i < segments->conversion_segments_size(); ++i) {
     Segment* segment = segments->mutable_conversion_segment(i);
+    // A segment the user has fixed keeps what was chosen there.
+    if (segment->segment_type() == Segment::FIXED_VALUE) {
+      continue;
+    }
     for (size_t j = 0; j < segment->candidates_size(); ++j) {
       const converter::Candidate& candidate = segment->candidate(j);
       // Latest() is empty for a reading without a pin.

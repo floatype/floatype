@@ -66,6 +66,16 @@ TEST_F(PinnedWordRewriterTest, LeavesSegmentsWithoutAPinnedWord) {
   EXPECT_EQ(segments.conversion_segment(0).candidate(0).value, "良い");
 }
 
+TEST_F(PinnedWordRewriterTest, LeavesASegmentTheUserFixed) {
+  floatype::ZenzMemory::Pinned().Add("よい", "よい");
+  Segments segments;
+  AddSegment(segments, "よい", {{"よい", "良い"}, {"よい", "よい"}});
+  segments.mutable_conversion_segment(0)->set_segment_type(
+      Segment::FIXED_VALUE);
+  EXPECT_FALSE(Rewrite(segments));
+  EXPECT_EQ(segments.conversion_segment(0).candidate(0).value, "良い");
+}
+
 TEST_F(PinnedWordRewriterTest, MovesNothingWithoutPins) {
   // A candidate with no content value (a date, say) is not taken for a pin.
   Segments segments;

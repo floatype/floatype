@@ -1362,8 +1362,9 @@ TEST_F(FloatypeZenzTest, APinnedWordComesFirstWithItsMark) {
   SendKeys({"Escape"});
   SendKeys({"Escape"});
 
-  // The key again on the pinned word unpins it.
-  ASSERT_EQ(Preedit(ConvertKikai()), "機械");
+  // The key again on the pinned word, chosen in the list, unpins it.
+  ASSERT_EQ(Preedit(SendKeys({"k", "i", "k", "a", "i", "Space", "Space", "Up"})),
+            "機械");
   SendKeys({"Ctrl Shift p"});
   EXPECT_FALSE(floatype::ZenzMemory::Pinned().Contains("きかい", "機械"));
   SendKeys({"Escape"});
@@ -1372,12 +1373,19 @@ TEST_F(FloatypeZenzTest, APinnedWordComesFirstWithItsMark) {
 }
 
 TEST_F(FloatypeZenzTest, ZenzLeavesAPinnedWord) {
-  // Mozc's 機会, pinned, which zenz would correct to 機械.
+  StartSession(/*zenz=*/false);
+  // Without the candidate list shown, there is no choice to pin.
   ASSERT_EQ(Preedit(SendKeys({"k", "i", "k", "a", "i", "Space"})), "機会");
+  SendKeys({"Ctrl Shift p"});
+  ASSERT_TRUE(floatype::ZenzMemory::Pinned().Entries().empty());
+  // Mozc's 機会, chosen in the list and pinned, which zenz would correct to
+  // 機械.
+  ASSERT_EQ(Preedit(SendKeys({"Space", "Up"})), "機会");
   SendKeys({"Ctrl Shift p"});
   ASSERT_TRUE(floatype::ZenzMemory::Pinned().Contains("きかい", "機会"));
   SendKeys({"Escape"});
   SendKeys({"Escape"});
+  StartSession(/*zenz=*/true);
   EXPECT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機会");
   SendKeys({"Escape"});
   SendKeys({"Escape"});

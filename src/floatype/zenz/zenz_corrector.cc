@@ -1367,8 +1367,10 @@ ZenzCorrector::PollResult ZenzCorrector::Judge(
                          : MappedText(segments, *mapping);
   // Kept back to a pinned word, the text is not zenz's answer: it may be one
   // the user stopped (which stores the text shown) or turned away with Ctrl+z.
-  if ((learning_ && ZenzMemory::Stopped().Contains(reading, text)) ||
-      std::find(rejected_.begin(), rejected_.end(), text) != rejected_.end()) {
+  if (text != response.conversion &&
+      ((learning_ && ZenzMemory::Stopped().Contains(reading, text)) ||
+       std::find(rejected_.begin(), rejected_.end(), text) !=
+           rejected_.end())) {
     return {PollResult::kDone, {}};
   }
   return {PollResult::kApply, std::move(mapping->candidate_indices),
