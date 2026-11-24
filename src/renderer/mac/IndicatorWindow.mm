@@ -1,6 +1,7 @@
 #import "renderer/mac/IndicatorWindow.h"
 
 #include <algorithm>
+#include <optional>
 #include <string>
 
 #include "floatype/indicator/indicator_layout.h"
@@ -135,9 +136,10 @@ NSView *IndicatorWindow::ViewForTesting() const { return view_; }
 
 NSView *IndicatorWindow::RubyViewForTesting() const { return ruby_view_; }
 
-void IndicatorWindow::Update(const commands::RendererCommand &command, double base_screen_height) {
+void IndicatorWindow::Update(const commands::RendererCommand &command, double base_screen_height,
+                             const NSRect *obstacle) {
   NSRect frame;
-  const bool shown = UpdateIndicator(command, base_screen_height, &frame);
+  const bool shown = UpdateIndicator(command, base_screen_height, obstacle, &frame);
   UpdateRuby(command, base_screen_height, shown ? &frame : nullptr);
 }
 
@@ -192,7 +194,8 @@ void IndicatorWindow::UpdateRuby(const commands::RendererCommand &command,
 }
 
 bool IndicatorWindow::UpdateIndicator(const commands::RendererCommand &command,
-                                      double base_screen_height, NSRect *frame) {
+                                      double base_screen_height, const NSRect *obstacle,
+                                      NSRect *frame) {
   const commands::Output::Indicator &indicator = command.output().indicator();
   if (!command.visible() || indicator.state() == commands::Output::Indicator::NONE) {
     [window_ orderOut:nil];
@@ -246,8 +249,22 @@ bool IndicatorWindow::UpdateIndicator(const commands::RendererCommand &command,
                                              origin.x + line_width, origin.y + line_height,
                                              NSMaxX(visible));
   } else {
-    rect = floatype::LayoutIndicator(style, label_width, origin.x, origin.y,
-                                     line_height, NSMaxY(visible));
+    // At the screen's edge it goes to the other side, beside the suggestion
+    // window in the way, or nowhere rather than over the text.
+    const floatype::IndicatorRect screen_area = {NSMinX(visible), NSMinY(visible),
+                                                 NSWidth(visible), NSHeight(visible)};
+    const floatype::IndicatorRect obstacle_area =
+        obstacle == nullptr ? floatype::IndicatorRect()
+                            : floatype::IndicatorRect{NSMinX(*obstacle), NSMinY(*obstacle),
+                                                      NSWidth(*obstacle), NSHeight(*obstacle)};
+    const std::optional<floatype::IndicatorRect> placed = floatype::PlaceIndicator(
+        style, label_width, origin.x, origin.y, line_height, screen_area,
+        obstacle == nullptr ? nullptr : &obstacle_area);
+    if (!placed.has_value()) {
+      [window_ orderOut:nil];
+      return false;
+    }
+    rect = *placed;
   }
   view_.cornerRadius = style.shape() == Config::IndicatorStyle::ROUNDED_RECT
                            ? std::min<double>(style.corner_radius(), rect.height / 2)

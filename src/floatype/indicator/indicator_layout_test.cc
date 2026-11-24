@@ -1,5 +1,7 @@
 #include "floatype/indicator/indicator_layout.h"
 
+#include <optional>
+
 #include "protocol/commands.pb.h"
 #include "protocol/config.pb.h"
 #include "testing/gunit.h"
@@ -57,6 +59,83 @@ TEST(IndicatorLayoutTest, GoesBelowAtTheTopOfTheScreenOrWhenAsked) {
   Style below;
   below.set_placement(Style::BELOW);
   EXPECT_EQ(LayoutIndicator(below, 30, 100, 500, 20, 1000).y, 500 - 5 - 22);
+}
+
+// A 1440x1000 screen whose visible area starts at the origin.
+constexpr IndicatorRect kScreen = {0, 0, 1440, 1000};
+
+void ExpectSame(const std::optional<IndicatorRect>& placed,
+                const IndicatorRect& laid_out) {
+  ASSERT_TRUE(placed.has_value());
+  EXPECT_EQ(placed->x, laid_out.x);
+  EXPECT_EQ(placed->y, laid_out.y);
+  EXPECT_EQ(placed->width, laid_out.width);
+  EXPECT_EQ(placed->height, laid_out.height);
+}
+
+TEST(PlaceIndicatorTest, KeepsWhereItFitsAsBefore) {
+  const Style above;
+  ExpectSame(PlaceIndicator(above, 30, 100, 500, 20, kScreen, nullptr),
+             LayoutIndicator(above, 30, 100, 500, 20, 1000));
+  ExpectSame(PlaceIndicator(above, 30, 100, 980, 20, kScreen, nullptr),
+             LayoutIndicator(above, 30, 100, 980, 20, 1000));
+  Style below;
+  below.set_placement(Style::BELOW);
+  ExpectSame(PlaceIndicator(below, 30, 100, 500, 20, kScreen, nullptr),
+             LayoutIndicator(below, 30, 100, 500, 20, 1000));
+  Style side;
+  side.set_placement(Style::SIDE);
+  ExpectSame(PlaceIndicator(side, 30, 100, 500, 20, kScreen, nullptr),
+             LayoutIndicator(side, 30, 100, 500, 20, 1000));
+}
+
+TEST(PlaceIndicatorTest, BelowGoesAboveAtTheBottomOfTheScreen) {
+  Style below;
+  below.set_placement(Style::BELOW);
+  const std::optional<IndicatorRect> rect =
+      PlaceIndicator(below, 30, 100, 10, 20, kScreen, nullptr);
+  ASSERT_TRUE(rect.has_value());
+  EXPECT_EQ(rect->y, 10 + 20 + 5);
+}
+
+TEST(PlaceIndicatorTest, TheSideGoesAboveAtTheLeftOfTheScreen) {
+  Style side;
+  side.set_placement(Style::SIDE);
+  const std::optional<IndicatorRect> rect =
+      PlaceIndicator(side, 30, 20, 500, 20, kScreen, nullptr);
+  ASSERT_TRUE(rect.has_value());
+  EXPECT_EQ(rect->x, 20);
+  EXPECT_EQ(rect->y, 500 + 20 + 5);
+}
+
+TEST(PlaceIndicatorTest, StaysInsideTheScreenSideways) {
+  const Style style;
+  const std::optional<IndicatorRect> rect =
+      PlaceIndicator(style, 30, 1420, 500, 20, kScreen, nullptr);
+  ASSERT_TRUE(rect.has_value());
+  EXPECT_EQ(rect->x, 1440 - 56);
+}
+
+TEST(PlaceIndicatorTest, GoesBesideTheSuggestionWindowInTheWay) {
+  const Style style;
+  // At the top of the screen the frame goes below the line, where the
+  // suggestion window is.
+  const IndicatorRect suggestions = {100, 800, 300, 175};
+  const std::optional<IndicatorRect> rect =
+      PlaceIndicator(style, 30, 100, 980, 20, kScreen, &suggestions);
+  ASSERT_TRUE(rect.has_value());
+  EXPECT_EQ(rect->x, 100 + 300 + 5);
+  EXPECT_EQ(rect->y, 980 - 5 - 22);
+  // Above the line, where it fits, the suggestions below do not matter.
+  ExpectSame(PlaceIndicator(style, 30, 100, 500, 20, kScreen, &suggestions),
+             LayoutIndicator(style, 30, 100, 500, 20, 1000));
+}
+
+TEST(PlaceIndicatorTest, NothingWhereNothingFits) {
+  const Style style;
+  // A screen just the line's height: neither above nor below fits.
+  EXPECT_FALSE(PlaceIndicator(style, 30, 100, 0, 20, {0, 0, 1440, 20}, nullptr)
+                   .has_value());
 }
 
 TEST(IndicatorLayoutTest, GrowsToFitTheLabelAndCirclesAreRound) {

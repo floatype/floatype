@@ -2,7 +2,9 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <optional>
 #include <string>
+#include <vector>
 
 namespace mozc::floatype {
 
@@ -123,6 +125,90 @@ IndicatorRect LayoutIndicator(const Style& style, double label_width,
   rect.y = (style.placement() == Style::ABOVE && fits_above) ? above : below;
   rect.y += style.offset_y();
   return rect;
+}
+
+namespace {
+
+bool Inside(const IndicatorRect& rect, const IndicatorRect& area) {
+  return rect.x >= area.x && rect.y >= area.y &&
+         rect.x + rect.width <= area.x + area.width &&
+         rect.y + rect.height <= area.y + area.height;
+}
+
+bool Overlaps(const IndicatorRect& a, const IndicatorRect& b) {
+  return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height &&
+         b.y < a.y + a.height;
+}
+
+}  // namespace
+
+std::optional<IndicatorRect> PlaceIndicator(const Style& style,
+                                            double label_width,
+                                            double line_left,
+                                            double line_bottom,
+                                            double line_height,
+                                            const IndicatorRect& screen,
+                                            const IndicatorRect* obstacle) {
+  const IndicatorRect size = Size(style, label_width);
+  const double x = line_left + style.offset_x();
+  const double above =
+      line_bottom + line_height + style.gap() + style.offset_y();
+  const double below =
+      line_bottom - style.gap() - size.height + style.offset_y();
+  struct Spot {
+    double x;
+    double y;
+    bool keep_on_screen;  // Moved sideways into the screen.
+  };
+  std::vector<Spot> spots;
+  switch (style.placement()) {
+    case Style::SIDE:
+      spots = {{line_left - style.gap() - size.width + style.offset_x(),
+                line_bottom + (line_height - size.height) / 2 +
+                    style.offset_y(),
+                false},
+               {x, above, true},
+               {x, below, true}};
+      break;
+    case Style::BELOW:
+      spots = {{x, below, true}, {x, above, true}};
+      break;
+    default:
+      spots = {{x, above, true}, {x, below, true}};
+      break;
+  }
+  const auto fits = [&](const IndicatorRect& rect) {
+    return Inside(rect, screen) &&
+           (obstacle == nullptr || !Overlaps(rect, *obstacle));
+  };
+  std::vector<IndicatorRect> tried;
+  for (const Spot& spot : spots) {
+    IndicatorRect rect = size;
+    rect.x = spot.x;
+    rect.y = spot.y;
+    if (spot.keep_on_screen) {
+      rect.x = std::clamp(
+          rect.x, screen.x,
+          std::max(screen.x, screen.x + screen.width - rect.width));
+    }
+    if (fits(rect)) {
+      return rect;
+    }
+    tried.push_back(rect);
+  }
+  // In the suggestion window's way: beside it, at the heights tried.
+  if (obstacle != nullptr) {
+    for (IndicatorRect rect : tried) {
+      for (const double beside : {obstacle->x + obstacle->width + style.gap(),
+                                  obstacle->x - style.gap() - rect.width}) {
+        rect.x = beside;
+        if (fits(rect)) {
+          return rect;
+        }
+      }
+    }
+  }
+  return std::nullopt;
 }
 
 bool ChoosingCandidates(const commands::CandidateWindow& window) {
