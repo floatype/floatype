@@ -149,10 +149,15 @@ TEST(WindowLookTest, MeasuresScaleWithTheSize) {
 }
 
 TEST(WindowLookTest, KindMarkColors) {
-  EXPECT_EQ(KindMarkColor(true, false), 0x6f8fbf);
-  EXPECT_EQ(KindMarkColor(true, true), 0x6f8fbf);
-  EXPECT_EQ(KindMarkColor(false, false), 0xc3c7cf);
-  EXPECT_EQ(KindMarkColor(false, true), 0x5c6068);
+  config::Config::CandidateStyle style;
+  EXPECT_EQ(KindMarkColor(style, true, false), 0x6f8fbf);
+  EXPECT_EQ(KindMarkColor(style, true, true), 0x6f8fbf);
+  EXPECT_EQ(KindMarkColor(style, false, false), 0xc3c7cf);
+  EXPECT_EQ(KindMarkColor(style, false, true), 0x5c6068);
+  // A color set in the style wins, light or dark.
+  style.set_kind_mark_color(0xe5484d);
+  EXPECT_EQ(KindMarkColor(style, true, false), 0xe5484d);
+  EXPECT_EQ(KindMarkColor(style, false, true), 0xe5484d);
 }
 
 TEST(WindowLookTest, ShadowPresets) {

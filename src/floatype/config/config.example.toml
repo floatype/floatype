@@ -123,7 +123,8 @@
 # suggest_added_words = false
 
 ## 予測候補の一覧と変換候補を、帯の左の丸の色で見分ける（予測候補の一覧は青、変換候補は灰色）。
-# candidate_kind_mark = true
+## 色は [candidate_style] と [suggest_style] の kind_mark_color で変えられる。
+# candidate_kind_mark = false
 
 ## 曖昧なローマ字の途中表示: 長い規則の途中のローマ字を、いまの時点の かな で見せる
 ## （n は ん、ローマ字テーブルに ms→ます と mst→ました があれば ms は ます）。
@@ -229,6 +230,8 @@
 # shadow = "SOFT"
 ##   書体のファミリー名（例 "Hiragino Sans"）。空かないものはシステムの書体
 # font_family = ""
+##   帯の左の丸の色（candidate_kind_mark のとき）。書かなければ灰色（予測候補の一覧は青）。値は例
+# kind_mark_color = 0xc3c7cf
 
 ## 予測と サジェスト の候補の窓の見た目。項目は [candidate_style] と同じ。
 # [suggest_style]

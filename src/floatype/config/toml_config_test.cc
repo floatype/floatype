@@ -202,6 +202,7 @@ TEST(UpdateTomlConfigTest, ReadsBackWhatItWrites) {
   config.mutable_ruby_style()->set_font_size(14);
   config.mutable_ruby_style()->set_text_color(0x010203);
   config.mutable_candidate_style()->set_text_color(0xabcdef);
+  config.mutable_suggest_style()->set_kind_mark_color(0xe5484d);
   config.clear_character_form_rules();
   Config::CharacterFormRule* rule = config.add_character_form_rules();
   rule->set_group("ア");

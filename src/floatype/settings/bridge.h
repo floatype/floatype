@@ -76,7 +76,8 @@ typedef struct {
   unsigned shadow_color;
   double candidate_font_size, number_font_size, description_font_size;
   double footer_font_size;
-  // The footer's dot for conversion candidates (candidate_kind_mark).
+  // The footer's dot (candidate_kind_mark): the prediction list's for the
+  // suggestion window, conversion candidates' otherwise.
   unsigned kind_mark_color;
   // A candidate column is at least this wide (column_minimum_width_string).
   char column_minimum_width[64];
