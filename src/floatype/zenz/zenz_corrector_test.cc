@@ -551,6 +551,50 @@ TEST_F(ZenzCorrectorTest, TellsAMappingThatShowsATurnedDownWord) {
   EXPECT_TRUE(UsesTurnedDown(Segments(), {{0, 0, 1}, segments}));
 }
 
+TEST_F(ZenzCorrectorTest, KeepsMozcsCandidateWhereTheUserPinnedIt) {
+  const Segments segments = KyouHaIshaNiIku();
+  ZenzMemory::Pinned().Add("きょうは", "今日は");
+  Mapping mapping{{1, 1, 1}, std::nullopt};
+  ASSERT_TRUE(KeepPinned(segments, mapping));
+  EXPECT_THAT(mapping.candidate_indices, ElementsAre(0, 1, 1))
+      << "the other segments keep zenz's";
+  EXPECT_EQ(MappedText(segments, mapping), "今日は慰謝に逝く");
+
+  // On segments cut again, the pinned word must still be written.
+  Segments recut;
+  AddSegment(recut, "きょうはいしゃに", {"今日は医者に", "強は医者に"});
+  AddSegment(recut, "いく", {"行く", "逝く"});
+  // shortcut: the words written are compared by content, so a pinned word
+  // inside a longer segment counts as lost. Look inside if that refuses too
+  // much.
+  Mapping lost{{0, 1}, recut};
+  EXPECT_FALSE(KeepPinned(segments, lost));
+  Segments kept_segments;
+  AddSegment(kept_segments, "きょうは", {"強は", "今日は"});
+  AddSegment(kept_segments, "いしゃにいく", {"医者に行く"});
+  Mapping kept{{1, 0}, kept_segments};
+  EXPECT_TRUE(KeepPinned(segments, kept));
+}
+
+TEST_F(ZenzCorrectorTest, LeavesAPinnedAnswerTheUserStopped) {
+  ZenzCorrector corrector(client_.get());
+  corrector.set_learning(true);
+  const Segments segments = KyouHa();
+  // zenz's 京歯, kept back to the pinned 今日: 今日歯, which Ctrl+Delete
+  // stopped when it was shown.
+  ZenzMemory::Pinned().Add("きょう", "今日");
+  ASSERT_TRUE(corrector.Request(segments, "熱が"));
+  ZenzCorrector::PollResult result = PollUntilDone(corrector, segments);
+  ASSERT_EQ(result.kind, ZenzCorrector::PollResult::kApply);
+  EXPECT_THAT(result.candidate_indices, ElementsAre(0, 1));
+  EXPECT_EQ(result.text, "今日歯");
+
+  ZenzMemory::Stopped().Add("きょうは", "今日歯");
+  ASSERT_TRUE(corrector.Request(segments, "熱が"));
+  EXPECT_EQ(PollUntilDone(corrector, segments).kind,
+            ZenzCorrector::PollResult::kDone);
+}
+
 TEST_F(ZenzCorrectorTest, AppliesAnAnswerThatDiffersFromMozc) {
   ZenzCorrector corrector(client_.get());
   const Segments segments = KyouHa();

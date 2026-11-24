@@ -201,6 +201,8 @@ struct ConversionState {
     DELETE_SELECTED_CANDIDATE,
     REPORT_BUG,
     ZENZ_CORRECT,  // floatype: ask zenz to correct the conversion now.
+    // floatype: pin the focused candidate for its reading, or unpin it (#28).
+    PIN_SELECTED_CANDIDATE,
   };
 };
 

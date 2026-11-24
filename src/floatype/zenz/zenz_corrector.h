@@ -98,6 +98,13 @@ std::string SafeContext(absl::string_view context);
 // candidate over (ZenzMemory::TurnedDown()). On the conversion's own segments
 // the first candidates are Mozc's and are not looked at.
 bool UsesTurnedDown(const Segments& segments, const Mapping& mapping);
+// Keeps Mozc's first candidate where it is a word the user pinned
+// (ZenzMemory::Pinned(), #28): `mapping`'s index there goes back to 0, and the
+// other segments keep zenz's. On segments cut again, where no segment is
+// Mozc's, false when a pinned word Mozc shows is not written any more.
+bool KeepPinned(const Segments& segments, Mapping& mapping);
+// The text `mapping` of `segments` shows.
+std::string MappedText(const Segments& segments, const Mapping& mapping);
 
 // The session calls Request() right after Mozc converts, Poll() whenever the
 // client calls back, and Cancel() on any user action.

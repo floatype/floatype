@@ -49,8 +49,9 @@ constexpr absl::string_view kModes[] = {
 const absl::flat_hash_map<absl::string_view, absl::string_view>& Names() {
   static const auto* names =
       new absl::flat_hash_map<absl::string_view, absl::string_view>{
-          // floatype's own (behavior.md, Ctrl+z).
+          // floatype's own (behavior.md).
           {"ZenzCorrect", "zenz に補正を聞く"},
+          {"PinSelectedCandidate", "候補を固定する／外す"},
     {"Conversion", "変換中"},
     {"Composition", "変換前入力中"},
     {"DirectInput", "直接入力"},

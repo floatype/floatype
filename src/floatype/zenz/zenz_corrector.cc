@@ -1231,6 +1231,71 @@ bool UsesTurnedDown(const Segments& segments, const Mapping& mapping) {
   return false;
 }
 
+namespace {
+
+bool IsPinned(const converter::Candidate& candidate) {
+  // Latest() is empty for a reading without a pin.
+  return !candidate.content_key.empty() && !candidate.content_value.empty() &&
+         ZenzMemory::Pinned().Latest(candidate.content_key) ==
+             candidate.content_value;
+}
+
+}  // namespace
+
+bool KeepPinned(const Segments& segments, Mapping& mapping) {
+  if (!mapping.segments.has_value()) {
+    for (size_t i = 0; i < mapping.candidate_indices.size() &&
+                       i < segments.conversion_segments_size();
+         ++i) {
+      const Segment& segment = segments.conversion_segment(i);
+      if (segment.candidates_size() > 0 && IsPinned(segment.candidate(0))) {
+        mapping.candidate_indices[i] = 0;
+      }
+    }
+    return true;
+  }
+  // Every pinned word Mozc shows must be among the words written.
+  for (const Segment& segment : segments.conversion_segments()) {
+    if (segment.candidates_size() == 0 || !IsPinned(segment.candidate(0))) {
+      continue;
+    }
+    const converter::Candidate& pinned = segment.candidate(0);
+    bool written = false;
+    for (size_t i = 0; i < mapping.candidate_indices.size() &&
+                       i < mapping.segments->conversion_segments_size();
+         ++i) {
+      const Segment& shown = mapping.segments->conversion_segment(i);
+      const int index = mapping.candidate_indices[i];
+      if (shown.is_valid_index(index) &&
+          shown.candidate(index).content_key == pinned.content_key &&
+          shown.candidate(index).content_value == pinned.content_value) {
+        written = true;
+        break;
+      }
+    }
+    if (!written) {
+      return false;
+    }
+  }
+  return true;
+}
+
+std::string MappedText(const Segments& segments, const Mapping& mapping) {
+  const Segments& shown =
+      mapping.segments.has_value() ? *mapping.segments : segments;
+  std::string text;
+  for (size_t i = 0; i < mapping.candidate_indices.size() &&
+                     i < shown.conversion_segments_size();
+       ++i) {
+    const Segment& segment = shown.conversion_segment(i);
+    if (segment.is_valid_index(mapping.candidate_indices[i])) {
+      absl::StrAppend(&text,
+                      segment.candidate(mapping.candidate_indices[i]).value);
+    }
+  }
+  return text;
+}
+
 ZenzCorrector::PollResult ZenzCorrector::Judge(
     const Segments& segments, const Response& response,
     absl::string_view left_context, const Resegmenter& resegment,
@@ -1288,9 +1353,26 @@ ZenzCorrector::PollResult ZenzCorrector::Judge(
        UsesTurnedDown(segments, *mapping))) {
     return {PollResult::kDone, {}};
   }
+  // A word the user pinned stays, whether or not zenz learns.
+  const std::vector<int> indices = mapping->candidate_indices;
+  if (!KeepPinned(segments, *mapping) ||
+      (!mapping->segments.has_value() &&
+       std::all_of(mapping->candidate_indices.begin(),
+                   mapping->candidate_indices.end(),
+                   [](int index) { return index == 0; }))) {
+    return {PollResult::kDone, {}};
+  }
+  std::string text = mapping->candidate_indices == indices
+                         ? response.conversion
+                         : MappedText(segments, *mapping);
+  // Kept back to a pinned word, the text is not zenz's answer: it may be one
+  // the user stopped (which stores the text shown) or turned away with Ctrl+z.
+  if ((learning_ && ZenzMemory::Stopped().Contains(reading, text)) ||
+      std::find(rejected_.begin(), rejected_.end(), text) != rejected_.end()) {
+    return {PollResult::kDone, {}};
+  }
   return {PollResult::kApply, std::move(mapping->candidate_indices),
-          std::move(reading), response.conversion,
-          std::move(mapping->segments)};
+          std::move(reading), std::move(text), std::move(mapping->segments)};
 }
 
 void ZenzCorrector::Reject(absl::string_view conversion) {

@@ -743,6 +743,8 @@ void KeyMapManager::InitCommandData() {
   RegisterConversionCommand("DeleteSelectedCandidate",
                             ConversionState::DELETE_SELECTED_CANDIDATE);
   RegisterConversionCommand("ZenzCorrect", ConversionState::ZENZ_CORRECT);
+  RegisterConversionCommand("PinSelectedCandidate",
+                            ConversionState::PIN_SELECTED_CANDIDATE);
   if (kCompositionModeXCommandSupported) {
     RegisterConversionCommand(kCommandStringCompositionModeHiragana,
                               ConversionState::COMPOSITION_MODE_HIRAGANA);

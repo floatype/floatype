@@ -30,7 +30,8 @@ for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua
     [LearnedEntry(kind: 0, reading: "かんじ", text: "完治"),
      LearnedEntry(kind: 1, reading: "きかい", text: "機会"),
      LearnedEntry(kind: 2, reading: "よい", text: "良い"),
-     LearnedEntry(kind: 3, reading: "ほう", text: "方")]
+     LearnedEntry(kind: 3, reading: "ほう", text: "方"),
+     LearnedEntry(kind: 4, reading: "さいとう", text: "齋藤")]
   }
   actions.englishWords = {
     [EnglishWord(word: "quokka", kept: true, from: 2),

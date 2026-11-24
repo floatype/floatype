@@ -81,6 +81,7 @@ Conversion	Ctrl s	SegmentFocusLeft
 Conversion	Ctrl w	SegmentWidthExpand
 Conversion	Ctrl x	ConvertNext
 Conversion	Ctrl z	ZenzCorrect
+Conversion	Ctrl Shift p	PinSelectedCandidate
 Conversion	Down	ConvertNext
 Conversion	End	SegmentFocusLast
 Conversion	Enter	Commit

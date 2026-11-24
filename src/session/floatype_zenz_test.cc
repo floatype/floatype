@@ -1341,6 +1341,60 @@ TEST_F(FloatypeZenzTest, CtrlDeleteStopsACorrectionForGood) {
   EXPECT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
 }
 
+// #28: Ctrl+Shift+P pins the focused candidate for its reading. It comes
+// first wherever the reading comes, marked 固定, and zenz leaves it.
+TEST_F(FloatypeZenzTest, APinnedWordComesFirstWithItsMark) {
+  StartSession(/*zenz=*/false);
+  ASSERT_EQ(Preedit(SendKeys({"k", "i", "k", "a", "i", "Space", "Space"})),
+            "機械");
+  SendKeys({"Ctrl Shift p"});
+  EXPECT_TRUE(floatype::ZenzMemory::Pinned().Contains("きかい", "機械"));
+  SendKeys({"Escape"});
+  SendKeys({"Escape"});
+
+  const commands::Output converted =
+      SendKeys({"k", "i", "k", "a", "i", "Space", "Space"});
+  ASSERT_GT(converted.candidate_window().candidate_size(), 0);
+  EXPECT_EQ(converted.candidate_window().candidate(0).value(), "機械");
+  EXPECT_EQ(
+      converted.candidate_window().candidate(0).annotation().description(),
+      "固定");
+  SendKeys({"Escape"});
+  SendKeys({"Escape"});
+
+  // The key again on the pinned word unpins it.
+  ASSERT_EQ(Preedit(ConvertKikai()), "機械");
+  SendKeys({"Ctrl Shift p"});
+  EXPECT_FALSE(floatype::ZenzMemory::Pinned().Contains("きかい", "機械"));
+  SendKeys({"Escape"});
+  SendKeys({"Escape"});
+  EXPECT_EQ(Preedit(ConvertKikai()), "機会");
+}
+
+TEST_F(FloatypeZenzTest, ZenzLeavesAPinnedWord) {
+  // Mozc's 機会, pinned, which zenz would correct to 機械.
+  ASSERT_EQ(Preedit(SendKeys({"k", "i", "k", "a", "i", "Space"})), "機会");
+  SendKeys({"Ctrl Shift p"});
+  ASSERT_TRUE(floatype::ZenzMemory::Pinned().Contains("きかい", "機会"));
+  SendKeys({"Escape"});
+  SendKeys({"Escape"});
+  EXPECT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機会");
+  SendKeys({"Escape"});
+  SendKeys({"Escape"});
+
+  // Nor does a correction committed before show at once.
+  floatype::ZenzMemory::Accepted().Add("きかい", "機械");
+  EXPECT_EQ(Preedit(ConvertKikai()), "機会");
+  SendKeys({"Escape"});
+  SendKeys({"Escape"});
+
+  // Clearing the history keeps the pin, as it keeps the user dictionary.
+  commands::Input clear;
+  clear.set_type(commands::Input::CLEAR_USER_HISTORY);
+  Eval(std::move(clear));
+  EXPECT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機会");
+}
+
 TEST_F(FloatypeZenzTest, ACommittedCorrectionShowsAtOnceNextTime) {
   ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
   ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機械");

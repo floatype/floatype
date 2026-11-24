@@ -1103,6 +1103,17 @@ bool EngineConverter::DeleteCandidateFromHistory(std::optional<int> id) {
       segments_, segments_.history_segments_size() + segment_index_, *id);
 }
 
+converter::Candidate* EngineConverter::mutable_focused_candidate() {
+  if (!CheckState(CONVERSION) || !candidate_list_.focused() ||
+      segment_index_ >= segments_.conversion_segments_size()) {
+    return nullptr;
+  }
+  Segment* segment = segments_.mutable_conversion_segment(segment_index_);
+  const int id = candidate_list_.focused_candidate().id();
+  return segment->is_valid_index(id) ? segment->mutable_candidate(id)
+                                     : nullptr;
+}
+
 void EngineConverter::SegmentFocusInternal(size_t index) {
   DCHECK(CheckState(PREDICTION | CONVERSION));
   candidate_list_visible_ = false;
