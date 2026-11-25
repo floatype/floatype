@@ -182,3 +182,10 @@ regression	ちょいのり	ちょい乗り	Conversion Expected
 regression	どらいぶするー	ドライブスルー	Conversion Expected
 regression	あいすきゅーぶ	アイスキューブ	Conversion Expected
 regression	かきわすれた	書き忘れた	Conversion Expected
+floatype_issue32	いんごっと	インゴット	Conversion Expected
+floatype_issue32	いんごっと	ingot	Conversion Expected 3
+floatype_issue32	いんごっと	Ingot	Conversion Expected 3
+floatype_issue32	こんぴゅーたー	computer	Conversion Expected 9
+floatype_issue32	のーてぃふぃけーしょん	ノーティフィケーション	Conversion Expected
+floatype_issue32	のーてぃふぃけーしょん	notification	Conversion Expected 9
+floatype_issue32	びーる	beer	Conversion Expected 2

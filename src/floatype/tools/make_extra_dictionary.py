@@ -121,13 +121,21 @@ def pos_ids() -> dict[str, int]:
   return ids
 
 
+def mozc_dictionaries() -> list[Path]:
+  """What counts as Mozc's dictionary: its files and the time words, not the
+  ones this script writes, nor the loanwords' English
+  (make_katakana_english.py): their readings would raise the cost of the
+  same readings here, which was measured without them."""
+  return [p for p in sorted(OUT_DIR.glob("dictionary*.txt"))
+          if not p.name.startswith("dictionary_floatype_ut_")
+          and p.name != "dictionary_floatype_english.txt"]
+
+
 def base_entries(ids: dict[str, int]):
   """(reading, value) pairs Mozc has, its readings, its surnames and given
   names, and its common written forms."""
   pairs, readings, surnames, given, common = set(), set(), set(), set(), set()
-  for path in sorted(OUT_DIR.glob("dictionary*.txt")):
-    if path.name.startswith("dictionary_floatype_ut_"):
-      continue
+  for path in mozc_dictionaries():
     for line in path.read_text().splitlines():
       reading, left, _, cost, value = line.split("\t")[:5]
       pairs.add((reading, value))
@@ -335,9 +343,8 @@ def inputs_hash() -> str:
   """What the outputs depend on: this script (which pins the downloads) and
   Mozc's own dictionary files."""
   digest = hashlib.sha256(Path(__file__).read_bytes())
-  for path in [OUT_DIR / "id.def", *sorted(OUT_DIR.glob("dictionary*.txt"))]:
-    if not path.name.startswith("dictionary_floatype_ut_"):
-      digest.update(path.name.encode() + path.read_bytes())
+  for path in [OUT_DIR / "id.def", *mozc_dictionaries()]:
+    digest.update(path.name.encode() + path.read_bytes())
   return digest.hexdigest()
 
 

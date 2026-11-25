@@ -853,7 +853,7 @@ void ConfigDialog::SetUpFloatypeSettings() {
   });
   // サジェスト
   suggestAddedWordsCheckBox_ = new QCheckBox(
-      Text("足した辞書（人名、地名、SudachiDict、ニコニコ・pixiv）の語も出す"
+      Text("足した辞書（人名、地名、SudachiDict、ニコニコ・pixiv、外来語の英語）の語も出す"
            "（オフなら、読みを最後まで打って変換したときだけ出る）"));
   gridLayout_4->addWidget(WithBadge(suggestAddedWordsCheckBox_),
                           gridLayout_4->rowCount(), 0, 1, 3);

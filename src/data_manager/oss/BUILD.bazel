@@ -85,7 +85,7 @@ mozc_dataset(
         "//data/dictionary_oss:collocation.txt"
     ),
     collocation_suppression_src = (
-        "//data/dictionary_oss:collocation_suppression.txt"
+        "//data/dictionary_oss:collocation_suppression_all"
     ),
     connection_single_column_src = "//data/dictionary_oss:connection_single_column.txt",
     dictionary_srcs = [
