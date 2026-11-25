@@ -58,6 +58,12 @@ std::optional<IndicatorRect> PlaceIndicator(
     double composition_bottom, const IndicatorRect& screen,
     const IndicatorRect* obstacle);
 
+// The bottom the candidate window goes below, in the client's coordinates (y
+// down): the composition's last line where it wraps below the focused
+// segment's line (#41; `composition_bottom` 0 when unknown), else the
+// segment's. Vertical writing keeps the segment's.
+int CandidatesBelow(int preedit_bottom, int composition_bottom, bool vertical);
+
 // The frame for vertical writing, where the composition runs down a column
 // from `column_left` to `column_right` with its top at `column_top`: right of
 // the column at its top, or left of it when the right side leaves the screen
