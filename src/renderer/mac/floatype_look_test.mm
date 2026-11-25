@@ -371,17 +371,20 @@ TEST(FloatypeLookTest, TheFooterDotTakesTheStylesColor) {
 }
 
 // The leftmost and rightmost columns in `rect` with ink: a pixel far from the
-// light look's white background.
+// light look's white background. Draws once: ColorAt draws per call.
 std::pair<double, double> InkColumns(CandidateView *view, const mozc::Rect &rect) {
+  NSBitmapImageRep *image = [view bitmapImageRepForCachingDisplayInRect:view.bounds];
+  [view cacheDisplayInRect:view.bounds toBitmapImageRep:image];
+  const double scale = image.pixelsWide / NSWidth(view.bounds);
   double first = rect.Right(), last = rect.Left();
-  for (double x = rect.Left(); x < rect.Right(); x += 0.5) {
-    for (double y = rect.Top(); y < rect.Bottom(); y += 0.5) {
-      const uint32_t color = ColorAt(view, x, y);
-      const int darkness = 3 * 255 - static_cast<int>((color >> 16 & 0xff) +
-                                                      (color >> 8 & 0xff) + (color & 0xff));
-      if (darkness > 120) {
-        first = std::min(first, x);
-        last = std::max(last, x);
+  for (int x = rect.Left() * scale; x < rect.Right() * scale; ++x) {
+    for (int y = rect.Top() * scale; y < rect.Bottom() * scale; ++y) {
+      NSColor *color = [[image colorAtX:x y:y] colorUsingColorSpace:NSColorSpace.sRGBColorSpace];
+      const double darkness =
+          3 - (color.redComponent + color.greenComponent + color.blueComponent);
+      if (color.alphaComponent > 0.5 && darkness > 120 / 255.0) {
+        first = std::min(first, x / scale);
+        last = std::max(last, x / scale);
       }
     }
   }
