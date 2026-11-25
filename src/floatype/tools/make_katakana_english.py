@@ -21,7 +21,7 @@ from pathlib import Path
 
 LEX_SHA256 = "5c892d88de9bb87dd90a2c1b2492b4cce0d13dacd9888d25e05298a00612a376"
 OUT = Path("data/dictionary_oss/dictionary_floatype_english.txt")
-# They convert but are not suggested, as the other added words.
+# The English converts but is not suggested, as the other added words.
 FILTER = Path("data/dictionary_oss/suggestion_filter_floatype_english.txt")
 NOTICE = Path("data/dictionary_oss/UniDic-BSD")
 ENGLISH = Path("floatype/english/english_words.txt")
@@ -136,10 +136,10 @@ def main() -> None:
     rows = list(entries(csv.reader(f), english, mozc_words, katakana_words))
   OUT.write_text("".join("\t".join(map(str, row)) + "\n" for row in rows),
                  encoding="utf-8")
-  # A katakana word Mozc has under another reading (エヴァー) stays suggested.
+  # Only the English: the filter goes by the word, and the katakana words
+  # are what Mozc suggested before as unknown words (アイアムパス).
   FILTER.write_text("".join(f"{w}\n" for w in sorted(
-      {row[4] for row in rows if row[4].lower() not in mozc_words})),
-                    encoding="utf-8")
+      {row[4] for row in rows if row[4].isascii()})), encoding="utf-8")
   NOTICE.write_text((unidic / "liceses" / "BSD").read_text(encoding="utf-8"),
                     encoding="utf-8")
   print(f"{len(rows)} entries")
