@@ -101,6 +101,9 @@ message Annotation {
   // Actual value to be displayed. Uses it to encode meta information
   // in the value. e.g., puts "_" to clarify the unrecognizable white spaces.
   optional string display_value = 7;
+  // floatype: set to true if ⌃⌫ hides this candidate (#38): one of several,
+  // not deletable from history.
+  optional bool hideable = 1001 [default = false];
 }
 
 // Additional information to a candidate word.  This message is

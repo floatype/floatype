@@ -274,14 +274,12 @@ EXPECT_PREEDIT	平面図
 SEND_KEY	TAB
 EXPECT_PREEDIT	経い目
 
-# Try deleting it. Nothing should happen.
+# floatype: Ctrl-Del hides it (#38), and the state is back in composition.
 SEND_KEY	CTRL DELETE
-
-# After hitting Ctrl-Del, nothing happend and preedit is kept as before.
-EXPECT_PREEDIT	経い目
+EXPECT_PREEDIT	へいめ
+EXPECT_NOT_IN_ALL_CANDIDATE_WORDS	経い目
 
 # Next commit 平面図 and delete it
-SEND_KEY	ESC
 SEND_KEY	TAB
 EXPECT_PREEDIT	平面図
 SEND_KEY	ENTER
@@ -302,5 +300,6 @@ SEND_KEY	TAB
 EXPECT_PREEDIT	平面図
 
 # Try deleting it. Nothing should happen for the already deleted history.
+# floatype: nor is it hidden here (#38): not hideable in this list.
 SEND_KEY	CTRL DELETE
 EXPECT_PREEDIT	平面図

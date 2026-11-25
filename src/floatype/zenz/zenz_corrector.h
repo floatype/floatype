@@ -95,7 +95,8 @@ std::string ConversionReading(const Segments& segments);
 // ZenzCorrector::Request() sends nothing else.
 std::string SafeContext(absl::string_view context);
 // Whether `mapping` of `segments` shows a word the user chose another
-// candidate over (ZenzMemory::TurnedDown()). On the conversion's own segments
+// candidate over (ZenzMemory::TurnedDown()) or hid (ZenzMemory::Hidden(),
+// #38). On the conversion's own segments
 // the first candidates are Mozc's and are not looked at.
 bool UsesTurnedDown(const Segments& segments, const Mapping& mapping);
 // Keeps Mozc's first candidate where it is a word the user pinned

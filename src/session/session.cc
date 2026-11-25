@@ -2954,6 +2954,18 @@ bool Session::DeleteCandidateFromHistory(commands::Command* command) {
   if (command->input().has_command() && command->input().command().has_id()) {
     id = command->input().command().id();
   }
+  // floatype: ⌃⌫ on a candidate in the shown list that has no history to
+  // delete hides it (#38): no conversion or prediction shows it again. A
+  // pin on it goes too. As after deleting history, the list closes.
+  if (id == std::nullopt) {
+    if (const auto hidden =
+            context_->mutable_converter()->HideableFocusedCandidate();
+        hidden.has_value()) {
+      floatype::ZenzMemory::Hidden().Add(hidden->first, hidden->second);
+      floatype::ZenzMemory::Pinned().Remove(hidden->first, hidden->second);
+      return ConvertCancel(command);
+    }
+  }
   if (!context_->mutable_converter()->DeleteCandidateFromHistory(id)) {
     return DoNothing(command);
   }

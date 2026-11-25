@@ -47,7 +47,7 @@ char* Copy(absl::string_view text) {
 // forgetting everything keeps it, as clearing the history does.
 ZenzMemory& (*const kMemories[])() = {
     &ZenzMemory::TurnedDown, &ZenzMemory::RefusedOnce, &ZenzMemory::Accepted,
-    &ZenzMemory::Stopped, &ZenzMemory::Pinned};
+    &ZenzMemory::Stopped, &ZenzMemory::Pinned, &ZenzMemory::Hidden};
 
 // english_words.txt as read, so that an edit never writes over a file changed
 // or unreadable since.
@@ -329,7 +329,8 @@ void FloatypeSettingsZenzForget(int kind, const char* reading,
 
 void FloatypeSettingsZenzForgetAll(void) {
   for (ZenzMemory& (*memory)() : kMemories) {
-    if (memory != &ZenzMemory::Pinned) {
+    // The user's own choices stay, as the user dictionary does.
+    if (memory != &ZenzMemory::Pinned && memory != &ZenzMemory::Hidden) {
       memory().Clear();
     }
   }

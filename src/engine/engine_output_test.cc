@@ -783,6 +783,50 @@ TEST(EngineOutputTest, FillFooter) {
   }
 }
 
+// floatype: #38's hint, for a candidate ⌃⌫ hides, and which those are.
+TEST(EngineOutputTest, FillFooterHintsHiding) {
+  commands::CandidateWindow candidate_window;
+  for (int i = 0; i < 2; ++i) {
+    commands::CandidateWindow::Candidate* c = candidate_window.add_candidate();
+    c->set_index(i);
+    c->set_id(i);
+    c->set_value("dummy");
+    c->mutable_annotation()->set_hideable(i == 1);
+  }
+  candidate_window.set_focused_index(1);
+  ASSERT_TRUE(output::FillFooter(commands::CONVERSION, &candidate_window));
+  if constexpr (port::IsAppleBase()) {
+    EXPECT_EQ(candidate_window.footer().label(), "⌃⌫ で候補非表示");
+  } else {
+    EXPECT_EQ(candidate_window.footer().label(), "Ctrl+Delで候補非表示");
+  }
+  candidate_window.clear_footer();
+  candidate_window.set_focused_index(0);
+  ASSERT_TRUE(output::FillFooter(commands::CONVERSION, &candidate_window));
+  EXPECT_FALSE(candidate_window.footer().has_label());
+
+  Segment segment;
+  segment.set_key("きかい");
+  for (const char* value : {"機会", "機械"}) {
+    converter::Candidate* candidate = segment.add_candidate();
+    candidate->key = candidate->content_key = "きかい";
+    candidate->value = candidate->content_value = value;
+  }
+  EXPECT_TRUE(output::CanHideCandidate(segment, 1));
+  segment.mutable_candidate(1)->attributes |=
+      converter::Attribute::USER_HISTORY_PREDICTION;
+  EXPECT_FALSE(output::CanHideCandidate(segment, 1)) << "history goes instead";
+  segment.mutable_candidate(1)->attributes =
+      converter::Attribute::COMMAND_CANDIDATE;
+  EXPECT_FALSE(output::CanHideCandidate(segment, 1)) << "a command";
+  segment.mutable_candidate(0)->content_value.clear();
+  EXPECT_FALSE(output::CanHideCandidate(segment, 0)) << "no word";
+  segment.erase_candidate(1);
+  segment.mutable_candidate(0)->content_value = "機会";
+  EXPECT_FALSE(output::CanHideCandidate(segment, 0)) << "the only one";
+  EXPECT_FALSE(output::CanHideCandidate(segment, 5)) << "no such";
+}
+
 TEST(EngineOutputTest, FillSubLabel) {
   commands::Footer footer;
   footer.set_label("to be deleted");

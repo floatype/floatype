@@ -84,6 +84,11 @@ void FillShortcuts(absl::string_view shortcuts,
 // called on dev_channel and unittest.
 void FillSubLabel(commands::Footer* footer_proto);
 
+// floatype: whether ⌃⌫ hides `segment`'s candidate `id` (#38): one of
+// several with a reading and a word, not deletable from history (which ⌃⌫
+// deletes instead) and not a command. The footer's hint and the key go by it.
+bool CanHideCandidate(const Segment& segment, int id);
+
 // Fill the footer contents of Candidates protobuf.  If category is
 // modified, true is returned.  Otherwise false is returned.
 bool FillFooter(commands::Category category,

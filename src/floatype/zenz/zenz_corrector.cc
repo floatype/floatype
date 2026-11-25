@@ -1224,7 +1224,9 @@ bool UsesTurnedDown(const Segments& segments, const Mapping& mapping) {
       continue;
     }
     const converter::Candidate& candidate = segment.candidate(index);
-    if (memory.Contains(candidate.content_key, candidate.content_value)) {
+    if (memory.Contains(candidate.content_key, candidate.content_value) ||
+        ZenzMemory::Hidden().Contains(candidate.content_key,
+                                      candidate.content_value)) {
       return true;
     }
   }

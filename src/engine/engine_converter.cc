@@ -1120,6 +1120,20 @@ converter::Candidate* EngineConverter::mutable_focused_candidate() {
                                                 : nullptr;
 }
 
+std::optional<std::pair<std::string, std::string>>
+EngineConverter::HideableFocusedCandidate() {
+  const converter::Candidate* candidate = mutable_focused_candidate();
+  if (candidate == nullptr ||
+      !output::CanHideCandidate(segments_.conversion_segment(segment_index_),
+                                candidate_list_.focused_id())) {
+    return std::nullopt;
+  }
+  if (CheckState(PREDICTION)) {
+    return std::make_pair(candidate->key, candidate->value);
+  }
+  return std::make_pair(candidate->content_key, candidate->content_value);
+}
+
 void EngineConverter::SegmentFocusInternal(size_t index) {
   DCHECK(CheckState(PREDICTION | CONVERSION));
   candidate_list_visible_ = false;

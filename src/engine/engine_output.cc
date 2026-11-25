@@ -196,6 +196,9 @@ void FillCandidate(const Segment& segment, const Candidate& candidate,
   if (FillAnnotation(candidate_value, &annotation)) {
     *candidate_proto->mutable_annotation() = annotation;
   }
+  if (CanHideCandidate(segment, candidate.id())) {
+    candidate_proto->mutable_annotation()->set_hideable(true);
+  }
 
   if (!candidate_value.usage_title.empty()) {
     candidate_proto->set_information_id(candidate_value.usage_id);
@@ -358,6 +361,19 @@ void FillSubLabel(commands::Footer* footer) {
   }
 }
 
+bool CanHideCandidate(const Segment& segment, const int id) {
+  if (segment.candidates_size() <= 1 || !segment.is_valid_index(id)) {
+    return false;
+  }
+  const converter::Candidate& candidate = segment.candidate(id);
+  const bool deletable =
+      (candidate.attributes & converter::Attribute::USER_HISTORY_PREDICTION) &&
+      !(candidate.attributes & converter::Attribute::NO_DELETABLE);
+  return !deletable && !candidate.content_key.empty() &&
+         !candidate.content_value.empty() &&
+         !(candidate.attributes & converter::Attribute::COMMAND_CANDIDATE);
+}
+
 bool FillFooter(const commands::Category category,
                 commands::CandidateWindow* candidate_window) {
   if (category != commands::SUGGESTION && category != commands::PREDICTION &&
@@ -399,6 +415,17 @@ bool FillFooter(const commands::Category category,
             }
           }();
           footer->set_label(kDeleteInstruction);
+          show_build_number = false;
+        } else if (cand.has_annotation() && cand.annotation().hideable()) {
+          // floatype: ⌃⌫ hides it (#38).
+          const absl::string_view kHideInstruction = []() {
+            if constexpr (port::IsAppleBase()) {
+              return "⌃⌫ で候補非表示";
+            } else {
+              return "Ctrl+Delで候補非表示";
+            }
+          }();
+          footer->set_label(kHideInstruction);
           show_build_number = false;
         }
         break;
