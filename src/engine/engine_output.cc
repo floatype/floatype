@@ -196,7 +196,9 @@ void FillCandidate(const Segment& segment, const Candidate& candidate,
   if (FillAnnotation(candidate_value, &annotation)) {
     *candidate_proto->mutable_annotation() = annotation;
   }
-  if (CanHideCandidate(segment, candidate.id())) {
+  if (CanForgetCandidate(segment, candidate.id())) {
+    candidate_proto->mutable_annotation()->set_forgettable(true);
+  } else if (CanHideCandidate(segment, candidate.id())) {
     candidate_proto->mutable_annotation()->set_hideable(true);
   }
 
@@ -361,8 +363,17 @@ void FillSubLabel(commands::Footer* footer) {
   }
 }
 
+bool CanForgetCandidate(const Segment& segment, const int id) {
+  // Mozc's forgetting clears what put the first candidate first, whichever
+  // candidate is focused (UserSegmentHistoryRewriter::ClearHistoryEntry).
+  return id == 0 && segment.candidates_size() > 1 &&
+         (segment.candidate(0).attributes &
+          converter::Attribute::USER_SEGMENT_HISTORY_REWRITER);
+}
+
 bool CanHideCandidate(const Segment& segment, const int id) {
-  if (segment.candidates_size() <= 1 || !segment.is_valid_index(id)) {
+  if (segment.candidates_size() <= 1 || !segment.is_valid_index(id) ||
+      CanForgetCandidate(segment, id)) {
     return false;
   }
   const converter::Candidate& candidate = segment.candidate(id);
@@ -415,6 +426,17 @@ bool FillFooter(const commands::Category category,
             }
           }();
           footer->set_label(kDeleteInstruction);
+          show_build_number = false;
+        } else if (cand.has_annotation() && cand.annotation().forgettable()) {
+          // floatype: ⌃⌫ forgets the learned order first (#38).
+          const absl::string_view kForgetInstruction = []() {
+            if constexpr (port::IsAppleBase()) {
+              return "⌃⌫ で学習を忘れる";
+            } else {
+              return "Ctrl+Delで学習を忘れる";
+            }
+          }();
+          footer->set_label(kForgetInstruction);
           show_build_number = false;
         } else if (cand.has_annotation() && cand.annotation().hideable()) {
           // floatype: ⌃⌫ hides it (#38).

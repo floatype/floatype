@@ -939,6 +939,21 @@ bool UserSegmentHistoryRewriter::ClearHistoryEntry(const Segments& segments,
   result |= DeleteEntry(fkey.RightNumber(key, value));
   result |= DeleteEntry(fkey.Single(key, value));
   result |= DeleteEntry(fkey.Current(key, value));
+  // floatype: RememberFirstCandidate() also learns the content word (機械 of
+  // 機械に), which alone kept 機械に first after forgetting (#38).
+  absl::string_view content_key = candidate.content_key;
+  absl::string_view content_value = candidate.content_value;
+  if (content_key != key || content_value != value) {
+    result |= DeleteEntry(fkey.LeftRight(content_key, content_value));
+    result |= DeleteEntry(fkey.LeftLeft(content_key, content_value));
+    result |= DeleteEntry(fkey.RightRight(content_key, content_value));
+    result |= DeleteEntry(fkey.Left(content_key, content_value));
+    result |= DeleteEntry(fkey.Right(content_key, content_value));
+    result |= DeleteEntry(fkey.LeftNumber(content_key, content_value));
+    result |= DeleteEntry(fkey.RightNumber(content_key, content_value));
+    result |= DeleteEntry(fkey.Single(content_key, content_value));
+    result |= DeleteEntry(fkey.Current(content_key, content_value));
+  }
   return result;
 }
 

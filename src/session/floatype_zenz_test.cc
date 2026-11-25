@@ -1454,6 +1454,65 @@ TEST_F(FloatypeZenzTest, AHiddenWordIsGone) {
   EXPECT_TRUE(floatype::ZenzMemory::Hidden().Entries().empty());
 }
 
+// #38: on a word Mozc learned to put first, ⌃⌫ first forgets that, so the word
+// goes back to the dictionary's place; pressed again there, it hides it.
+TEST_F(FloatypeZenzTest, ForgettingALearnedWordComesBeforeHidingIt) {
+  StartSession(/*zenz=*/false);
+  ASSERT_EQ(Preedit(SendKeys({"k", "i", "k", "a", "i", "Space", "Space"})),
+            "機械");
+  SendKeys({"Enter"});
+  StartSession(/*zenz=*/false);
+  ASSERT_EQ(Preedit(SendKeys({"k", "i", "k", "a", "i", "Space"})), "機械");
+  const commands::Output learned = SendKeys({"Space", "Up"});
+  ASSERT_EQ(Preedit(learned), "機械");
+  EXPECT_EQ(learned.candidate_window().footer().label(), "⌃⌫ で学習を忘れる");
+  SendKeys({"Ctrl Delete"});
+  EXPECT_TRUE(floatype::ZenzMemory::Hidden().Entries().empty());
+  SendKeys({"Escape"});
+  SendKeys({"Escape"});
+
+  ASSERT_EQ(Preedit(SendKeys({"k", "i", "k", "a", "i", "Space"})), "機会")
+      << "forgotten";
+  const commands::Output listed = SendKeys({"Space"});
+  ASSERT_EQ(Preedit(listed), "機械");
+  EXPECT_EQ(listed.candidate_window().footer().label(), "⌃⌫ で候補非表示");
+  SendKeys({"Ctrl Delete"});
+  EXPECT_TRUE(floatype::ZenzMemory::Hidden().Contains("きかい", "機械"));
+  SendKeys({"Escape"});
+  SendKeys({"Escape"});
+  // Brought back, it is in the dictionary's place, not first.
+  floatype::ZenzMemory::Hidden().Clear();
+  EXPECT_EQ(Preedit(SendKeys({"k", "i", "k", "a", "i", "Space"})), "機会");
+}
+
+// #38: the same with a particle (Mozc learns 機械に and 機械) and in a live
+// conversion, as the user types: one ⌃⌫ forgets, a second one hides.
+TEST_F(FloatypeZenzTest, ForgettingALearnedWordWithAParticleInALiveConversion) {
+  floatype::EnableSessionFeatures(true);
+  StartSession(/*zenz=*/false);
+  const auto live = [this] {
+    return Preedit(CallBack(SendKeys({"k", "i", "k", "a", "i", "n", "i"})));
+  };
+  ASSERT_EQ(live(), "機会に");
+  // A live conversion shows the first candidate: Space goes to the second.
+  ASSERT_EQ(Preedit(SendKeys({"Space"})), "機械に");
+  SendKeys({"Enter"});
+  StartSession(/*zenz=*/false);
+  ASSERT_EQ(live(), "機械に") << "learned";
+  const commands::Output learned = SendKeys({"Space", "Up"});
+  ASSERT_EQ(Preedit(learned), "機械に");
+  EXPECT_EQ(learned.candidate_window().footer().label(), "⌃⌫ で学習を忘れる");
+  SendKeys({"Ctrl Delete"});
+  SendKeys({"Escape"});
+  SendKeys({"Escape"});
+  EXPECT_EQ(live(), "機会に") << "forgotten";
+  const commands::Output listed = SendKeys({"Space"});
+  ASSERT_EQ(Preedit(listed), "機械に");
+  EXPECT_EQ(listed.candidate_window().footer().label(), "⌃⌫ で候補非表示");
+  SendKeys({"Escape"});
+  SendKeys({"Escape"});
+}
+
 // #38: from the prediction list, a row is hidden as shown: only that row goes,
 // not every row of its first word.
 TEST_F(FloatypeZenzTest, HidingAPredictedPhraseKeepsItsWord) {

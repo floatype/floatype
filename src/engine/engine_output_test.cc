@@ -804,6 +804,15 @@ TEST(EngineOutputTest, FillFooterHintsHiding) {
   candidate_window.set_focused_index(0);
   ASSERT_TRUE(output::FillFooter(commands::CONVERSION, &candidate_window));
   EXPECT_FALSE(candidate_window.footer().has_label());
+  candidate_window.clear_footer();
+  candidate_window.mutable_candidate(0)->mutable_annotation()->set_forgettable(
+      true);
+  ASSERT_TRUE(output::FillFooter(commands::CONVERSION, &candidate_window));
+  if constexpr (port::IsAppleBase()) {
+    EXPECT_EQ(candidate_window.footer().label(), "⌃⌫ で学習を忘れる");
+  } else {
+    EXPECT_EQ(candidate_window.footer().label(), "Ctrl+Delで学習を忘れる");
+  }
 
   Segment segment;
   segment.set_key("きかい");
@@ -816,6 +825,15 @@ TEST(EngineOutputTest, FillFooterHintsHiding) {
   segment.mutable_candidate(1)->attributes |=
       converter::Attribute::USER_HISTORY_PREDICTION;
   EXPECT_FALSE(output::CanHideCandidate(segment, 1)) << "history goes instead";
+  segment.mutable_candidate(1)->attributes = 0;
+  EXPECT_FALSE(output::CanForgetCandidate(segment, 0));
+  segment.mutable_candidate(0)->attributes =
+      converter::Attribute::USER_SEGMENT_HISTORY_REWRITER;
+  EXPECT_TRUE(output::CanForgetCandidate(segment, 0)) << "learned first";
+  EXPECT_FALSE(output::CanHideCandidate(segment, 0)) << "forgotten instead";
+  EXPECT_FALSE(output::CanForgetCandidate(segment, 1));
+  EXPECT_TRUE(output::CanHideCandidate(segment, 1));
+  segment.mutable_candidate(0)->attributes = 0;
   segment.mutable_candidate(1)->attributes =
       converter::Attribute::COMMAND_CANDIDATE;
   EXPECT_FALSE(output::CanHideCandidate(segment, 1)) << "a command";
