@@ -40,6 +40,7 @@
 
 #include "absl/log/log.h"
 #include "absl/strings/match.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
 #include "client/client_interface.h"
@@ -114,7 +115,9 @@ NSFont *FontOf(const NSAttributedString *text) {
 - (void)initializeDefaultStyle;
 - (BOOL)systemDark;
 - (BOOL)updateLook;
-- (NSAttributedString *)footerText;
+- (std::string)footerLabel;
+- (std::string)footerIndex;
+- (NSAttributedString *)footerTextWithIndexAt:(CGFloat)indexRight;
 // floatype: the space between a pinned word and its pin.
 - (CGFloat)pinGap;
 
@@ -272,12 +275,20 @@ NSFont *FontOf(const NSAttributedString *text) {
     focusedRow_ = -1;
   }
 
-  // Reserve footer space: floatype's plain line, right-aligned.
+  // Reserve footer space: floatype's line, the label left and the index
+  // right with a gap between.
   if (candidate_window_.has_footer()) {
-    const NSSize textSize = [[self footerText] size];
+    const auto width = [&](const std::string &text) {
+      return text.empty() ? 0.0
+                          : MacViewUtil::ToNSAttributedString(text, style_.footer_style()).size.width;
+    };
+    const CGFloat label = width([self footerLabel]);
+    const CGFloat index = width([self footerIndex]);
+    const CGFloat gap = label > 0 && index > 0 ? 2 * look_.row_padding : 0;
     const CGFloat mark = [self hasKindMark] ? [self kindMarkDiameter] + look_.row_padding : 0;
+    const NSSize textSize = [[self footerTextWithIndexAt:label + gap + index] size];
     tableLayout_.EnsureFooterSize(MacViewUtil::ToSize(NSMakeSize(
-        std::ceil(textSize.width + 2 * look_.row_padding + mark),
+        std::ceil(label + gap + index + 2 * look_.row_padding + mark),
         std::ceil(textSize.height + look_.footer_top_padding + look_.footer_bottom_padding))));
   }
 
@@ -491,8 +502,8 @@ NSFont *FontOf(const NSAttributedString *text) {
   return 3 * look_.size_percent / 100.0;
 }
 
-// floatype: the footer's label, sub label and index ("1 / 3") as one line.
-- (NSAttributedString *)footerText {
+// floatype: the footer's label and sub label, at its left.
+- (std::string)footerLabel {
   const mozc::commands::Footer &footer = candidate_window_.footer();
   std::vector<std::string> parts;
   if (footer.has_label()) {
@@ -501,12 +512,41 @@ NSFont *FontOf(const NSAttributedString *text) {
   if (footer.has_sub_label()) {
     parts.push_back(footer.sub_label());
   }
-  if (footer.index_visible()) {
-    parts.push_back(absl::StrFormat("%d / %d",
-                                    candidate_window_.focused_index() + 1,  // 1-origin.
-                                    candidate_window_.size()));
+  return absl::StrJoin(parts, "  ");
+}
+
+// floatype: the footer's index ("1 / 3"), at its right.
+- (std::string)footerIndex {
+  if (!candidate_window_.footer().index_visible()) {
+    return "";
   }
-  return MacViewUtil::ToNSAttributedString(absl::StrJoin(parts, "  "), style_.footer_style());
+  return absl::StrFormat("%d / %d",
+                         candidate_window_.focused_index() + 1,  // 1-origin.
+                         candidate_window_.size());
+}
+
+// floatype: the footer as one line, the label, a tab, and the index ending at
+// `indexRight` from the line's start (the user asked for the label at the
+// left). One line keeps both on one baseline. Without a label, an ideographic
+// space keeps the Japanese line's height, so the window does not jump when
+// the hint comes and goes.
+- (NSAttributedString *)footerTextWithIndexAt:(CGFloat)indexRight {
+  const std::string label = [self footerLabel];
+  const std::string index = [self footerIndex];
+  std::string text = label.empty() ? "\u3000" : label;
+  if (!index.empty()) {
+    absl::StrAppend(&text, "\t", index);
+  }
+  NSMutableAttributedString *line =
+      [MacViewUtil::ToNSAttributedString(text, style_.footer_style()) mutableCopy];
+  NSMutableParagraphStyle *paragraph = [[NSMutableParagraphStyle alloc] init];
+  paragraph.tabStops = @[ [[NSTextTab alloc] initWithTextAlignment:NSTextAlignmentRight
+                                                          location:indexRight
+                                                           options:@{}] ];
+  [line addAttribute:NSParagraphStyleAttributeName
+               value:paragraph
+               range:NSMakeRange(0, line.length)];
+  return line;
 }
 
 - (void)drawFooter {
@@ -514,9 +554,11 @@ NSFont *FontOf(const NSAttributedString *text) {
     return;
   }
   const NSRect footerRect = MacViewUtil::ToNSRect(tableLayout_.GetFooterRect());
-  const NSAttributedString *text = [self footerText];
-  [text drawAtPoint:NSMakePoint(NSMaxX(footerRect) - look_.row_padding - text.size.width,
-                                NSMinY(footerRect) + look_.footer_top_padding)];
+  const CGFloat mark = [self hasKindMark] ? [self kindMarkDiameter] + look_.row_padding : 0;
+  const CGFloat left = NSMinX(footerRect) + look_.row_padding + mark;
+  const NSAttributedString *text =
+      [self footerTextWithIndexAt:NSMaxX(footerRect) - look_.row_padding - left];
+  [text drawAtPoint:NSMakePoint(left, NSMinY(footerRect) + look_.footer_top_padding)];
   if ([self hasKindMark]) {
     const CGFloat diameter = [self kindMarkDiameter];
     const CGFloat middle = NSMinY(footerRect) + look_.footer_top_padding + text.size.height / 2;

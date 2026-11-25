@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <string>
 #include <tuple>
+#include <utility>
 
 #include "floatype/look/window_look.h"
 #include "protocol/candidate_window.pb.h"
@@ -367,6 +368,61 @@ TEST(FloatypeLookTest, TheFooterDotTakesTheStylesColor) {
   const mozc::Rect footer = [view tableLayout]->GetFooterRect();
   ExpectNear(ColorAt(view, footer.Left() + 9 + 3.5, footer.Top() + footer.Height() / 2.0),
              0xe5484d, "the dot in the chosen color");
+}
+
+// The leftmost and rightmost columns in `rect` with ink: a pixel far from the
+// light look's white background. Draws once: ColorAt draws per call.
+std::pair<double, double> InkColumns(CandidateView *view, const mozc::Rect &rect) {
+  NSBitmapImageRep *image = [view bitmapImageRepForCachingDisplayInRect:view.bounds];
+  [view cacheDisplayInRect:view.bounds toBitmapImageRep:image];
+  const double scale = image.pixelsWide / NSWidth(view.bounds);
+  double first = rect.Right(), last = rect.Left();
+  for (int x = rect.Left() * scale; x < rect.Right() * scale; ++x) {
+    for (int y = rect.Top() * scale; y < rect.Bottom() * scale; ++y) {
+      NSColor *color = [[image colorAtX:x y:y] colorUsingColorSpace:NSColorSpace.sRGBColorSpace];
+      const double darkness =
+          3 - (color.redComponent + color.greenComponent + color.blueComponent);
+      if (color.alphaComponent > 0.5 && darkness > 120 / 255.0) {
+        first = std::min(first, x / scale);
+        last = std::max(last, x / scale);
+      }
+    }
+  }
+  return {first, last};
+}
+
+// The user asked for the hint at the left; the index stays at the right.
+TEST(FloatypeLookTest, TheFooterHintIsLeftAndTheIndexRight) {
+  commands::CandidateWindow candidates = Candidates();
+  candidates.set_category(commands::PREDICTION);
+  CandidateView *plain = ViewFor(Style());
+  [plain setCandidateWindow:&candidates];
+  const NSSize without = Draw(plain, "footer_index_only");
+  const mozc::Rect plainFooter = [plain tableLayout]->GetFooterRect();
+  const auto [plainFirst, plainLast] = InkColumns(plain, plainFooter);
+  EXPECT_GT(plainFirst, plainFooter.Left() + plainFooter.Width() / 2.0) << "the index alone, right";
+
+  candidates.mutable_footer()->set_label("⌃⌫ で履歴削除");
+  CandidateView *view = ViewFor(Style());
+  [view setCandidateWindow:&candidates];
+  const NSSize with = Draw(view, "footer_hint");
+  const mozc::Rect footer = [view tableLayout]->GetFooterRect();
+  const auto [first, last] = InkColumns(view, footer);
+  EXPECT_LT(first, footer.Left() + 9 + 3) << "the hint starts at the row padding";
+  EXPECT_GT(last, footer.Right() - 9 - 3) << "the index ends at the row padding";
+  EXPECT_EQ(with.height, without.height) << "the hint does not change the height";
+
+  CandidateView *marked = ViewFor(Style());
+  [marked setKindMark:YES];
+  [marked setCandidateWindow:&candidates];
+  Draw(marked, "footer_hint_dot");
+  const mozc::Rect markedFooter = [marked tableLayout]->GetFooterRect();
+  // Right of the dot (7) and its gap (9): the first ink is the dot's.
+  const auto [dotFirst, dotLast] = InkColumns(
+      marked, mozc::Rect(markedFooter.Left() + 9 + 7 + 1, markedFooter.Top(),
+                         markedFooter.Width() - 9 - 7 - 1, markedFooter.Height()));
+  EXPECT_GT(dotFirst, markedFooter.Left() + 9 + 7 + 9 - 2) << "the hint starts after the dot";
+  EXPECT_LT(dotFirst, markedFooter.Left() + 9 + 7 + 9 + 3);
 }
 
 TEST(FloatypeLookTest, RoundedCornersAreSeeThrough) {
