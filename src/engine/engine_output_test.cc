@@ -771,12 +771,14 @@ TEST(EngineOutputTest, FillFooter) {
       } else {
         EXPECT_EQ(candidate_window.footer().label(), "Ctrl+Delで履歴から削除");
       }
-#if defined(CHANNEL_DEV) && defined(GOOGLE_JAPANESE_INPUT_BUILD)
-    } else {
+    } else if constexpr (port::IsChannelDev() &&
+                         port::IsGoogleOfficialBuild()) {
       EXPECT_FALSE(candidate_window.footer().has_label());
       EXPECT_TRUE(candidate_window.footer().has_sub_label());
       EXPECT_EQ(candidate_window.footer().sub_label().find("build "), 0);
-#endif  // CHANNEL_DEV && GOOGLE_JAPANESE_INPUT_BUILD
+    } else {
+      EXPECT_FALSE(candidate_window.footer().has_label());
+      EXPECT_FALSE(candidate_window.footer().has_sub_label());
     }
   }
 }

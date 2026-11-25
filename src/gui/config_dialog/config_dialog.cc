@@ -340,9 +340,9 @@ ConfigDialog::ConfigDialog()
   IMEHotKeyDisabledCheckBox->setVisible(false);
 #endif  // _WIN32
 
-#ifdef CHANNEL_DEV
-  usageStatsCheckBox->setEnabled(false);
-#endif  // CHANNEL_DEV
+  if constexpr (port::IsChannelDev()) {
+    usageStatsCheckBox->setEnabled(false);
+  }
 
   // Event handlers to enable 'Apply' button, as Mozc's, made after Reload()
   // so that loading leaves it off. floatype listens to the value signals, so
@@ -1882,9 +1882,9 @@ bool ConfigDialog::eventFilter(QObject* obj, QEvent* event) {
   }
   if (event->type() == QEvent::MouseButtonRelease) {
     if (obj == usageStatsMessage) {
-#ifndef CHANNEL_DEV
-      usageStatsCheckBox->toggle();
-#endif  // CHANNEL_DEV
+      if constexpr (!port::IsChannelDev()) {
+        usageStatsCheckBox->toggle();
+      }
     } else if (obj == incognitoModeMessage) {
       incognitoModeCheckBox->toggle();
     }
