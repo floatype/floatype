@@ -205,7 +205,7 @@ struct SuggestPage: View {
         Row(title: "リアルタイム変換を有効にする") {
           Switch(isOn: store.bool("use_realtime_conversion"))
         }
-        Row(title: "足した辞書（人名、地名、SudachiDict、ニコニコ・pixiv）の語も出す",
+        Row(title: "足した辞書（人名、地名、SudachiDict、ニコニコ・pixiv、外来語の英語）の語も出す",
             detail: "オフなら、読みを最後まで打って変換したときだけ出る", floatype: true) {
           Switch(isOn: store.bool("suggest_added_words"))
         }

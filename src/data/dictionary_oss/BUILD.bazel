@@ -56,7 +56,10 @@ exports_files(
 # suggested.
 genrule(
     name = "suggestion_filter_all",
-    srcs = ["suggestion_filter.txt"] + glob(
+    srcs = [
+        "suggestion_filter.txt",
+        "suggestion_filter_floatype_english.txt",
+    ] + glob(
         ["suggestion_filter_floatype_ut.txt"],
         allow_empty = True,
     ),
@@ -99,6 +102,9 @@ filegroup(
         "dictionary09.txt",
         # floatype: days, hours and minutes (floatype/tools/make_time_words.py).
         "dictionary_floatype_time.txt",
+        # floatype: loanwords' English words from UniDic
+        # (floatype/tools/make_katakana_english.py).
+        "dictionary_floatype_english.txt",
         "//dictionary:zip_code_data",
     ] + glob(
         # floatype: made from outside data by

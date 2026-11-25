@@ -682,3 +682,10 @@ FAILED:	ちょいのり	チョイノリ	Conversion Expected	ちょい乗り	3.34
 OK:	どらいぶするー	ドライブスルー	Conversion Expected	ドライブスルー	3.35.6354
 FAILED:	あいすきゅーぶ	アイス・キューブ	Conversion Expected	アイスキューブ	3.35.6354
 FAILED:	かきわすれた	下記忘れた	Conversion Expected	書き忘れた	3.35.6354
+OK:	いんごっと	インゴット	Conversion Expected	インゴット	3.35.6354
+OK:	いんごっと	インゴット	Conversion Expected 3	ingot	3.35.6354
+OK:	いんごっと	インゴット	Conversion Expected 3	Ingot	3.35.6354
+OK:	こんぴゅーたー	コンピューター	Conversion Expected 9	computer	3.35.6354
+OK:	のーてぃふぃけーしょん	ノーティフィケーション	Conversion Expected	ノーティフィケーション	3.35.6354
+OK:	のーてぃふぃけーしょん	ノーティフィケーション	Conversion Expected 9	notification	3.35.6354
+OK:	びーる	ビール	Conversion Expected 2	beer	3.35.6354
