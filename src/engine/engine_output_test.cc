@@ -764,7 +764,7 @@ TEST(EngineOutputTest, FillFooter) {
       ASSERT_TRUE(candidate_window.footer().has_label());
       if constexpr (port::IsAppleBase()) {
         EXPECT_EQ(candidate_window.footer().label(),
-                  "⌃⌫ で履歴から削除");
+                  "⌃⌫ で履歴削除");
       } else if constexpr (port::IsChromeos()) {
         EXPECT_EQ(candidate_window.footer().label(),
                   "ctrl+alt+backspaceで履歴から削除");
