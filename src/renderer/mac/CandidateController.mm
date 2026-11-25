@@ -231,9 +231,18 @@ bool CandidateController::AlignWindows(mozc::Rect *candidate_frame) {
     return false;
   }
 
-  const mozc::Size preedit_size(
-      command_.preedit_rectangle().right() - command_.preedit_rectangle().left(),
-      command_.preedit_rectangle().bottom() - command_.preedit_rectangle().top());
+  // floatype: a wrapped composition's last line, which the client updates
+  // while the indicator shows, so that the window keeps off its later lines
+  // (#41). Only the bottom moves: the window stays at the segment's left.
+  const int preedit_width =
+      command_.preedit_rectangle().right() - command_.preedit_rectangle().left();
+  const int preedit_bottom = mozc::floatype::CandidatesBelow(
+      command_.preedit_rectangle().bottom(),
+      command_.has_composition_bounds() ? command_.composition_bounds().bottom() : 0,
+      command_.preedit_rectangle().bottom() - command_.preedit_rectangle().top() <
+          preedit_width);
+  const mozc::Size preedit_size(preedit_width,
+                                preedit_bottom - command_.preedit_rectangle().top());
   // The origin point of command_.preedit_rectangle() is the left-top of the
   // base screen which is set in MozcImkInputController. It is
   // unnecessary calculation but to support older version of GoogleJapaneseInput
