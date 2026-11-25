@@ -45,6 +45,7 @@
 #include "config/config_handler.h"
 #include "floatype/config/settings_file.h"
 #include "client/client.h"
+#include "client/client_interface.h"
 
 ABSL_FLAG(bool, register_input_source, false,
           "Register and enable the input source in the system, then exit.");
@@ -132,7 +133,8 @@ int main(int argc, char *argv[]) {
   // Start the converter server at this time explicitly to prevent the
   // slow-down of the response for initial key event.
   {
-    std::unique_ptr<mozc::client::Client> client(new mozc::client::Client);
+    std::unique_ptr<mozc::client::ClientInterface> client =
+        mozc::client::ClientFactory::NewClient();
     client->PingServer();
   }
   NSApplicationMain(argc, (const char **)argv);
