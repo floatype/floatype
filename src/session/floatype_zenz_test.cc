@@ -1417,6 +1417,76 @@ TEST_F(FloatypeZenzTest, ZenzLeavesAPinnedWord) {
   EXPECT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機会");
 }
 
+// #38: ⌃⌫ on a candidate in the list with no history hides it: the footer
+// says so, and neither Mozc nor a remembered correction shows it again.
+TEST_F(FloatypeZenzTest, AHiddenWordIsGone) {
+  StartSession(/*zenz=*/false);
+  const commands::Output listed =
+      SendKeys({"k", "i", "k", "a", "i", "Space", "Space"});
+  ASSERT_EQ(Preedit(listed), "機械");
+  EXPECT_EQ(listed.candidate_window().footer().label(), "⌃⌫ で候補非表示");
+  floatype::ZenzMemory::Pinned().Add("きかい", "機械");
+  SendKeys({"Ctrl Delete"});
+  EXPECT_TRUE(floatype::ZenzMemory::Hidden().Contains("きかい", "機械"));
+  EXPECT_FALSE(floatype::ZenzMemory::Pinned().Contains("きかい", "機械"))
+      << "its pin goes";
+  SendKeys({"Escape"});
+  SendKeys({"Escape"});
+
+  const commands::Output converted =
+      SendKeys({"k", "i", "k", "a", "i", "Space", "Space"});
+  for (const auto& candidate : converted.candidate_window().candidate()) {
+    EXPECT_NE(candidate.value(), "機械");
+  }
+  SendKeys({"Escape"});
+  SendKeys({"Escape"});
+  floatype::ZenzMemory::Accepted().Add("きかい", "機械");
+  StartSession(/*zenz=*/true);
+  EXPECT_NE(Preedit(PollWhileAsked(ConvertKikai())), "機械");
+  SendKeys({"Escape"});
+  SendKeys({"Escape"});
+
+  // Without the list shown, ⌃⌫ hides nothing (it deletes history, as Mozc's).
+  floatype::ZenzMemory::Hidden().Clear();
+  StartSession(/*zenz=*/false);
+  ASSERT_EQ(Preedit(SendKeys({"k", "i", "k", "a", "i", "Space"})), "機会");
+  SendKeys({"Ctrl Delete"});
+  EXPECT_TRUE(floatype::ZenzMemory::Hidden().Entries().empty());
+}
+
+// #38: from the prediction list, a row is hidden as shown: only that row goes,
+// not every row of its first word.
+TEST_F(FloatypeZenzTest, HidingAPredictedPhraseKeepsItsWord) {
+  StartSession(/*zenz=*/false);
+  const auto rows = [this] {
+    std::vector<std::string> values;
+    const commands::Output listed = SendKeys({"m", "o", "j", "i", "Down"});
+    for (const auto& word : listed.all_candidate_words().candidates()) {
+      values.push_back(word.value());
+    }
+    return values;
+  };
+  std::vector<std::string> before = rows();
+  SendKeys({"Escape"});
+  SendKeys({"Escape"});
+  std::string shown = Preedit(SendKeys({"m", "o", "j", "i", "Down"}));
+  for (int i = 0; i < 9 && !(absl::StartsWith(shown, "文字") && shown != "文字");
+       ++i) {
+    shown = Preedit(SendKeys({"Down"}));
+  }
+  ASSERT_TRUE(absl::StartsWith(shown, "文字") && shown != "文字") << shown;
+  SendKeys({"Ctrl Delete"});
+  const auto hidden = floatype::ZenzMemory::Hidden().Entries();
+  ASSERT_EQ(hidden.size(), 1);
+  EXPECT_EQ(hidden[0].second, shown);
+  SendKeys({"Escape"});
+  SendKeys({"Escape"});
+
+  // Only that row goes.
+  std::erase(before, shown);
+  EXPECT_EQ(rows(), before);
+}
+
 TEST_F(FloatypeZenzTest, ACommittedCorrectionShowsAtOnceNextTime) {
   ASSERT_EQ(Preedit(PollWhileAsked(ConvertKikai())), "機械");
   ASSERT_EQ(SendKeys({"Enter"}).result().value(), "機械");

@@ -37,6 +37,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 
 #include "absl/functional/function_ref.h"
 #include "absl/strings/string_view.h"
@@ -309,6 +310,14 @@ class EngineConverterInterface {
   // or a prediction, to change in place (its description), or nullptr: also
   // for a transliteration, and while no list is shown.
   virtual converter::Candidate* mutable_focused_candidate() { return nullptr; }
+  // floatype: what ⌃⌫ hides of that candidate rather than deleting history
+  // (#38; output::CanHideCandidate()), as (reading, word), or nullopt. In a
+  // conversion its content word (完治 for 完治に); in a prediction the row as
+  // shown (文字と中央, so that 文字 stays).
+  virtual std::optional<std::pair<std::string, std::string>>
+  HideableFocusedCandidate() {
+    return std::nullopt;
+  }
 
   // Operation for the candidate list.
   virtual void SetCandidateListVisible(bool visible) = 0;

@@ -4,8 +4,8 @@
 // committed, which are shown at once the next time the reading comes; the
 // words the user chose another candidate over, which zenz does not bring
 // back; and the words of a correction left once for Mozc's result, which are
-// turned down the second time. A fifth, the words the user pinned, is the
-// user's own choice rather than zenz's learning.
+// turned down the second time. Two more, the words the user pinned and the
+// ones the user hid, are the user's own choices rather than zenz's learning.
 
 #ifndef MOZC_FLOATYPE_ZENZ_ZENZ_MEMORY_H_
 #define MOZC_FLOATYPE_ZENZ_ZENZ_MEMORY_H_
@@ -60,6 +60,9 @@ class ZenzMemory {
   // reading; clearing the history keeps them, as it keeps the user
   // dictionary.
   static ZenzMemory& Pinned();
+  // Words the user hid with ⌃⌫ from a candidate list (#38): no conversion,
+  // prediction or zenz correction shows them. Kept as the pins are.
+  static ZenzMemory& Hidden();
 
  private:
   // Reads the file again if it changed since it was read or written. Without

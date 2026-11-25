@@ -39,6 +39,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/strings/string_view.h"
@@ -246,6 +247,8 @@ class EngineConverter : public EngineConverterInterface {
   int ConversionCost(absl::string_view reading) const override;
   std::vector<ReplacedCandidate> ReplacedCandidates() const override;
   converter::Candidate* mutable_focused_candidate() override;
+  std::optional<std::pair<std::string, std::string>> HideableFocusedCandidate()
+      override;
   // floatype: what StartsWord() calls; the engine gives its dictionary's.
   using WordStartLookup = std::function<bool(absl::string_view reading)>;
   void set_word_start_lookup(WordStartLookup lookup) {

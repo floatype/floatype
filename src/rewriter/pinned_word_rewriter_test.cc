@@ -88,13 +88,12 @@ TEST_F(PinnedWordRewriterTest, MovesAPredictionOnlyWithTheSetting) {
         .SetRequestType(type)
         .Build();
   };
-  EXPECT_EQ(rewriter.capability(request(ConversionRequest::PREDICTION)) &
-                RewriterInterface::PREDICTION,
-            0);
+  // Without the setting, a prediction keeps its order.
+  Segments kept;
+  AddSegment(kept, "さいとう", {{"さいとう", "斉藤"}, {"さいとう", "齋藤"}});
+  EXPECT_FALSE(rewriter.Rewrite(request(ConversionRequest::PREDICTION), &kept));
+  EXPECT_EQ(kept.conversion_segment(0).candidate(0).value, "斉藤");
   config.set_pinned_words_in_predictions(true);
-  EXPECT_NE(rewriter.capability(request(ConversionRequest::PREDICTION)) &
-                RewriterInterface::PREDICTION,
-            0);
 
   // The word itself, with its whole reading typed, comes first.
   Segments segments;
@@ -116,6 +115,35 @@ TEST_F(PinnedWordRewriterTest, MovesAPredictionOnlyWithTheSetting) {
       "齋藤さん";
   EXPECT_FALSE(
       rewriter.Rewrite(request(ConversionRequest::PREDICTION), &longer));
+}
+
+// #38: a hidden word goes from conversions and predictions, with its
+// particles (its content word), but a segment keeps one candidate.
+TEST_F(PinnedWordRewriterTest, TakesOutHiddenWords) {
+  floatype::ZenzMemory::Hidden().Add("きかい", "機械");
+  Segments segments;
+  AddSegment(segments, "きかいが",
+             {{"きかい", "機会"}, {"きかい", "機械"}, {"きかい", "器械"}});
+  segments.mutable_conversion_segment(0)->mutable_candidate(1)->value = "機械が";
+  AddSegment(segments, "きかい", {{"きかい", "機械"}});
+  ASSERT_TRUE(Rewrite(segments));
+  const Segment& segment = segments.conversion_segment(0);
+  ASSERT_EQ(segment.candidates_size(), 2);
+  EXPECT_EQ(segment.candidate(0).value, "機会");
+  EXPECT_EQ(segment.candidate(1).value, "器械");
+  EXPECT_EQ(segments.conversion_segment(1).candidates_size(), 1)
+      << "the only candidate stays";
+
+  // Predictions too, without pinned_words_in_predictions.
+  Segments predicted;
+  AddSegment(predicted, "きか", {{"きかい", "機械"}, {"きかい", "機会"}});
+  ASSERT_TRUE(PinnedWordRewriter().Rewrite(
+      ConversionRequestBuilder()
+          .SetRequestType(ConversionRequest::PREDICTION)
+          .Build(),
+      &predicted));
+  ASSERT_EQ(predicted.conversion_segment(0).candidates_size(), 1);
+  EXPECT_EQ(predicted.conversion_segment(0).candidate(0).value, "機会");
 }
 
 TEST_F(PinnedWordRewriterTest, MovesNothingWithoutPins) {

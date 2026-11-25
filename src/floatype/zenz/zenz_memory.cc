@@ -179,4 +179,10 @@ ZenzMemory& ZenzMemory::Pinned() {
   return InProfile(*memory, *path, "floatype_pinned.tsv");
 }
 
+ZenzMemory& ZenzMemory::Hidden() {
+  static absl::NoDestructor<std::unique_ptr<ZenzMemory>> memory;
+  static absl::NoDestructor<std::string> path;
+  return InProfile(*memory, *path, "floatype_hidden.tsv");
+}
+
 }  // namespace mozc::floatype

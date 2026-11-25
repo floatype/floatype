@@ -22,21 +22,36 @@ constexpr absl::string_view kMark = "📌";
 }  // namespace
 
 int PinnedWordRewriter::capability(const ConversionRequest& request) const {
-  return request.config().pinned_words_in_predictions()
-             ? RewriterInterface::ALL
-             : RewriterInterface::CONVERSION;
+  return RewriterInterface::ALL;
 }
 
 bool PinnedWordRewriter::Rewrite(const ConversionRequest& request,
                                  Segments* segments) const {
   const floatype::ZenzMemory& pinned = floatype::ZenzMemory::Pinned();
+  const floatype::ZenzMemory& hidden = floatype::ZenzMemory::Hidden();
   const bool predicting =
       request.request_type() != ConversionRequest::CONVERSION;
+  const bool pins = !predicting || request.config().pinned_words_in_predictions();
   bool modified = false;
   for (size_t i = 0; i < segments->conversion_segments_size(); ++i) {
     Segment* segment = segments->mutable_conversion_segment(i);
     // A segment the user has fixed keeps what was chosen there.
     if (segment->segment_type() == Segment::FIXED_VALUE) {
+      continue;
+    }
+    // From the end, so that the indices ahead stay; the last one stays, as a
+    // segment needs a candidate.
+    for (size_t j = segment->candidates_size(); j-- > 0;) {
+      const converter::Candidate& candidate = segment->candidate(j);
+      // A word hidden from a conversion, or a row from a prediction list.
+      if (segment->candidates_size() > 1 &&
+          (hidden.Contains(candidate.content_key, candidate.content_value) ||
+           hidden.Contains(candidate.key, candidate.value))) {
+        segment->erase_candidate(j);
+        modified = true;
+      }
+    }
+    if (!pins) {
       continue;
     }
     for (size_t j = 0; j < segment->candidates_size(); ++j) {
