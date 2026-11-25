@@ -250,9 +250,13 @@ bool IndicatorWindow::UpdateIndicator(const commands::RendererCommand &command,
                                              NSMaxX(visible));
   } else {
     // At the screen's edge it goes to the other side, beside the suggestion
-    // window in the way, or nowhere rather than over the text.
-    const floatype::IndicatorRect screen_area = {NSMinX(visible), NSMinY(visible),
-                                                 NSWidth(visible), NSHeight(visible)};
+    // window in the way, or nowhere rather than over the text. The whole
+    // screen, as Mozkey: in a field just under the menu bar (Chrome's address
+    // bar) it stays above the text, over the menu bar if need be, as the
+    // user preferred to going beside the suggestions.
+    const NSRect whole = screen.frame;
+    const floatype::IndicatorRect screen_area = {NSMinX(whole), NSMinY(whole), NSWidth(whole),
+                                                 NSHeight(whole)};
     const floatype::IndicatorRect obstacle_area =
         obstacle == nullptr ? floatype::IndicatorRect()
                             : floatype::IndicatorRect{NSMinX(*obstacle), NSMinY(*obstacle),
