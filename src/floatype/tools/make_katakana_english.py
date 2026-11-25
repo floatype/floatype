@@ -23,6 +23,11 @@ LEX_SHA256 = "5c892d88de9bb87dd90a2c1b2492b4cce0d13dacd9888d25e05298a00612a376"
 OUT = Path("data/dictionary_oss/dictionary_floatype_english.txt")
 # The English converts but is not suggested, as the other added words.
 FILTER = Path("data/dictionary_oss/suggestion_filter_floatype_english.txt")
+# Nor promoted as one of a pair: the pairs Mozc knows are checked by hash,
+# and one of these, new to it, matched by chance (インソムニアを使う became
+# INSOMNIAをつかう). In each case form Mozc's English variants give.
+COLLOCATION = Path(
+    "data/dictionary_oss/collocation_suppression_floatype_english.txt")
 NOTICE = Path("data/dictionary_oss/UniDic-BSD")
 ENGLISH = Path("floatype/english/english_words.txt")
 MOZC = sorted(Path("data/dictionary_oss").glob("dictionary0*.txt"))
@@ -81,7 +86,12 @@ def entries(rows, english: set[str], mozc_words: set[str],
       yield reading, left, right, cost + BELOW + i, word
 
 
+def case_forms(word: str) -> list[str]:
+  return sorted({word, word.lower(), word.capitalize(), word.upper()})
+
+
 def self_check() -> None:
+  assert case_forms("Viking") == ["VIKING", "Viking", "viking"]
   assert hiragana("インゴット") == "いんごっと"
   assert hiragana("ヴァイオリン") == "ゔぁいおりん"
   row = lambda surface, lemma, goshu, cost: (
@@ -140,6 +150,9 @@ def main() -> None:
   # are what Mozc suggested before as unknown words (アイアムパス).
   FILTER.write_text("".join(f"{w}\n" for w in sorted(
       {row[4] for row in rows if row[4].isascii()})), encoding="utf-8")
+  COLLOCATION.write_text("".join(
+      f"{form}\t{row[0]}\n" for row in rows if row[4].isascii()
+      for form in case_forms(row[4])), encoding="utf-8")
   NOTICE.write_text((unidic / "liceses" / "BSD").read_text(encoding="utf-8"),
                     encoding="utf-8")
   print(f"{len(rows)} entries")
