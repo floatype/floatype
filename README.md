@@ -134,11 +134,11 @@ Mozc が覚えた候補の順は、この一覧には出ません。1 つずつ�
 
 設定画面の「その他」ページで「更新を確認」を押します。新しいバージョンがあれば、ダウンロードして macOS のインストーラで開きます。Floatype が外と通信するのは、このボタンを押したときだけです。
 
-Homebrew で入れたときは `brew upgrade` でも上がります。ボタンで上げた場合、Homebrew の記録は古い版のまま残ります。次の `brew upgrade` で同じ版をもう一度入れますが、害はありません。
+Homebrew で入れたときは `brew upgrade` でも上がります。新しい版になるのは、ログアウトしてログインし直したあとです。ボタンで上げた場合、Homebrew の記録は古い版のまま残ります。次の `brew upgrade` で同じ版をもう一度入れますが、害はありません。
 
 ## 消し方
 
-`/Applications/floatype/Uninstallfloatype.app` を開きます。Homebrew で入れたときは `brew uninstall floatype` でも消せます。どちらでも、設定（`~/.config/floatype`）と学習（`~/Library/Application Support/floatype`）は残ります。
+`/Applications/floatype/Uninstallfloatype.app` を開きます。Homebrew で入れたときは `brew uninstall floatype` でも消せます。動いている Floatype は、ログアウトすると止まります。どちらでも、設定（`~/.config/floatype`）と学習（`~/Library/Application Support/floatype`）は残ります。
 
 ## 困ったとき
 
