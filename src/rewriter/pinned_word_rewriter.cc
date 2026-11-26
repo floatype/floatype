@@ -19,6 +19,14 @@ namespace {
 // A pin, as the user asked for an icon over the word 固定.
 constexpr absl::string_view kMark = "📌";
 
+// Made by the emoji and the emoticon rewriters, whose descriptions start so.
+// shortcut: a user dictionary word registered as 顔文字 is not seen; Mozkey
+// counts it too. Add it if users pin or learn such words and miss this.
+bool IsEmojiOrEmoticon(const converter::Candidate& candidate) {
+  return absl::StartsWith(candidate.description, "絵文字") ||
+         absl::StartsWith(candidate.description, "顔文字");
+}
+
 }  // namespace
 
 int PinnedWordRewriter::capability(const ConversionRequest& request) const {
@@ -49,6 +57,19 @@ bool PinnedWordRewriter::Rewrite(const ConversionRequest& request,
            hidden.Contains(candidate.key, candidate.value))) {
         segment->erase_candidate(j);
         modified = true;
+      }
+    }
+    // #50: an emoji or an emoticon chosen once is not first the next time,
+    // as in Mozkey: it stays in the list, and a pin below can still put it
+    // first. Predictions keep their order.
+    if (!predicting && segment->candidates_size() > 1 &&
+        IsEmojiOrEmoticon(segment->candidate(0))) {
+      for (size_t j = 1; j < segment->candidates_size(); ++j) {
+        if (!IsEmojiOrEmoticon(segment->candidate(j))) {
+          segment->move_candidate(j, 0);
+          modified = true;
+          break;
+        }
       }
     }
     if (!pins) {
