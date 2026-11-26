@@ -2955,8 +2955,9 @@ bool Session::DeleteCandidateFromHistory(commands::Command* command) {
     id = command->input().command().id();
   }
   // floatype: ⌃⌫ on a candidate in the shown list that has no history to
-  // delete hides it (#38): no conversion or prediction shows it again. A
-  // pin on it goes too. As after deleting history, the list closes.
+  // delete, nor a learned order to forget (output::CanForgetCandidate()),
+  // hides it (#38): no conversion or prediction shows it again. A pin on it
+  // goes too. As after deleting history, the list closes.
   if (id == std::nullopt) {
     if (const auto hidden =
             context_->mutable_converter()->HideableFocusedCandidate();

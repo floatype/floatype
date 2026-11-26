@@ -89,6 +89,11 @@ void FillSubLabel(commands::Footer* footer_proto);
 // deletes instead) and not a command. The footer's hint and the key go by it.
 bool CanHideCandidate(const Segment& segment, int id);
 
+// floatype: whether ⌃⌫ on `segment`'s candidate `id` forgets the learned order
+// instead (#38): the first one, put first by what Mozc learned. Pressed again,
+// the word is back in the dictionary's place and ⌃⌫ hides it.
+bool CanForgetCandidate(const Segment& segment, int id);
+
 // Fill the footer contents of Candidates protobuf.  If category is
 // modified, true is returned.  Otherwise false is returned.
 bool FillFooter(commands::Category category,

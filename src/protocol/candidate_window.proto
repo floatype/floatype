@@ -104,6 +104,9 @@ message Annotation {
   // floatype: set to true if ⌃⌫ hides this candidate (#38): one of several,
   // not deletable from history.
   optional bool hideable = 1001 [default = false];
+  // floatype: set to true if ⌃⌫ forgets the learned order that put this
+  // candidate first (#38): it then goes back to the dictionary's place.
+  optional bool forgettable = 1002 [default = false];
 }
 
 // Additional information to a candidate word.  This message is
