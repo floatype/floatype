@@ -173,8 +173,16 @@ TEST(IndicatorLayoutTest, CandidatesGoBelowTheLastLine) {
   EXPECT_EQ(CandidatesBelow(718, 740, false), 740);
   EXPECT_EQ(CandidatesBelow(718, 718, false), 718) << "one line";
   EXPECT_EQ(CandidatesBelow(740, 718, false), 740) << "the segment on line 2";
-  EXPECT_EQ(CandidatesBelow(718, 0, false), 718) << "unknown";
+  EXPECT_EQ(CandidatesBelow(718, std::nullopt, false), 718) << "unknown";
   EXPECT_EQ(CandidatesBelow(718, 740, true), 718) << "vertical";
+}
+
+// A display above the main one has its places below 0: the window stayed
+// there, not pulled down to 0, the main display's top.
+TEST(IndicatorLayoutTest, CandidatesStayOnADisplayAboveTheMainOne) {
+  EXPECT_EQ(CandidatesBelow(-150, std::nullopt, false), -150);
+  EXPECT_EQ(CandidatesBelow(-150, -128, false), -128)
+      << "a wrapped composition";
 }
 
 TEST(IndicatorLayoutTest, SitsRightOfAVerticalColumnAtItsTop) {
