@@ -26,6 +26,16 @@ Mozc（Google 日本語入力のオープンソース版）をもとに作って
 
 ## 入れ方
 
+### Homebrew で入れる
+
+```sh
+brew install --cask floatype/tap/floatype
+```
+
+途中で管理者のパスワードを聞かれます。終わったらログアウトしてログインし直し、システム設定 → キーボード → 入力ソース の「編集…」で「＋」を押し、日本語の「Floatype」を足します。cask は [floatype/homebrew-tap](https://github.com/floatype/homebrew-tap) にあり、Releases と同じ pkg を SHA-256 で確かめてから入れます。
+
+### pkg を落として入れる
+
 1. [Releases](https://github.com/floatype/floatype/releases) から、`floatype-<バージョン>.pkg` と `floatype-<バージョン>.pkg.sha256` の 2 つを同じフォルダに落とします。
 2. ターミナルでそのフォルダに移り、ファイルが壊れたり差し替えられたりしていないか確かめます。
 
@@ -124,9 +134,11 @@ Mozc が覚えた候補の順は、この一覧には出ません。1 つずつ�
 
 設定画面の「その他」ページで「更新を確認」を押します。新しいバージョンがあれば、ダウンロードして macOS のインストーラで開きます。Floatype が外と通信するのは、このボタンを押したときだけです。
 
+Homebrew で入れたときは `brew upgrade` でも上がります。ボタンで上げた場合、Homebrew の記録は古い版のまま残ります。次の `brew upgrade` で同じ版をもう一度入れますが、害はありません。
+
 ## 消し方
 
-`/Applications/floatype/Uninstallfloatype.app` を開きます。
+`/Applications/floatype/Uninstallfloatype.app` を開きます。Homebrew で入れたときは `brew uninstall floatype` でも消せます。どちらでも、設定（`~/.config/floatype`）と学習（`~/Library/Application Support/floatype`）は残ります。
 
 ## 困ったとき
 
