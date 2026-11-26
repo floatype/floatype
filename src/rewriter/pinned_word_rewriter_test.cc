@@ -68,6 +68,39 @@ TEST_F(PinnedWordRewriterTest, LeavesSegmentsWithoutAPinnedWord) {
   EXPECT_EQ(segments.conversion_segment(0).candidate(0).value, "良い");
 }
 
+TEST_F(PinnedWordRewriterTest, KeepsEmojiAndEmoticonsOffTheFirstPlace) {
+  Segments segments;
+  AddSegment(
+      segments, "にこにこ",
+      {{"にこにこ", "😊"}, {"にこにこ", "ニコニコ"}, {"にこにこ", "にこにこ"}});
+  segments.mutable_conversion_segment(0)->mutable_candidate(0)->description =
+      "絵文字 笑顔";
+  AddSegment(
+      segments, "かおもじ",
+      {{"かおもじ", "(^^)"}, {"かおもじ", "(^o^)"}, {"かおもじ", "顔文字"}});
+  for (int i : {0, 1}) {
+    segments.mutable_conversion_segment(1)->mutable_candidate(i)->description =
+        "顔文字";
+  }
+  ASSERT_TRUE(Rewrite(segments));
+  const Segment& emoji = segments.conversion_segment(0);
+  EXPECT_EQ(emoji.candidate(0).value, "ニコニコ");
+  EXPECT_EQ(emoji.candidate(1).value, "😊") << "it stays in the list";
+  EXPECT_EQ(segments.conversion_segment(1).candidate(0).value, "顔文字")
+      << "past every emoticon";
+}
+
+TEST_F(PinnedWordRewriterTest, APinnedEmojiStaysFirst) {
+  floatype::ZenzMemory::Pinned().Add("にこにこ", "😊");
+  Segments segments;
+  AddSegment(segments, "にこにこ",
+             {{"にこにこ", "😊"}, {"にこにこ", "ニコニコ"}});
+  segments.mutable_conversion_segment(0)->mutable_candidate(0)->description =
+      "絵文字";
+  ASSERT_TRUE(Rewrite(segments));
+  EXPECT_EQ(segments.conversion_segment(0).candidate(0).value, "😊");
+}
+
 TEST_F(PinnedWordRewriterTest, LeavesASegmentTheUserFixed) {
   floatype::ZenzMemory::Pinned().Add("よい", "よい");
   Segments segments;
