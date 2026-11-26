@@ -88,6 +88,19 @@ TEST_F(PinnedWordRewriterTest, KeepsEmojiAndEmoticonsOffTheFirstPlace) {
   EXPECT_EQ(emoji.candidate(1).value, "😊") << "it stays in the list";
   EXPECT_EQ(segments.conversion_segment(1).candidate(0).value, "顔文字")
       << "past every emoticon";
+
+  // A prediction keeps its order, as in Mozkey.
+  Segments predicted;
+  AddSegment(predicted, "にこにこ",
+             {{"にこにこ", "😊"}, {"にこにこ", "ニコニコ"}});
+  predicted.mutable_conversion_segment(0)->mutable_candidate(0)->description =
+      "絵文字";
+  EXPECT_FALSE(PinnedWordRewriter().Rewrite(
+      ConversionRequestBuilder()
+          .SetRequestType(ConversionRequest::PREDICTION)
+          .Build(),
+      &predicted));
+  EXPECT_EQ(predicted.conversion_segment(0).candidate(0).value, "😊");
 }
 
 TEST_F(PinnedWordRewriterTest, APinnedEmojiStaysFirst) {
