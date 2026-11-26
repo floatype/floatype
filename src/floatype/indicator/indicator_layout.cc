@@ -96,9 +96,12 @@ IndicatorRect LayoutRubyVertical(double width, double height,
   return rect;
 }
 
-int CandidatesBelow(int preedit_bottom, int composition_bottom,
+int CandidatesBelow(int preedit_bottom, std::optional<int> composition_bottom,
                     bool vertical) {
-  return vertical ? preedit_bottom : std::max(preedit_bottom, composition_bottom);
+  if (vertical || !composition_bottom.has_value()) {
+    return preedit_bottom;
+  }
+  return std::max(preedit_bottom, *composition_bottom);
 }
 
 IndicatorRect LayoutIndicatorVertical(const Style& style, double label_width,

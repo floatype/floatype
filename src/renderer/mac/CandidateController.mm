@@ -29,6 +29,8 @@
 
 #import "renderer/mac/CandidateView.h"
 
+#include <optional>
+
 #include "base/coordinates.h"
 #include "floatype/indicator/indicator_layout.h"
 #include "protocol/commands.pb.h"
@@ -238,9 +240,9 @@ bool CandidateController::AlignWindows(mozc::Rect *candidate_frame) {
       command_.preedit_rectangle().right() - command_.preedit_rectangle().left();
   const int preedit_bottom = mozc::floatype::CandidatesBelow(
       command_.preedit_rectangle().bottom(),
-      command_.has_composition_bounds() ? command_.composition_bounds().bottom() : 0,
-      command_.preedit_rectangle().bottom() - command_.preedit_rectangle().top() <
-          preedit_width);
+      command_.has_composition_bounds() ? std::optional<int>(command_.composition_bounds().bottom())
+                                        : std::nullopt,
+      command_.preedit_rectangle().bottom() - command_.preedit_rectangle().top() < preedit_width);
   const mozc::Size preedit_size(preedit_width,
                                 preedit_bottom - command_.preedit_rectangle().top());
   // The origin point of command_.preedit_rectangle() is the left-top of the
